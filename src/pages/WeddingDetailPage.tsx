@@ -1,14 +1,11 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Building2,
   Calendar,
-  Car,
   ChevronDown,
   MapPin,
   Paperclip,
   PenLine,
-  Plane,
   Plus,
   Reply,
   ReplyAll,
@@ -35,8 +32,17 @@ import {
   messageFoldKey,
   type WeddingThreadMessage,
 } from "../data/weddingThreads";
+import { WeddingFinancialsPanel } from "../components/WeddingFinancialsPanel";
+import { TravelTabPanel } from "../components/TravelTabPanel";
 
-type TabId = "timeline" | "thread" | "tasks" | "files" | "travel";
+type TabId = "timeline" | "thread" | "tasks" | "files" | "financials" | "travel";
+
+const TAB_IDS: TabId[] = ["timeline", "thread", "tasks", "files", "financials", "travel"];
+
+function parseTabParam(v: string | null): TabId | null {
+  if (!v) return null;
+  return (TAB_IDS as readonly string[]).includes(v) ? (v as TabId) : null;
+}
 
 type ReplyScope = "reply" | "replyAll";
 
@@ -146,6 +152,7 @@ function buildPersistedDefaults(weddingId: string, entry: WeddingEntry) {
 
 function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: WeddingEntry }) {
   const w = entry;
+  const [searchParams, setSearchParams] = useSearchParams();
   const threads = getThreadsForWedding(weddingId);
   const travelPlan = getTravelForWedding(weddingId);
 
@@ -167,7 +174,24 @@ function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: We
   weddingFieldsRef.current = weddingFields;
   peopleRef.current = people;
 
-  const [tab, setTab] = useState<TabId>("timeline");
+  const [tab, setTab] = useState<TabId>(() => parseTabParam(searchParams.get("tab")) ?? "timeline");
+
+  useEffect(() => {
+    const t = parseTabParam(searchParams.get("tab"));
+    if (t) setTab(t);
+  }, [searchParams]);
+
+  const setTabAndUrl = (next: TabId) => {
+    setTab(next);
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        n.set("tab", next);
+        return n;
+      },
+      { replace: true },
+    );
+  };
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerKind, setComposerKind] = useState<"reply" | "internal">("reply");
   const [toast, setToast] = useState<string | null>(null);
@@ -451,7 +475,7 @@ function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: We
       <button
         key={id}
         type="button"
-        onClick={() => setTab(id)}
+        onClick={() => setTabAndUrl(id)}
         className={
           "rounded-full px-3 py-1 text-[12px] font-semibold transition " +
           (on ? "bg-canvas text-ink" : "text-ink-muted hover:bg-canvas")
@@ -695,7 +719,7 @@ function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: We
           <p className="mt-2 text-[13px] text-ink-muted">COI on file · Travel 11–16 Jun · Final timeline due 21 May</p>
           <button
             type="button"
-            onClick={() => setTab("travel")}
+            onClick={() => setTabAndUrl("travel")}
             className="mt-3 text-[12px] font-semibold text-accent hover:text-accent-hover"
           >
             Open travel
@@ -710,6 +734,7 @@ function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: We
             {tabBtn("thread", "By thread")}
             {tabBtn("tasks", "Tasks")}
             {tabBtn("files", "Files")}
+            {tabBtn("financials", "Financials")}
             {tabBtn("travel", "Travel")}
           </div>
         </header>
@@ -889,7 +914,7 @@ function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: We
                         className="rounded-full border border-border bg-surface px-3 py-1.5 text-[12px] font-semibold text-accent transition hover:border-accent/40 hover:text-accent-hover"
                         onClick={() => {
                           setSelectedThreadId(t.id);
-                          setTab("timeline");
+                          setTabAndUrl("timeline");
                         }}
                       >
                         Open in timeline
@@ -933,78 +958,20 @@ function WeddingDetailInner({ weddingId, entry }: { weddingId: string; entry: We
             </div>
           ) : null}
 
+          {tab === "financials" ? (
+            <div className="space-y-3">
+              <p className="text-[13px] text-ink-muted">Proposals, contracts, and invoices for this wedding.</p>
+              <WeddingFinancialsPanel weddingId={weddingId} />
+            </div>
+          ) : null}
+
           {tab === "travel" ? (
             <div className="space-y-5">
               {travelPlan ? (
-                <>
-                  <div>
-                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                      <Plane className="h-4 w-4" strokeWidth={1.75} />
-                      Flights
-                    </div>
-                    {travelPlan.flights.length === 0 ? (
-                      <p className="mt-2 text-[13px] text-ink-muted">No flights logged yet.</p>
-                    ) : (
-                      <ul className="mt-2 space-y-2">
-                        {travelPlan.flights.map((f) => (
-                          <li
-                            key={f.id}
-                            className="rounded-xl border border-border bg-canvas/80 px-3 py-2.5 text-[13px] text-ink"
-                          >
-                            <p className="font-semibold">{f.route}</p>
-                            <p className="mt-0.5 text-[12px] text-ink-muted">
-                              {f.depart} → {f.arrive} · {f.airline}
-                            </p>
-                            <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-accent">{f.status}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                      <Building2 className="h-4 w-4" strokeWidth={1.75} />
-                      Hotels
-                    </div>
-                    <ul className="mt-2 space-y-2">
-                      {travelPlan.hotels.map((h) => (
-                        <li
-                          key={h.id}
-                          className="rounded-xl border border-border bg-canvas/80 px-3 py-2.5 text-[13px] text-ink"
-                        >
-                          <p className="font-semibold">{h.name}</p>
-                          <p className="mt-0.5 text-[12px] text-ink-muted">
-                            {h.checkIn} – {h.checkOut}
-                          </p>
-                          {h.note ? <p className="mt-1 text-[12px] text-ink-faint">{h.note}</p> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                      <Car className="h-4 w-4" strokeWidth={1.75} />
-                      Ground & transfers
-                    </div>
-                    <ul className="mt-2 space-y-2">
-                      {travelPlan.ground.map((g) => (
-                        <li
-                          key={g.id}
-                          className="rounded-xl border border-border bg-canvas/80 px-3 py-2.5 text-[13px] text-ink"
-                        >
-                          <p className="font-semibold">{g.label}</p>
-                          <p className="mt-0.5 text-[12px] text-ink-muted">{g.detail}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
+                <TravelTabPanel travelPlan={travelPlan} onToast={showToast} />
               ) : (
                 <p className="text-[13px] text-ink-muted">No travel plan for this wedding (demo).</p>
               )}
-              <p className="border-t border-border pt-4 text-[11px] leading-relaxed text-ink-faint">
-                Flight tracking and booking sync via Amadeus (planned).
-              </p>
             </div>
           ) : null}
             </div>
