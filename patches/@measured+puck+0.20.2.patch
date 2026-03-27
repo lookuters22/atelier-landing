@@ -1,0 +1,78 @@
+diff --git a/node_modules/@measured/puck/dist/chunk-QIGVND56.mjs b/node_modules/@measured/puck/dist/chunk-QIGVND56.mjs
+index ee1d987..7733427 100644
+--- a/node_modules/@measured/puck/dist/chunk-QIGVND56.mjs
++++ b/node_modules/@measured/puck/dist/chunk-QIGVND56.mjs
+@@ -7289,9 +7289,9 @@ var styles_module_default19 = { "LayerTree": "_LayerTree_7rx04_1", "LayerTree-zo
+ init_react_import();
+ var scrollIntoView = (el) => {
+   const oldStyle = __spreadValues({}, el.style);
+-  el.style.scrollMargin = "256px";
++  el.style.scrollMargin = "12px";
+   if (el) {
+-    el == null ? void 0 : el.scrollIntoView({ behavior: "smooth" });
++    el == null ? void 0 : el.scrollIntoView({ behavior: "auto", block: "nearest", inline: "nearest" });
+     el.style.scrollMargin = oldStyle.scrollMargin || "";
+   }
+ };
+@@ -7383,27 +7383,9 @@ var Layer = ({
+             type: "button",
+             className: getClassNameLayer("clickable"),
+             onClick: () => {
+-              if (isSelected) {
+-                setItemSelector(null);
+-                return;
+-              }
+-              const frame = getFrame();
+-              const el = frame == null ? void 0 : frame.querySelector(
+-                `[data-puck-component="${itemId}"]`
+-              );
+-              if (!el) {
+-                setItemSelector({
+-                  index,
+-                  zone: zoneCompound
+-                });
+-                return;
+-              }
+-              scrollIntoView(el);
+-              onScrollEnd(frame, () => {
+-                setItemSelector({
+-                  index,
+-                  zone: zoneCompound
+-                });
++              setItemSelector({
++                index,
++                zone: zoneCompound
+               });
+             },
+             onMouseEnter: (e) => {
+@@ -7777,8 +7759,16 @@ var Canvas = () => {
+   useEffect25(() => {
+     const { height: frameHeight } = getFrameDimensions();
+     if (viewports.current.height === "auto") {
++      const computed = frameHeight / zoomConfig.zoom;
++      const prev = zoomConfig.rootHeight;
++      let rootHeight = Math.max(computed, 32);
++      if (frameHeight < 32 && prev > 32) {
++        rootHeight = prev;
++      } else if (prev > 200 && computed > 0 && computed < prev * 0.55) {
++        rootHeight = prev;
++      }
+       setZoomConfig(__spreadProps(__spreadValues({}, zoomConfig), {
+-        rootHeight: frameHeight / zoomConfig.zoom
++        rootHeight
+       }));
+     }
+   }, [zoomConfig.zoom, getFrameDimensions, setZoomConfig]);
+@@ -7859,10 +7849,10 @@ var Canvas = () => {
+               className: getClassName26("root"),
+               style: {
+                 width: iframe.enabled ? viewports.current.width : "100%",
+-                height: zoomConfig.rootHeight,
++                height: iframe.enabled ? zoomConfig.rootHeight : "100%",
+                 transform: iframe.enabled ? `scale(${zoomConfig.zoom})` : void 0,
+                 transition: showTransition ? `width ${TRANSITION_DURATION}ms ease-out, height ${TRANSITION_DURATION}ms ease-out, transform ${TRANSITION_DURATION}ms ease-out` : "",
+-                overflow: iframe.enabled ? void 0 : "auto"
++                overflow: iframe.enabled ? void 0 : void 0
+               },
+               suppressHydrationWarning: true,
+               id: "puck-canvas-root",

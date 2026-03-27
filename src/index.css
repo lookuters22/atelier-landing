@@ -47,3 +47,302 @@
     animation: none;
   }
 }
+
+/* Offer builder: no second “window” header — actions live in the app FILE menu */
+.offer-builder-puck [class*="PuckHeader"] {
+  display: none !important;
+}
+
+/* Hide Puck sidebar toggles (left hidden; right inspector stays open). */
+.offer-builder-puck button[title="Toggle left sidebar"],
+.offer-builder-puck button[title="Toggle right sidebar"] {
+  display: none;
+}
+
+/*
+  Single vertical scroll in the canvas column:
+  - Puck’s root sets overflow-x:auto at ≥766px; the other axis becomes scrollable too, so you
+    get a second scrollbar beside PuckCanvas-inner. Clip the root.
+  - PuckLayout-inner uses height:100dvh, which is taller than the embedded settings panel and
+    forces an outer (page/panel) scrollbar on top of the canvas scroller.
+*/
+.offer-builder-puck > * {
+  flex: 1 1 0%;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+}
+.offer-builder-puck [class*="PuckLayout_"]:not([class*="PuckLayout-inner"]) {
+  flex: 1;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.offer-builder-puck [class*="PuckLayout-inner"] {
+  flex: 1 1 auto !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  grid-template-columns: 0 minmax(0, 1fr) var(--puck-right-side-bar-width) !important;
+  overflow: hidden !important;
+}
+
+/* Canvas column: lock flex so sidebar / selection updates don’t compress the canvas */
+.offer-builder-puck [class*="PuckCanvas"]:not([id="puck-canvas-root"]):not([class*="PuckCanvas-controls"]) {
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+/*
+  Canvas shell: no top padding here — the File bar is position:absolute and would overlap content.
+  Top inset is applied on #puck-canvas-root only (see below).
+*/
+.offer-builder-puck [class*="PuckCanvas_"]:not([class*="PuckCanvas-inner"]):not([class*="PuckCanvas-root"]):not([class*="PuckCanvas-loader"]) {
+  position: relative;
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  min-height: 0;
+  min-width: 0 !important;
+  padding-top: 0;
+  padding-bottom: 1rem;
+  box-sizing: border-box;
+}
+.offer-builder-puck [class*="PuckCanvas-loader"] {
+  display: none !important;
+}
+/*
+  Canvas: PuckCanvas-inner is a flex row (root + loader). #puck-canvas-root must flex-grow on the
+  main axis, min-width:0 for correct width, stretch height, overflow-y:auto for the only scroll.
+  Do not put transform:none on PuckCanvas-inner — it breaks stacking / controls.
+*/
+/* 1. THE MAIN SCROLL VIEWPORT */
+.offer-builder-puck #puck-canvas-root {
+  position: relative !important;
+  display: block !important;
+  flex: 1 1 auto !important;
+  align-self: stretch !important;
+  min-width: 0 !important;
+  min-height: max-content !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  padding-top: 2.75rem !important;
+  /* Puck sets width/height transitions on the canvas — disable to stop layout “animation loops” */
+  transition: none !important;
+  animation: none !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  scroll-behavior: auto !important;
+  box-sizing: border-box;
+  scroll-padding-top: 0.5rem;
+  scroll-padding-bottom: calc(5.5rem + 4rem);
+}
+/* Gray frame: let the document define height; outer canvas owns scrolling */
+.offer-builder-puck [class*="PuckCanvas-inner"] {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  transition: none !important;
+}
+.offer-builder-puck #puck-canvas-root > [data-puck-preview] {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  min-height: max-content !important;
+  width: 100% !important;
+}
+.offer-builder-puck #preview-frame[data-puck-entry] {
+  flex: 1 1 auto !important;
+  width: min(100%, var(--offer-builder-preview-width, 100%)) !important;
+  max-width: min(100%, var(--offer-builder-preview-width, 100%)) !important;
+  min-height: max-content !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  transition: none !important;
+}
+.offer-builder-puck #puck-canvas-root::after {
+  content: "";
+  display: block;
+  height: calc(5.5rem + 4rem);
+}
+.offer-builder-puck #puck-canvas-root::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+/* 2. NUKE ALL INNER SCROLLS (never PuckCanvas-inner — see height note above) */
+.offer-builder-puck #puck-canvas-root > div,
+.offer-builder-puck [data-puck-preview],
+.offer-builder-puck [class*="PuckPreview"],
+.offer-builder-puck [data-puck-entry],
+.offer-builder-puck #puck-canvas-root [data-puck-dropzone],
+.offer-builder-puck #puck-canvas-root [class*="DropZone"] {
+  display: block !important; /* Force standard document flow */
+  width: 100% !important;
+  height: auto !important;
+  min-height: max-content !important; /* Grow with the content (e.g., images) */
+  max-height: none !important; /* Remove any artificial ceilings */
+  overflow: visible !important; /* CRITICAL: Destroy all nested scrollbars */
+  margin: 0 !important;
+}
+/* Width only — no transform:none (breaks Puck overlays); no PuckCanvas-inner here */
+.offer-builder-puck #puck-canvas-root > div,
+.offer-builder-puck [data-puck-preview],
+.offer-builder-puck [class*="PuckPreview"],
+.offer-builder-puck [data-puck-entry] {
+  width: min(100%, var(--offer-builder-preview-width, 100%)) !important;
+  max-width: none !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
+  transition: none !important;
+}
+.offer-builder-puck [class*="PuckPreview-frame"] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+}
+/* Block action menu: positioning context inside preview */
+.offer-builder-puck [data-puck-entry] {
+  position: relative !important;
+}
+.offer-builder-puck #puck-canvas-root [data-puck-dropzone]:empty {
+  min-height: var(--min-empty-height);
+}
+.offer-builder-puck #puck-canvas-root [data-puck-dropzone][class*="DropZone--hasChildren"] {
+  min-height: 0;
+}
+/*
+  Right inspector: scroll when fields overflow. Scrollbar hidden but wheel / trackpad / touch still scroll.
+  (Puck’s .Sidebar already uses overflow-y:auto on the column.)
+*/
+.offer-builder-puck [class*="Sidebar--right"] {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+.offer-builder-puck [class*="Sidebar--right"] > [class*="SidebarSection"] {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.offer-builder-puck [class*="Sidebar--right"] [class*="SidebarSection-content"] {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  -ms-overflow-style: auto;
+}
+
+/*
+  Puck sets [data-puck-component] * { pointer-events: none } so drag wins.
+  With iframe preview enabled, overrides in this file never reach the iframe — use iframe={{ enabled: false }} on Puck.
+  !important wins over Puck when load order would otherwise tie.
+*/
+.offer-builder-puck [data-puck-component] * {
+  pointer-events: auto !important;
+  user-select: text !important;
+}
+
+/* Device viewport toggle: escape flex column so it is not stretched; float bottom-center */
+.offer-builder-puck [class*="PuckCanvas-controls"],
+.offer-builder-puck .puck-device-controls {
+  position: absolute !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  height: max-content !important;
+  width: max-content !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-shrink: 0 !important;
+  align-items: center !important;
+  z-index: 100 !important;
+  margin: 0 !important;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.4rem 0.75rem;
+  box-shadow: 0 8px 28px rgba(26, 28, 30, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* Puck’s default ViewportControls: inner gray panel + extra bottom padding — flatten to one filled pill */
+.offer-builder-puck [class*="ViewportControls_"]:not([class*="divider"]):not([class*="zoomSelect"]) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center;
+  gap: 0.375rem;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-inline-start: none !important;
+  box-sizing: border-box;
+}
+
+.offer-builder-puck [class*="ViewportControls-divider"] {
+  align-self: stretch;
+  width: 0;
+  min-height: 1.25rem;
+  margin-inline: 0.35rem !important;
+  border: none !important;
+  border-inline-end: 1px solid var(--color-border) !important;
+  background: transparent !important;
+}
+
+.offer-builder-puck [class*="ViewportControls-zoomSelect"] {
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: auto !important;
+  min-width: 4.25rem;
+  padding: 0 1.35rem 0 0.5rem !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  line-height: 1 !important;
+  color: var(--color-ink-muted);
+  background-color: transparent !important;
+  background-position: calc(100% - 6px) 50% !important;
+  border-radius: 0.375rem;
+}
+
+.offer-builder-puck [class*="PuckCanvas-controls"] [class*="IconButton"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+

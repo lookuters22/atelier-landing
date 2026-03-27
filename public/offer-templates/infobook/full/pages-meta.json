@@ -1,0 +1,158 @@
+[
+  {
+    "index": 1,
+    "pdfPage": 1,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-01.png"
+  },
+  {
+    "index": 2,
+    "pdfPage": 2,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-02.png"
+  },
+  {
+    "index": 3,
+    "pdfPage": 3,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-03.png"
+  },
+  {
+    "index": 4,
+    "pdfPage": 4,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-04.png"
+  },
+  {
+    "index": 5,
+    "pdfPage": 5,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-05.png"
+  },
+  {
+    "index": 6,
+    "pdfPage": 6,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-06.png"
+  },
+  {
+    "index": 7,
+    "pdfPage": 7,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-07.png"
+  },
+  {
+    "index": 8,
+    "pdfPage": 8,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-08.png"
+  },
+  {
+    "index": 9,
+    "pdfPage": 9,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-09.png"
+  },
+  {
+    "index": 10,
+    "pdfPage": 10,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-10.png"
+  },
+  {
+    "index": 11,
+    "pdfPage": 11,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-11.png"
+  },
+  {
+    "index": 12,
+    "pdfPage": 13,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-12.png"
+  },
+  {
+    "index": 13,
+    "pdfPage": 14,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-13.png"
+  },
+  {
+    "index": 14,
+    "pdfPage": 15,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-14.png"
+  },
+  {
+    "index": 15,
+    "pdfPage": 16,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-15.png"
+  },
+  {
+    "index": 16,
+    "pdfPage": 17,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-16.png"
+  },
+  {
+    "index": 17,
+    "pdfPage": 18,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-17.png"
+  },
+  {
+    "index": 18,
+    "pdfPage": 19,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-18.png"
+  },
+  {
+    "index": 19,
+    "pdfPage": 20,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-19.png"
+  },
+  {
+    "index": 20,
+    "pdfPage": 21,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-20.png"
+  },
+  {
+    "index": 21,
+    "pdfPage": 22,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-21.png"
+  },
+  {
+    "index": 22,
+    "pdfPage": 23,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-22.png"
+  },
+  {
+    "index": 23,
+    "pdfPage": 24,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-23.png"
+  },
+  {
+    "index": 24,
+    "pdfPage": 25,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-24.png"
+  },
+  {
+    "index": 25,
+    "pdfPage": 26,
+    "format": "A4",
+    "publicPath": "/offer-templates/infobook/full/page-25.png"
+  },
+  {
+    "index": 26,
+    "pdfPage": 27,
+    "format": "A4-landscape",
+    "publicPath": "/offer-templates/infobook/full/page-26.png"
+  }
+]

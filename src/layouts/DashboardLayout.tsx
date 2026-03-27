@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   CalendarDays,
@@ -40,6 +40,8 @@ const notificationsSeed = [
 
 export function DashboardLayout() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isOfferBuilderEditorMode = pathname.startsWith("/settings/offer-builder/edit");
   const [notifOpen, setNotifOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [notifs, setNotifs] = useState(notificationsSeed);
@@ -62,16 +64,17 @@ export function DashboardLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-canvas">
-      <aside className="flex w-[260px] shrink-0 flex-col bg-sidebar text-white/90">
-        <div className="flex items-center gap-3 px-5 py-6">
+    <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-canvas">
+      {!isOfferBuilderEditorMode ? (
+      <aside className="flex h-full min-h-0 w-[260px] shrink-0 flex-col overflow-hidden bg-sidebar text-white/90">
+        <div className="flex shrink-0 items-center gap-3 px-5 py-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10 text-sm font-semibold tracking-tight">A</div>
           <div>
             <p className="text-[13px] font-semibold tracking-wide text-white">Atelier</p>
             <p className="text-[11px] text-white/45">Studio OS</p>
           </div>
         </div>
-        <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-4">
+        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-4">
           {nav.map((item) => (
             <NavLink
               key={item.to}
@@ -87,13 +90,17 @@ export function DashboardLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-white/[0.06] px-3 py-4 space-y-1">
-          <NavLink to="/settings" className={({ isActive }) => ["flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors", isActive ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/[0.06] hover:text-white"].join(" ")}>
+        <div className="shrink-0 space-y-1 border-t border-white/[0.06] px-3 py-4">
+          <NavLink
+            to="/settings"
+            end={false}
+            className={({ isActive }) => ["flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-colors", isActive ? "bg-white/10 text-white" : "text-white/55 hover:bg-white/[0.06] hover:text-white"].join(" ")}
+          >
             <Settings className="h-[18px] w-[18px]" strokeWidth={1.75} />
             Settings
           </NavLink>
         </div>
-        <div className="flex items-center gap-3 border-t border-white/[0.06] px-4 py-4">
+        <div className="flex shrink-0 items-center gap-3 border-t border-white/[0.06] px-4 py-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs font-semibold">ED</div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium text-white">Elena Duarte</p>
@@ -102,8 +109,10 @@ export function DashboardLayout() {
           <ChevronDown className="h-4 w-4 text-white/35" />
         </div>
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-6 border-b border-border bg-canvas/90 px-8 py-4 backdrop-blur-md">
+      ) : null}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {!isOfferBuilderEditorMode ? (
+        <header className="flex shrink-0 items-center justify-between gap-6 border-b border-border bg-canvas/90 px-8 py-4 backdrop-blur-md">
           <div className="relative max-w-xl flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
             <input type="search" placeholder="Search weddings, people, or messages" className="w-full rounded-full border border-border bg-surface py-2.5 pl-11 pr-4 text-[13px] text-ink shadow-[0_8px_24px_rgba(26,28,30,0.06)] placeholder:text-ink-faint focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/20" onKeyDown={(e) => { if (e.key === "Enter") navigate("/inbox"); }} />
@@ -140,7 +149,16 @@ export function DashboardLayout() {
             </div>
           </div>
         </header>
-        <main className="min-h-0 flex-1 px-8 py-8"><Outlet /></main>
+        ) : null}
+        <main
+          className={
+            isOfferBuilderEditorMode
+              ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-0"
+              : "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-8 py-8"
+          }
+        >
+          <Outlet />
+        </main>
       </div>
       <SupportAssistantWidget />
       {helpOpen ? (

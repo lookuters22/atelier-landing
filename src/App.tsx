@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { DashboardLayout } from "./layouts/DashboardLayout";
 import { ManagerLayout } from "./layouts/ManagerLayout";
@@ -10,7 +11,9 @@ import { CalendarPage } from "./pages/CalendarPage";
 import { ContactsPage } from "./pages/ContactsPage";
 import { TasksPage } from "./pages/TasksPage";
 import { FinancialsPage } from "./pages/FinancialsPage";
-import { SettingsPage } from "./pages/SettingsPage";
+import { SettingsLayout } from "./layouts/SettingsLayout";
+import { SettingsHubPage } from "./pages/settings/SettingsHubPage";
+import { PricingCalculatorPage } from "./pages/settings/PricingCalculatorPage";
 import { WeddingsPage } from "./pages/WeddingsPage";
 import { AddWeddingPage } from "./pages/AddWeddingPage";
 import { ManagerTodayPage } from "./pages/manager/ManagerTodayPage";
@@ -23,6 +26,27 @@ import { ManagerCalendarPage } from "./pages/manager/ManagerCalendarPage";
 import { ManagerContactsPage } from "./pages/manager/ManagerContactsPage";
 import { ManagerTasksPage } from "./pages/manager/ManagerTasksPage";
 import { ManagerSettingsPage } from "./pages/manager/ManagerSettingsPage";
+
+/** Code-split: Puck + offer export must not block initial app load. */
+const OfferBuilderHubPage = lazy(() =>
+  import("./pages/settings/OfferBuilderHubPage").then((m) => ({ default: m.OfferBuilderHubPage })),
+);
+const OfferBuilderEditorPage = lazy(() =>
+  import("./pages/settings/OfferBuilderEditorPage").then((m) => ({ default: m.OfferBuilderEditorPage })),
+);
+
+/** Code-split: @react-pdf/renderer is heavy and can fail independently of the dashboard shell. */
+const InvoiceSetupPage = lazy(() =>
+  import("./pages/settings/InvoiceSetupPage").then((m) => ({ default: m.InvoiceSetupPage })),
+);
+
+function SettingsRouteFallback() {
+  return (
+    <div className="flex min-h-[30vh] items-center justify-center px-4 text-[13px] text-ink-muted">
+      Loading…
+    </div>
+  );
+}
 
 export default function App() {
   return (
@@ -39,7 +63,34 @@ export default function App() {
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="tasks" element={<TasksPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings" element={<SettingsLayout />}>
+          <Route index element={<SettingsHubPage />} />
+          <Route path="pricing-calculator" element={<PricingCalculatorPage />} />
+          <Route
+            path="invoices"
+            element={
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <InvoiceSetupPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="offer-builder"
+            element={
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <OfferBuilderHubPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="offer-builder/edit/:projectId"
+            element={
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <OfferBuilderEditorPage />
+              </Suspense>
+            }
+          />
+        </Route>
       </Route>
       <Route path="manager" element={<ManagerLayout />}>
         <Route index element={<Navigate to="today" replace />} />
