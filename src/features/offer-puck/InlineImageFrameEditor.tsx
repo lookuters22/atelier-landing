@@ -127,6 +127,23 @@ export function InlineImageFrameEditor<T extends InlineImageDraft, S extends Inl
   }, [editor, onCancel, onCommit]);
 
   useEffect(() => {
+    if (!editor) return;
+
+    const onWindowPointerDown = (event: PointerEvent) => {
+      if (interactionRef.current) return;
+      const stage = stageRef.current;
+      const target = event.target as Node | null;
+      if (!stage || !target || stage.contains(target)) return;
+      onCommit();
+    };
+
+    window.addEventListener("pointerdown", onWindowPointerDown, { capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", onWindowPointerDown, { capture: true });
+    };
+  }, [editor, onCommit]);
+
+  useEffect(() => {
     const stage = stageRef.current;
     const moveLayer = moveLayerRef.current;
     if (!editor || !stage || !moveLayer) return;

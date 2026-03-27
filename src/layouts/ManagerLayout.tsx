@@ -126,7 +126,7 @@ function ManagerChrome() {
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-6 border-b border-border bg-canvas/90 px-8 py-4 backdrop-blur-md">
+        <header className="sticky top-0 z-[250] flex items-center justify-between gap-6 border-b border-border bg-canvas/90 px-8 py-4 backdrop-blur-md">
           <div className="relative max-w-xl flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
             <input type="search" placeholder="Search weddings, people, or messages" className="w-full rounded-full border border-border bg-surface py-2.5 pl-11 pr-4 text-[13px] text-ink shadow-[0_8px_24px_rgba(26,28,30,0.06)] placeholder:text-ink-faint focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/20" onKeyDown={(e) => { if (e.key === "Enter") navigate("/manager/inbox"); }} />
@@ -144,7 +144,7 @@ function ManagerChrome() {
                 <ChevronDown className={"h-4 w-4 shrink-0 text-ink-faint transition " + (switcherOpen ? "rotate-180" : "")} />
               </button>
               {switcherOpen ? (
-                <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,16rem)] rounded-2xl border border-border bg-surface py-2 shadow-[0_8px_32px_rgba(26,28,30,0.12)]" role="listbox">
+                <div className="absolute right-0 z-[260] mt-2 w-[min(100vw-2rem,16rem)] rounded-2xl border border-border bg-surface py-2 shadow-[0_8px_32px_rgba(26,28,30,0.12)]" role="listbox">
                   <button
                     type="button"
                     role="option"
@@ -180,7 +180,7 @@ function ManagerChrome() {
             <div className="relative" ref={notifRef}>
               <button type="button" className="relative rounded-full p-2.5 text-ink-muted transition hover:bg-surface hover:text-ink" aria-label="Notifications" aria-expanded={notifOpen} onClick={() => setNotifOpen((o) => !o)}><Bell className="h-5 w-5" strokeWidth={1.5} />{unreadCount > 0 ? <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#e01e5a] ring-2 ring-canvas" /> : null}</button>
               {notifOpen ? (
-                <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,22rem)] rounded-2xl border border-border bg-surface py-2 shadow-[0_8px_32px_rgba(26,28,30,0.12)]">
+                <div className="absolute right-0 z-[260] mt-2 w-[min(100vw-2rem,22rem)] rounded-2xl border border-border bg-surface py-2 shadow-[0_8px_32px_rgba(26,28,30,0.12)]">
                   <div className="flex items-center justify-between border-b border-border px-4 py-2">
                     <p className="text-[13px] font-semibold text-ink">Notifications</p>
                     <button type="button" className="text-[12px] font-semibold text-accent hover:text-accent-hover" onClick={markAllRead}>Mark all read</button>
