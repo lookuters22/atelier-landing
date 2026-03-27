@@ -31,9 +31,17 @@ function loadProjectData(projectId: string): Data {
   return normalizePuckData(p.data);
 }
 
+function clonePuckData(data: Data): Data {
+  if (typeof structuredClone === "function") {
+    return structuredClone(data) as Data;
+  }
+  return JSON.parse(JSON.stringify(data)) as Data;
+}
+
 export function OfferPuckEditor({ projectId }: OfferPuckEditorProps) {
   const { setCommands } = useOfferBuilderShell();
   const [data, setData] = useState<Data>(() => loadProjectData(projectId));
+  const [editorKey, setEditorKey] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewViewportWidth, setPreviewViewportWidth] = useState(
     () => OFFER_PUCK_VIEWPORTS[OFFER_PUCK_VIEWPORTS.length - 1]?.width ?? 1280,
@@ -41,8 +49,14 @@ export function OfferPuckEditor({ projectId }: OfferPuckEditorProps) {
 
   useEffect(() => {
     setData(loadProjectData(projectId));
+    setEditorKey((current) => current + 1);
     setPreviewViewportWidth(OFFER_PUCK_VIEWPORTS[OFFER_PUCK_VIEWPORTS.length - 1]?.width ?? 1280);
   }, [projectId]);
+
+  const replaceDocument = useCallback((nextData: Data) => {
+    setData(normalizePuckData(clonePuckData(nextData)));
+    setEditorKey((current) => current + 1);
+  }, []);
 
   const blockCount = Array.isArray(data.content) ? data.content.length : 0;
 
@@ -143,11 +157,11 @@ export function OfferPuckEditor({ projectId }: OfferPuckEditorProps) {
           <OfferPuckCanvasSelectionScroll />
           <OfferPuckCanvasScrollOutlineSync />
           <OfferPuckInitialSelection />
-          <OfferBuilderPalettePortal onApplyTemplate={setData} />
+          <OfferBuilderPalettePortal onApplyTemplate={replaceDocument} />
         </>
       ),
     }),
-    [previewViewportWidth],
+    [previewViewportWidth, replaceDocument],
   );
 
   const initialUi = useMemo(
@@ -175,6 +189,7 @@ export function OfferPuckEditor({ projectId }: OfferPuckEditorProps) {
         {/* Canvas must not use Puck’s iframe preview: inline edit CSS + pointer-events live in the parent document only. */}
         <OfferViewportProvider width={previewViewportWidth}>
           <Puck
+            key={`${projectId}:${editorKey}`}
             config={offerPuckConfig}
             data={data}
             onChange={setData}
