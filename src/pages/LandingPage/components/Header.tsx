@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   motion,
   useScroll,
@@ -10,6 +11,7 @@ const EASE = [0.75, 0, 0.25, 1] as const;
 const NAV_ITEMS = ["Products", "About", "Learn"];
 
 export function Header() {
+  const navigate = useNavigate();
   const { scrollY } = useScroll();
   const [hidden, setHidden] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -66,7 +68,10 @@ export function Header() {
       </div>
 
       {/* RIGHT: CTA Pill */}
-      <div className="glass-shell interactive-glass pointer-events-auto h-[52px] cursor-pointer rounded-[999px] shadow-[0_6px_12px_rgba(0,0,0,0.1)]">
+      <div
+        className="glass-shell interactive-glass pointer-events-auto h-[52px] cursor-pointer rounded-[999px] shadow-[0_6px_12px_rgba(0,0,0,0.1)]"
+        onClick={() => navigate("/today")}
+      >
         <button
           type="button"
           className="glass-inner justify-center px-10 text-body-small text-white whitespace-nowrap"
