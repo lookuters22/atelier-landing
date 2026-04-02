@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarClock, ClipboardPen, Inbox, ListTodo } from "lucide-react";
+import { CalendarClock, ClipboardPen, FlaskConical, Inbox, ListTodo, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "../../../lib/supabase";
 import { fireDraftsChanged } from "../../../lib/events";
@@ -58,6 +58,34 @@ export function TodayWorkspace() {
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [linkWeddingId, setLinkWeddingId] = useState("");
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function fireTestLead() {
+    try {
+      setIsSimulating(true);
+      setSimResult(null);
+      const { error } = await supabase.functions.invoke("webhook-web", {
+        body: {
+          source: "test_button",
+          photographer_id: photographerId,
+          lead: {
+            name: "Sarah & James",
+            email: "sarah.test@example.com",
+            event_date: "2026-09-15",
+            message:
+              "Hi! We are getting married in Lake Como and absolutely love your editorial style. Are you available for our dates?",
+          },
+        },
+      });
+      if (error) throw error;
+      setSimResult({ ok: true, message: "Lead sent \u2014 check Inbox for the AI pipeline result." });
+    } catch (err: unknown) {
+      setSimResult({ ok: false, message: err instanceof Error ? err.message : "Failed to send test lead." });
+    } finally {
+      setIsSimulating(false);
+    }
+  }
 
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
@@ -152,6 +180,51 @@ export function TodayWorkspace() {
               </ul>
             )}
           </div>
+        </section>
+
+        <section className="mt-8 rounded-lg border border-dashed border-border bg-accent/20 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div
+                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] shadow-md"
+                style={{ background: "linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)" }}
+              >
+                <FlaskConical className="h-[18px] w-[18px] text-white" strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-foreground">Developer Test</p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Fire a simulated inquiry into the live AI pipeline via{" "}
+                  <span className="font-mono text-[11px] text-muted-foreground/70">webhook-web</span>.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={fireTestLead}
+              disabled={isSimulating}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-[13px] text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSimulating ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+              {isSimulating ? "Sending\u2026" : "Simulate Incoming Lead"}
+            </button>
+          </div>
+          {simResult && (
+            <div
+              className={cn(
+                "mt-3 rounded-lg px-4 py-2 text-[13px]",
+                simResult.ok
+                  ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
+                  : "border border-red-500/20 bg-red-500/10 text-red-600",
+              )}
+            >
+              {simResult.message}
+            </div>
+          )}
         </section>
       </div>
     );

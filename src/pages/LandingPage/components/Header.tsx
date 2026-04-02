@@ -70,7 +70,7 @@ export function Header() {
       {/* RIGHT: CTA Pill */}
       <div
         className="glass-shell interactive-glass pointer-events-auto h-[52px] cursor-pointer rounded-[999px] shadow-[0_6px_12px_rgba(0,0,0,0.1)]"
-        onClick={() => navigate("/today")}
+        onClick={() => navigate("/login")}
       >
         <button
           type="button"
