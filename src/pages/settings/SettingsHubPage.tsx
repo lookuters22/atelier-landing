@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, MessageCircle } from "lucide-react";
+import { Check, FlaskConical, MessageCircle, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
@@ -88,6 +89,8 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
   const [waSaving, setWaSaving] = useState(false);
   const [waSaved, setWaSaved] = useState(false);
   const [waError, setWaError] = useState<string | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   useEffect(() => {
     if (!photographerId) return;
@@ -141,6 +144,32 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
       setWaError(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setWaSaving(false);
+    }
+  }
+
+  async function fireTestLead() {
+    try {
+      setIsSimulating(true);
+      setSimResult(null);
+      const { error } = await supabase.functions.invoke("webhook-web", {
+        body: {
+          source: "test_button",
+          photographer_id: photographerId,
+          lead: {
+            name: "Sarah & James",
+            email: "sarah.test@example.com",
+            event_date: "2026-09-15",
+            message:
+              "Hi! We are getting married in Lake Como and absolutely love your editorial style. Are you available for our dates?",
+          },
+        },
+      });
+      if (error) throw error;
+      setSimResult({ ok: true, message: "Lead sent — check Inbox for the AI pipeline result." });
+    } catch (err: unknown) {
+      setSimResult({ ok: false, message: err instanceof Error ? err.message : "Failed to send test lead." });
+    } finally {
+      setIsSimulating(false);
     }
   }
 
@@ -278,6 +307,56 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
           >
             Upload tone examples
           </button>
+        </div>
+      </section>
+
+      {/* ── Developer Tools ── */}
+      <section className="mt-10 mb-6">
+        <h3 className="border-b border-border pb-2 text-[15px] font-medium text-foreground">Developer Tools</h3>
+        <div className="mt-5 rounded-lg border border-border bg-background px-4 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div
+                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] shadow-md"
+                style={{ background: "linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)" }}
+              >
+                <FlaskConical className="h-4 w-4 text-white" strokeWidth={1.75} />
+              </div>
+              <div>
+                <p className="text-[13px] font-semibold text-foreground">Simulate Incoming Lead</p>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
+                  Fire a test inquiry through{" "}
+                  <span className="font-mono text-[11px]">webhook-web</span>{" "}
+                  to validate the AI pipeline end-to-end.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={fireTestLead}
+              disabled={isSimulating}
+              className="shrink-0 inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-[13px] font-semibold text-foreground transition hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSimulating ? (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+              )}
+              {isSimulating ? "Sending…" : "Send Test Lead"}
+            </button>
+          </div>
+          {simResult && (
+            <div
+              className={cn(
+                "mt-3 rounded-lg px-4 py-2 text-[13px]",
+                simResult.ok
+                  ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
+                  : "border border-red-500/20 bg-red-500/10 text-red-600",
+              )}
+            >
+              {simResult.message}
+            </div>
+          )}
         </div>
       </section>
     </div>

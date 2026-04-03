@@ -14,7 +14,7 @@ function nextId() {
 }
 
 const panelShadow = "0 8px 30px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
-const btnShadow = "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)";
+
 
 const ANA_QUERY_EVENT = "ana-widget:open-with-query";
 
@@ -135,7 +135,7 @@ export function SupportAssistantWidget() {
           }
           if (open) computeDir();
         }}
-        className="pointer-events-auto fixed bottom-6 right-6 z-[80]"
+        className="pointer-events-auto fixed bottom-24 right-6 z-[80]"
         style={{ touchAction: "none", x: dragX, y: dragY, overflow: "visible" }}
       >
         {/* Panel -- inside drag container, absolute positioned */}
@@ -226,7 +226,7 @@ export function SupportAssistantWidget() {
           )}
         </AnimatePresence>
 
-        {/* Trigger button */}
+        {/* Trigger — same smoked crystal as Landing Header "Early Access" */}
         <motion.button
           type="button"
           ref={btnRef}
@@ -235,40 +235,43 @@ export function SupportAssistantWidget() {
             if (!open) computeDir();
             setOpen((o) => !o);
           }}
-          className="relative flex min-w-[100px] cursor-grab items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-[12px] font-semibold text-slate-700 transition active:cursor-grabbing hover:bg-slate-50"
-          style={{ boxShadow: btnShadow }}
+          className="relative cursor-grab border-0 bg-transparent p-0 active:cursor-grabbing"
           aria-expanded={open}
           aria-controls="support-assistant-panel"
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
         >
-          <AnimatePresence mode="wait" initial={false}>
-            {open ? (
-              <motion.span
-                key="close"
-                className="flex items-center gap-2"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.15 }}
-              >
-                <X className="h-4 w-4" strokeWidth={2} aria-hidden />
-                Close
-              </motion.span>
-            ) : (
-              <motion.span
-                key="open"
-                className="flex items-center gap-2"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.15 }}
-              >
-                <MessageCircle className="h-4 w-4 text-[#25D366]" strokeWidth={2} aria-hidden />
-                Ana
-              </motion.span>
-            )}
-          </AnimatePresence>
+          <div className="glass-shell interactive-glass min-h-[44px] min-w-[100px] rounded-[999px] shadow-[0_6px_12px_rgba(0,0,0,0.1)]">
+            <span className="glass-inner justify-center gap-2 px-4 py-2.5 text-[12px] font-normal tracking-wide text-white">
+              <AnimatePresence mode="wait" initial={false}>
+                {open ? (
+                  <motion.span
+                    key="close"
+                    className="flex items-center gap-2"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <X className="h-4 w-4 shrink-0" strokeWidth={1.35} aria-hidden />
+                    Close
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="open"
+                    className="flex items-center gap-2"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <MessageCircle className="h-4 w-4 shrink-0 text-white/90" strokeWidth={1.35} aria-hidden />
+                    Ana
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </span>
+          </div>
         </motion.button>
       </motion.div>
     </>
