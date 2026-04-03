@@ -125,7 +125,6 @@ function glowAlongArc(pathT: number): number {
 function SolarArc({ now }: { now: Date }) {
   const uid = useId().replace(/:/g, "");
   const haloId = `${uid}-halo`;
-  const coreId = `${uid}-core`;
   const bloomFilterId = `${uid}-bloom`;
 
   /* Wide gentle arc (large Δx, modest Δy). */
@@ -165,22 +164,9 @@ function SolarArc({ now }: { now: Date }) {
             cy={y}
             r={r * 4.25}
           >
-            <stop offset="0%" stopColor="#fffbeb" stopOpacity="0.65" />
-            <stop offset="22%" stopColor="#fde68a" stopOpacity="0.38" />
-            <stop offset="48%" stopColor="#fb923c" stopOpacity="0.16" />
+            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.35" />
+            <stop offset="35%" stopColor="#fb923c" stopOpacity="0.18" />
             <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient
-            id={coreId}
-            gradientUnits="userSpaceOnUse"
-            cx={x}
-            cy={y - r * 0.12}
-            r={r * 1.08}
-          >
-            <stop offset="0%" stopColor="#fffdf7" stopOpacity="1" />
-            <stop offset="28%" stopColor="#fde68a" stopOpacity="1" />
-            <stop offset="72%" stopColor="#fb923c" stopOpacity="1" />
-            <stop offset="100%" stopColor="#ea580c" stopOpacity="1" />
           </radialGradient>
           <filter
             id={bloomFilterId}
@@ -202,11 +188,15 @@ function SolarArc({ now }: { now: Date }) {
           strokeWidth="1.35"
           strokeLinecap="round"
         />
-        <circle cx={x} cy={y} r={r * 3.9} fill={`url(#${haloId})`} opacity={0.92 * glow} />
-        <g opacity={0.78 * glow} filter={`url(#${bloomFilterId})`}>
-          <circle cx={x} cy={y} r={r * 1.22} fill="#fcd34d" />
+        {/* Halo + bloom underneath; solid disc on top (no radial gradient = no “pin” in the middle) */}
+        <g opacity={opacity}>
+          <circle cx={x} cy={y} r={r * 3.9} fill={`url(#${haloId})`} opacity={0.92 * glow} />
+          <g opacity={0.78 * glow} filter={`url(#${bloomFilterId})`}>
+            {/* Same hue as core so blur has no brighter yellow core than the disc */}
+            <circle cx={x} cy={y} r={r * 1.22} fill="#fb923c" />
+          </g>
+          <circle cx={x} cy={y} r={r} fill="#ea580c" />
         </g>
-        <circle cx={x} cy={y} r={r} fill={`url(#${coreId})`} opacity={opacity} />
       </svg>
     </span>
   );
