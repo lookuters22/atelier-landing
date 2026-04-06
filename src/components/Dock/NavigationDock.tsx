@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -9,8 +9,11 @@ import {
   Briefcase,
   Users,
   Settings,
+  AlertCircle,
 } from "lucide-react";
 import { FloatingDock, type DockItem } from "./FloatingDock";
+import { useAuth } from "../../context/AuthContext";
+import { supabase } from "../../lib/supabase";
 
 const NAV_ITEMS = [
   { to: "/today", icon: Sun, label: "Home", match: (p: string) => p.startsWith("/today") || p === "/" },
@@ -54,23 +57,68 @@ function EphemeralHint() {
 export function NavigationDock() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { photographerId } = useAuth();
   const [isHovering, setIsHovering] = useState(false);
+  const [openEscalationsCount, setOpenEscalationsCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!photographerId) {
+      setOpenEscalationsCount(null);
+      return;
+    }
+    let cancelled = false;
+    async function loadOpenEscalations() {
+      const { count, error } = await supabase
+        .from("escalation_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("photographer_id", photographerId)
+        .eq("status", "open");
+      if (cancelled || error) return;
+      setOpenEscalationsCount(count ?? 0);
+    }
+    void loadOpenEscalations();
+    const interval = setInterval(() => void loadOpenEscalations(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [photographerId]);
 
   const isFocusMode = !pathname.startsWith("/today") && pathname !== "/";
 
   const handleMouseEnterTrigger = useCallback(() => setIsHovering(true), []);
   const handleMouseLeaveDock = useCallback(() => setIsHovering(false), []);
 
-  const dockItems: DockItem[] = NAV_ITEMS.map((item) => {
-    const active = item.match(pathname);
-    return {
+  const dockItems: DockItem[] = useMemo(() => {
+    const mapItem = (item: (typeof NAV_ITEMS)[number]): DockItem => ({
       title: item.label,
       icon: <item.icon className="size-[1em] shrink-0" strokeWidth={1.35} aria-hidden />,
       href: item.to,
-      active,
+      active: item.match(pathname),
       onClick: () => navigate(item.to),
+    });
+
+    const escalationIcon = (
+      <span className="relative inline-flex items-center justify-center" aria-hidden>
+        <AlertCircle className="size-[1em] shrink-0" strokeWidth={1.35} />
+        {openEscalationsCount != null && openEscalationsCount > 0 ? (
+          <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white tabular-nums shadow-sm">
+            {openEscalationsCount > 99 ? "99+" : openEscalationsCount}
+          </span>
+        ) : null}
+      </span>
+    );
+
+    const escalationsItem: DockItem = {
+      title: "Escalations",
+      icon: escalationIcon,
+      href: "/escalations",
+      active: pathname.startsWith("/escalations"),
+      onClick: () => navigate("/escalations"),
     };
-  });
+
+    return [...NAV_ITEMS.slice(0, 2).map(mapItem), escalationsItem, ...NAV_ITEMS.slice(2).map(mapItem)];
+  }, [navigate, pathname, openEscalationsCount]);
 
   const isVisible = !isFocusMode || isHovering;
 

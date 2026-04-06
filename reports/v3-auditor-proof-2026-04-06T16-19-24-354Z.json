@@ -1,0 +1,169 @@
+{
+  "schema": "v3_auditor_proof_v1",
+  "generatedAt": "2026-04-06T16:19:24.355Z",
+  "runId": "AUDITOR-PROOF-1775492244585",
+  "photographerId": "beee13da-bbb2-4c94-992f-7dde911209ec",
+  "deterministic": {
+    "r1_grounded_commit_pass": {
+      "isValid": true
+    },
+    "r2_ungrounded_structured_fail": {
+      "isValid": false,
+      "violations": [
+        "deposit_percentage 30% is not present in verified playbook_rules text (CRM does not carry deposit %).",
+        "travel_miles_included 50 is not present in verified playbook_rules text with travel/distance context.",
+        "email_draft asserts deposit/booking percentage 30% in prose without matching verified playbook_rules text.",
+        "email_draft asserts travel/mileage 50 in prose without matching verified playbook_rules text."
+      ]
+    },
+    "r3_ungrounded_prose_fail": {
+      "isValid": false,
+      "violations": [
+        "email_draft asserts deposit/booking percentage 30% in prose without matching verified playbook_rules text."
+      ]
+    },
+    "deterministicProven": true
+  },
+  "branches": [
+    {
+      "branch": "happy",
+      "label": "HAPPY",
+      "weddingId": "c72f341a-2388-4f7a-a0ad-43e0ecdcd3b3",
+      "threadId": "5f9d0de7-d507-4252-ba15-fbd1dca001e0",
+      "waitOk": true,
+      "draftId": "4e75d29b-872d-4b7e-95cd-96231e3abe54",
+      "draftBodyPreview": "Dear Auditor proof HAPPY-AUDITOR-PROOF-1775492244585,\n\nThank you so much—we're thrilled you're leaning in this direction!\n\nI'm happy to confirm: the **Elite collection** secures your December 6, 2026 Tuscany date with a **30% retainer** when the contract is signed, and **engagement-session travel within 50 miles of Florence is included** as part of that offering.\n\nIf you're ready to move forward this week, I'll send over the contract and payment details right away. Once we have your signed agreement and retainer, your date is officially held and we can start planning the finer details together.\n\nPlease let me know if you'd like me to email the paperwork today, or if you have any other questions before we proceed.\n\nWarmly,\n\n[Studio Manager]\n[Studio Name]\n[Contact Information]",
+      "instructionHistoryRaw": [
+        {
+          "step": "client_orchestrator_v1",
+          "action_key": "send_message",
+          "candidate_id": "cand-1-send_message",
+          "action_family": "send_message",
+          "schema_version": 1,
+          "playbook_rule_ids": null,
+          "orchestrator_slice": "A2_draft"
+        },
+        {
+          "step": "persona_writer_after_client_orchestrator_v1",
+          "model": "claude-sonnet-4-5-20250929",
+          "source": "personaAgent.draftPersonaStructuredResponse",
+          "committed_terms": {
+            "package_names": [
+              "Elite collection"
+            ],
+            "deposit_percentage": 30,
+            "travel_miles_included": 50
+          }
+        },
+        {
+          "step": "v3_output_auditor_commercial_terms",
+          "passed": true
+        }
+      ],
+      "isStubFallback": false,
+      "parsed": {
+        "committed_terms": {
+          "package_names": [
+            "Elite collection"
+          ],
+          "deposit_percentage": 30,
+          "travel_miles_included": 50
+        },
+        "auditPassed": true,
+        "violations": [],
+        "personaStepFound": true,
+        "auditorStepFound": true,
+        "faultInjectionFlag": null
+      },
+      "auditorEscalations": [],
+      "notes": "stable 18000ms"
+    },
+    {
+      "branch": "failure",
+      "label": "FAILURE",
+      "weddingId": "5f3419fd-54e0-4500-9258-aecd10f09b6a",
+      "threadId": "87484e4f-6094-4bb2-98a6-99f4b2bb5e58",
+      "waitOk": true,
+      "draftId": "18f120e4-e165-4e35-8c84-c69e84958513",
+      "draftBodyPreview": "[Orchestrator draft — clientOrchestratorV1 QA path]\nAction: send_message (send_message)\nChannel: email\n\nRationale: Draft or send a client-appropriate reply on email; align with playbook and decision mode (draft_only).\n\nInbound (excerpt):\nThanks, this helps. We're leaning toward the Elite collection — can you confirm the deposit is 30% to hold the date, and that travel for the engagement session within 50 miles of Florence is included? We can pay the deposit this week.\n\n--\n[auditor_proof_failure] AUDITOR-PROOF-1775492244585\n\nThis text is a pending-approval draft only. It must not be sent without operator approval.\n\n[V3 output auditor] Persona draft rejected — stub restored. Operator escalation filed for ungrounded commercial terms.",
+      "instructionHistoryRaw": [
+        {
+          "step": "client_orchestrator_v1",
+          "action_key": "send_message",
+          "candidate_id": "cand-1-send_message",
+          "action_family": "send_message",
+          "schema_version": 1,
+          "playbook_rule_ids": null,
+          "orchestrator_slice": "A2_draft"
+        },
+        {
+          "step": "persona_writer_after_client_orchestrator_v1",
+          "model": "claude-sonnet-4-5-20250929",
+          "source": "personaAgent.draftPersonaStructuredResponse",
+          "committed_terms": {
+            "package_names": [
+              "Elite collection"
+            ],
+            "deposit_percentage": 30,
+            "travel_miles_included": 50
+          },
+          "v3_auditor_test_fault_injection": true
+        },
+        {
+          "step": "v3_output_auditor_commercial_terms",
+          "passed": false,
+          "violations": [
+            "package_name not grounded: \"Elite collection\" (must appear in CRM package_name, playbook_rules text, or case memory headers).",
+            "deposit_percentage 30% is not present in verified playbook_rules text (CRM does not carry deposit %).",
+            "travel_miles_included 50 is not present in verified playbook_rules text with travel/distance context."
+          ],
+          "escalation_id": "889c6146-6a05-4dba-8435-4015dbe5f147"
+        }
+      ],
+      "isStubFallback": true,
+      "parsed": {
+        "committed_terms": {
+          "package_names": [
+            "Elite collection"
+          ],
+          "deposit_percentage": 30,
+          "travel_miles_included": 50
+        },
+        "auditPassed": false,
+        "violations": [
+          "package_name not grounded: \"Elite collection\" (must appear in CRM package_name, playbook_rules text, or case memory headers).",
+          "deposit_percentage 30% is not present in verified playbook_rules text (CRM does not carry deposit %).",
+          "travel_miles_included 50 is not present in verified playbook_rules text with travel/distance context."
+        ],
+        "personaStepFound": true,
+        "auditorStepFound": true,
+        "faultInjectionFlag": true
+      },
+      "auditorEscalations": [
+        {
+          "id": "889c6146-6a05-4dba-8435-4015dbe5f147",
+          "created_at": "2026-04-06T16:18:57.952909+00:00",
+          "status": "open",
+          "reason_code": "v3_output_auditor_ungrounded_commercial",
+          "action_key": "orchestrator.client.v1.output_auditor.v1",
+          "thread_id": "87484e4f-6094-4bb2-98a6-99f4b2bb5e58",
+          "wedding_id": "5f3419fd-54e0-4500-9258-aecd10f09b6a"
+        }
+      ],
+      "notes": "stable 18000ms"
+    }
+  ],
+  "checks": {
+    "deterministicProven": true,
+    "liveHappyObserved": true,
+    "liveFailureStubObserved": true,
+    "failureBranchFaultInjectionObserved": true,
+    "verdict": "**Deterministic auditor proven** (in-process). **Live pipeline** shows grounded persona draft and failure stub + auditor escalation."
+  },
+  "qaFaultInjection": {
+    "edgeSecret": "V3_AUDITOR_TEST_FORCE_UNGROUNDED_TERMS=1",
+    "marker": "auditor_proof_failure",
+    "module": "supabase/functions/_shared/orchestrator/v3AuditorTestFaultInjection.ts"
+  },
+  "inngestEventNote": "On rejection, `recordV3OutputAuditorEscalation` calls `inngest.send` for `operator/escalation.pending_delivery.v1` after DB insert; confirm in Inngest Cloud if needed."
+}

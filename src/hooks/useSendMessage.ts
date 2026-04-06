@@ -35,7 +35,7 @@ export function useSendMessage() {
     try {
       const { data: thread, error: threadErr } = await supabase
         .from("threads")
-        .select("id, wedding_id")
+        .select("id, wedding_id, photographer_id")
         .eq("id", threadId)
         .maybeSingle();
 
@@ -43,19 +43,21 @@ export function useSendMessage() {
         return fail(threadErr?.message ?? "Thread not found.");
       }
 
-      const { data: wedding, error: weddingErr } = await supabase
-        .from("weddings")
-        .select("photographer_id")
-        .eq("id", thread.wedding_id)
-        .maybeSingle();
+      if (thread.photographer_id !== photographerId) {
+        return fail("Not allowed for this thread.");
+      }
 
-      if (weddingErr || !wedding || wedding.photographer_id !== photographerId) {
-        return fail(weddingErr?.message ?? "Not allowed for this wedding.");
+      // Slice 3: client-facing outbound must not bypass approval / outbound policy (no direct insert).
+      if (!isInternal) {
+        return fail(
+          "Client-facing messages cannot be sent from here. Use draft approval and the outbound pipeline.",
+        );
       }
 
       const { error: insertErr } = await supabase.from("messages").insert({
         thread_id: threadId,
-        direction: isInternal ? "internal" : "out",
+        photographer_id: photographerId,
+        direction: "internal",
         sender: "Studio",
         body: trimmed,
       });

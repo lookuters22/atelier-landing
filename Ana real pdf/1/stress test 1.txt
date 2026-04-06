@@ -1,0 +1,51 @@
+1. Notepad Extractions (Fluid Memory)
+The background memory worker would have a field day with this thread. It needs to extract the following permanent notes into Dana’s dossier:
+
+Entity Identity & B2B Pivot: Dana Alloy is the founder/partner of Indalo Travel. She is not just a bride; she is a B2B partner.
+
+VIP Dynamics: The Wedding Planner is Anne Mann (timeline questions go to her, not Dana).
+
+Financial & Deal Structures: Dana gets a 10% commission on any wedding referrals. She also has a customized editing rate: 3€ per image (discounted from 10€) with 80 complimentary edits.
+
+Aesthetic Preferences (Critical): Dislikes hyper-saturated presets. Hates washed-out skin. Prefers natural, dark brown hair color and realistic/tan skin tones. Prefers the "raw" look over heavy color grading.
+
+Studio Boundaries: If Dana posts raw/unedited photos on Instagram, she is strictly instructed not to tag Danilo & Sharon to protect the portfolio's consistency.
+
+⚡ 2. Tool Triggers (The Orchestrator)
+Here is exactly when the Orchestrator would need to fire its specific tools to survive this thread:
+
+Pre-Flight (Entity Resolution): * Trigger: [Wed, Mar 5, 2025 at 2:00 PM] An email arrives from erin@indalo.travel but is signed by Dana, discussing PR and Safari packages.
+
+Action: The router must link the indalo.travel domain and the Safari context to the existing Dana & Matt wedding file, preventing the AI from treating Indalo Travel as a brand new corporate inquiry.
+
+Tool: check_calendar & generate_meeting:
+
+Trigger: [Tue, Dec 17, 2024] and [Thu, Feb 20, 2025]
+
+Action: Ana needs to ping Danilo's availability and successfully generate Zoom links with passwords for both the pre-wedding prep and the post-wedding B2B pitch.
+
+Tool: escalate_to_boss:
+
+Trigger 1: [Mon, Mar 31, 2025 at 4:40 PM] Dana asks if there is a bulk discount for 500-800 extra photos and if B&W photos can be reversed to color for free. (AI must halt: It cannot negotiate bulk discounts or assess the technical labor of B&W-to-color conversion).
+
+Trigger 2: [Sun, Apr 27, 2025 at 9:12 PM] Dana sends a massive, highly critical complaint about the wedding day colors looking "fake," her hair looking "yellow," and the crops being weird. (AI must halt immediately: An AI should never handle artistic critique or offer free re-edits without the photographer's direct input).
+
+Trigger 3: [Mon, May 26, 2025 at 12:10 PM] Dana asks for high-res RAW photos for Instagram. (AI must halt: Releasing RAW files is the biggest taboo in photography. The boss must dictate the exact terms of release).
+
+🚨 3. Architecture Gaps (Where the humans got messy)
+This thread exposed a few brilliant edge cases we need to account for in the final build:
+
+Gap A: The "Artistic Critique" Protocol
+The AI is fantastic at logistical policies (e.g., "extra hours cost X"). But when a client says, "My hair looks reddish and the background is too green," the AI is blind. It cannot see the photos.
+
+The Fix: We must add a strict rule to the knowledge_base: "If a client expresses dissatisfaction with the artistic style, coloring, or editing of their photos, you MUST immediately use escalate_to_boss. Do not attempt to explain the editing process or apologize for the colors yourself."
+
+Gap B: The Eternal "Wire Transfer" Chase
+Ana had to chase Dana for missing bank wires three separate times over a six-month period. If the AI just says "I'll keep an eye out for it," it might forget to follow up if the client goes silent.
+
+The Fix: The AI needs a schedule_follow_up tool. If a client says "I am wiring the money today," the AI should trigger a background Inngest sleep timer that wakes up in 4 days. If the invoice isn't marked paid in the database by then, Ana autonomously drafts a polite nudge email.
+
+Gap C: The Context Shift (From Client to Colleague)
+Halfway through, the relationship changes. Dana stops talking like a bride and starts sending highly detailed B2B itineraries, emergency numbers, and PR strategies.
+
+The Fix: The "Fluid Notepad" handles this perfectly, but the AI's tone needs to adapt. Once the Notepad registers "B2B Partner," the AI's system prompt should slightly dial down the "luxury wedding concierge" voice and dial up the "efficient industry peer" voice.

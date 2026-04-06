@@ -1,0 +1,58 @@
+AI Studio Manager Architecture: Master Plan
+1. The Pre-Flight Router (Entity Resolution)
+Goal: Prevent duplicate quotes and connect crossed wires (e.g., Planner vs. Bride).
+
+The Webhook Intake: A new email arrives via webhook.
+
+The Matchmaker Script: Before the AI reads the email, a script scans the text strictly for Event Date and Location (e.g., Sept 2, Taormina).
+
+The Merge: It queries the Supabase database. If a wedding already exists for that date and location, the email is dynamically merged into the existing file. Ana instantly gains the full context of any previous quotes sent to planners or family members.
+
+2. The Fluid Notepad (Memory Extraction)
+Goal: Replace rigid categories with a natural, learning "sponge" that captures preferences and vibes.
+
+The Background Worker: A fast, cheap worker (gpt-4o-mini) reads every incoming and outgoing message.
+
+The Semantic Extraction: It looks for preferences, boundaries, and agency dynamics (e.g., "Loves moody lighting," "Planner gets 10% commission," "Does not want getting-ready photos").
+
+The Save: It saves these as simple, searchable text nodes linked to the wedding_id. Ana queries this notepad to seamlessly match the client's tone and constraints without needing strict database buckets.
+
+3. The 4-Part Context Dossier (Prompt Assembly)
+Goal: Mathematically lock the token count to ~2,100 tokens to completely eliminate the "Lost in the Middle" syndrome and keep Anthropic API costs flat, no matter how long the thread gets.
+When preparing to draft an email, the Orchestrator assembles its brain from 4 strict database queries:
+
+The Rulebook (Tier 1): Top 3 relevant Markdown policy modules from the knowledge_base (~900 tokens).
+
+The Notepad (Tier 2): Extracted preferences for this specific wedding (~300 tokens).
+
+The Rolling Summary (Tier 3): A dense, continuously updated paragraph of the entire relationship history (~400 tokens).
+
+The Sliding Window: Only the raw text of the 3 most recent emails (~500 tokens).
+
+4. The Orchestrator & Action Tools
+Goal: Give Ana the tools to act autonomously when she has the data, and halt when she doesn't.
+The Orchestrator runs the Authority Check and decides which tool to use:
+
+Tool: generate_meeting / check_calendar: If the client wants to book a call, Ana pings the photographer's Google Calendar for availability and generates a real Zoom link with a password.
+
+Tool: draft_response: If Ana has all the facts and policy authority, she passes the verified data to the Persona Agent to write the luxury email and drops it in the Approval Inbox.
+
+Tool: escalate_to_boss: If the client asks a question with no matching rule in the knowledge_base, Ana halts the workflow and triggers Phase 5.
+
+5. The Escalation & Learning Loop (WhatsApp)
+Goal: The self-healing safety net that teaches Ana new rules on the fly.
+
+The Ping: The Inngest worker pauses and sends a WhatsApp message via Twilio: "Ashley asked if she can bring her dog to the engagement shoot. I don't have a rule for this. How should I reply?"
+
+The Pause: The system executes step.waitForEvent(), safely putting the AI to sleep.
+
+The Compiler: You reply to the text: "Dogs are fine on a leash." A webhook catches this, formats it into a strict Markdown # POLICY module, and saves it to the knowledge_base.
+
+The Resumption: The Inngest worker wakes back up, re-reads the updated Rulebook, realizes it now has authority, and finishes drafting the email for the client.
+
+Infrastructure Stack Summary
+Logic & Queues: Inngest (handles the pauses, background extractions, and tool chaining).
+
+Database & Vector Search: Supabase / pgvector (houses the isolated wedding_id records, the Markdown vector embeddings, and the rolling summaries).
+
+LLM Engine: Claude 3.5 Sonnet (for the luxury Persona Agent) & OpenAI gpt-4o-mini (for cheap, fast background memory extraction).

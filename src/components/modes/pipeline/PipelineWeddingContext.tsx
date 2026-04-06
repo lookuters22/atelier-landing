@@ -14,6 +14,8 @@ import { WeddingLogisticsCard } from "../../../components/wedding-detail/Wedding
 import { StoryNotesCard } from "../../../components/wedding-detail/StoryNotesCard";
 import { WeddingAttachmentsCard } from "../../../components/wedding-detail/WeddingAttachmentsCard";
 import { OtherWeddingsCard } from "../../../components/wedding-detail/OtherWeddingsCard";
+import { WeddingManualControlsCard } from "../../../components/wedding-detail/WeddingManualControlsCard";
+import { useAuth } from "../../../context/AuthContext";
 import { useTimedToast } from "../../../hooks/useTimedToast";
 import { useSendMessage } from "../../../hooks/useSendMessage";
 import { useWeddingProject, type ThreadWithDrafts, type ProjectTask } from "../../../hooks/useWeddingProject";
@@ -57,6 +59,18 @@ export function PipelineWeddingProvider({ children }: { children: ReactNode }) {
       {children}
     </PipelineWeddingLoader>
   );
+}
+
+/** Same loader + context as pipeline, keyed by an explicit wedding id (Inbox project selection). */
+export function PipelineWeddingProviderByWeddingId({
+  weddingId,
+  children,
+}: {
+  weddingId: string | null;
+  children: ReactNode;
+}) {
+  if (!weddingId) return <>{children}</>;
+  return <PipelineWeddingLoader weddingId={weddingId}>{children}</PipelineWeddingLoader>;
 }
 
 function PipelineWeddingLoader({ weddingId, children }: { weddingId: string; children: ReactNode }) {
@@ -253,12 +267,16 @@ export function PipelineTimelinePane() {
 /** Renders the right pane: sidebar cards */
 export function PipelineSidebarCards() {
   const state = usePipelineWedding();
+  const { photographerId } = useAuth();
   if (!state) return null;
 
-  const { entry, detailState, setTabAndUrl } = state;
+  const { weddingId, entry, detailState, setTabAndUrl } = state;
 
   return (
     <div className="space-y-4 p-4">
+      {photographerId ? (
+        <WeddingManualControlsCard weddingId={weddingId} photographerId={photographerId} />
+      ) : null}
       <WeddingOverviewCard
         weddingFields={detailState.weddingFields}
         editingWedding={detailState.editingWedding}

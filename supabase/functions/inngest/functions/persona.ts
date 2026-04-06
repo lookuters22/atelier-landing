@@ -1,23 +1,27 @@
 /**
- * Persona Agent — Brand Voice & Drafting.
+ * Persona drafting — execute_v3 Phase 6.5 Step 6.5H (**agents / tools / workers** split).
  *
- * Listens for ai/intent.persona.
+ * - **Worker (runtime unit):** `personaFunction` is an Inngest worker — durable steps, retries, DB side
+ *   effects (`drafts` only; outbound WhatsApp is not sent here — Slice 3). It is *not* an extra named “agent role” in `v3TargetAgentRoles`;
+ *   it is the operational shell around one slice of work.
+ * - **Agent (reasoning role):** the **writer / persona** turn — Anthropic Messages loop that composes copy.
+ *   That reasoning stays inside this worker; we do not register a separate autonomous “persona agent” worker type.
+ * - **Tools (bounded capabilities):** only `search_past_communications` (RAG) is exposed to the model in this loop.
+ *   Calendar/CRM/orchestration belong elsewhere (tools or other workers), not here.
  *
- * Runs an agentic tool-calling loop with Anthropic Claude Sonnet 4:
- * 1. Fetches wedding + photographer context for dynamic prompt interpolation.
- * 2. The LLM is bound to the search_past_communications RAG tool.
- * 3. System prompt enforces European luxury minimalist style.
- * 4. The finished draft is saved to the drafts table for human approval.
- *
- * Each iteration of the loop is wrapped in step.run() for durable execution.
+ * Event: `ai/intent.persona`. Each tool round is wrapped in `step.run()` for durability.
  */
 import { inngest } from "../../_shared/inngest.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
-import { sendWhatsAppMessage } from "../../_shared/twilio.ts";
 import {
   searchPastCommunications,
   type RagToolParams,
 } from "../../_shared/tools/rag.ts";
+import { PERSONA_STRICT_STUDIO_BUSINESS_RULES } from "../../_shared/prompts/personaStudioRules.ts";
+import {
+  anthropicMessagesHeadersWithPromptCaching,
+  cachedEphemeralSystemBlocks,
+} from "../../_shared/persona/anthropicPromptCache.ts";
 
 const MODEL = "claude-sonnet-4-20250514";
 
@@ -35,6 +39,8 @@ function buildSystemPrompt(ctx: PersonaContext): string {
   const firstName = ctx.coupleNames.split("&")[0]?.trim() || ctx.coupleNames;
 
   return `You are the Client Manager for a high-end, luxury photography studio. You must write exactly like a busy, professional human studio manager — not like an AI.
+
+${PERSONA_STRICT_STUDIO_BUSINESS_RULES}
 
 BEFORE DRAFTING: Use your search tool twice.
 1. Search document_type: 'brand_voice' to learn tone rules.
@@ -127,25 +133,29 @@ type AnthropicResponse = {
   stop_reason: "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
 };
 
+type ClaudeMetricsContext = { qa_sim_turn?: number };
+
+type ClaudeCallResult = AnthropicResponse & {
+  usage: { input_tokens: number; output_tokens: number };
+};
+
 async function callClaude(
   systemPrompt: string,
   messages: AnthropicMessage[],
-): Promise<AnthropicResponse> {
+  metrics?: ClaudeMetricsContext,
+): Promise<ClaudeCallResult> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
 
+  // Same prompt-caching shape as _shared/persona/personaAgent.ts (ephemeral system cache).
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
+    headers: anthropicMessagesHeadersWithPromptCaching(apiKey),
     body: JSON.stringify({
       model: MODEL,
-      system: systemPrompt,
+      system: cachedEphemeralSystemBlocks(systemPrompt),
       max_tokens: 2048,
-      temperature: 0.4,
+      temperature: 0.7,
       tools: [TOOL_SPEC],
       messages,
     }),
@@ -156,7 +166,22 @@ async function callClaude(
     throw new Error(`Anthropic API error ${res.status}: ${body}`);
   }
 
-  return (await res.json()) as AnthropicResponse;
+  const data = (await res.json()) as AnthropicResponse & {
+    usage?: { input_tokens: number; output_tokens: number };
+  };
+  const usage = {
+    input_tokens: data.usage?.input_tokens ?? 0,
+    output_tokens: data.usage?.output_tokens ?? 0,
+  };
+  console.log(
+    JSON.stringify({
+      type: "persona_metrics",
+      usage: data.usage,
+      prompt_caching: true,
+      ...(metrics?.qa_sim_turn != null ? { qa_sim_turn: metrics.qa_sim_turn } : {}),
+    }),
+  );
+  return { content: data.content, stop_reason: data.stop_reason, usage };
 }
 
 function extractText(blocks: ContentBlock[]): string {
@@ -184,15 +209,19 @@ function formatDate(iso: string): string {
   }
 }
 
-// ── Inngest function ─────────────────────────────────────────────
+// ── Worker: Inngest runtime unit (durable orchestration of draft pipeline) ──
 
 const MAX_TOOL_ROUNDS = 5;
 
 export const personaFunction = inngest.createFunction(
-  { id: "persona-agent", name: "Persona Agent — Brand Voice & Drafting" },
+  {
+    id: "persona-agent",
+    name: "Persona drafting worker — writer role + RAG tool (6.5H)",
+  },
   { event: "ai/intent.persona" },
   async ({ event, step }) => {
-    const { wedding_id, thread_id, photographer_id, raw_facts, reply_channel } = event.data;
+    const { wedding_id, thread_id, photographer_id, raw_facts, qa_sim_turn } =
+      event.data;
 
     // ── Fetch context for dynamic prompt interpolation ────────────
     const ctx = await step.run("fetch-persona-context", async () => {
@@ -204,12 +233,13 @@ export const personaFunction = inngest.createFunction(
       let managerName = "The Atelier Team";
       let photographerNames = "our team";
 
-      if (wedding_id) {
+      if (wedding_id && photographer_id) {
         const { data: wedding } = await supabaseAdmin
           .from("weddings")
           .select("couple_names, wedding_date, location, stage")
           .eq("id", wedding_id)
-          .single();
+          .eq("photographer_id", photographer_id)
+          .maybeSingle();
 
         if (wedding) {
           coupleNames = (wedding.couple_names as string) || coupleNames;
@@ -249,8 +279,9 @@ export const personaFunction = inngest.createFunction(
 
     const systemPrompt = buildSystemPrompt(ctx);
 
-    // ── Agentic tool-calling loop ────────────────────────────────
-    const draftBody = await step.run("agentic-drafting-loop", async () => {
+    // ── Reasoning: writer/persona loop + bounded tool (RAG only) ──
+    const draftResult = await step.run("writer-persona-rag-tool-loop", async () => {
+      const metrics: ClaudeMetricsContext = { qa_sim_turn };
       const messages: AnthropicMessage[] = [
         {
           role: "user",
@@ -267,18 +298,32 @@ export const personaFunction = inngest.createFunction(
         },
       ];
 
+      let totalIn = 0;
+      let totalOut = 0;
+      const addUsage = (u: { input_tokens: number; output_tokens: number }) => {
+        totalIn += u.input_tokens;
+        totalOut += u.output_tokens;
+      };
+
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-        const response = await callClaude(systemPrompt, messages);
+        const response = await callClaude(systemPrompt, messages, metrics);
+        addUsage(response.usage);
 
         messages.push({ role: "assistant", content: response.content });
 
         if (response.stop_reason === "end_turn" || response.stop_reason === "max_tokens") {
-          return extractText(response.content);
+          return {
+            draftBody: extractText(response.content),
+            usage_totals: { input_tokens: totalIn, output_tokens: totalOut },
+          };
         }
 
         const toolUses = extractToolUses(response.content);
         if (toolUses.length === 0) {
-          return extractText(response.content);
+          return {
+            draftBody: extractText(response.content),
+            usage_totals: { input_tokens: totalIn, output_tokens: totalOut },
+          };
         }
 
         const toolResults: ToolResultBlock[] = [];
@@ -302,15 +347,23 @@ export const personaFunction = inngest.createFunction(
         messages.push({ role: "user", content: toolResults });
       }
 
-      const fallback = await callClaude(systemPrompt, messages);
-      return extractText(fallback.content);
+      const fallback = await callClaude(systemPrompt, messages, metrics);
+      addUsage(fallback.usage);
+      return {
+        draftBody: extractText(fallback.content),
+        usage_totals: { input_tokens: totalIn, output_tokens: totalOut },
+      };
     });
+
+    const draftBody = draftResult.draftBody;
+    const usageTotals = draftResult.usage_totals;
 
     // ── Save draft for human approval ────────────────────────────
     const draftId = await step.run("save-draft", async () => {
       const { data, error } = await supabaseAdmin
         .from("drafts")
         .insert({
+          photographer_id,
           thread_id,
           status: "pending_approval",
           body: draftBody,
@@ -321,6 +374,7 @@ export const personaFunction = inngest.createFunction(
               model: MODEL,
               context: ctx,
               tool_calls_enabled: true,
+              usage: usageTotals,
             },
           ],
         })
@@ -331,42 +385,14 @@ export const personaFunction = inngest.createFunction(
       return data.id as string;
     });
 
-    // ── Conditional WhatsApp outbound ─────────────────────────────
-    let whatsappSid: string | null = null;
-
-    if (reply_channel === "whatsapp") {
-      whatsappSid = await step.run("send-whatsapp-reply", async () => {
-        // Find the client's phone number from the most recent inbound message on this thread
-        const { data: inboundMsg } = await supabaseAdmin
-          .from("messages")
-          .select("sender")
-          .eq("thread_id", thread_id)
-          .eq("direction", "in")
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const clientNumber = (inboundMsg?.sender as string) ?? null;
-
-        if (!clientNumber) {
-          console.warn(`[persona] No inbound sender found for thread ${thread_id}, skipping WhatsApp send`);
-          return null;
-        }
-
-        console.log(`[persona] Sending WhatsApp reply to ${clientNumber} for thread ${thread_id}`);
-        const sid = await sendWhatsAppMessage(clientNumber, draftBody);
-        return sid;
-      });
-    }
+    // Slice 3: no direct WhatsApp send from persona — drafts go through approval / verifier-gated outbound.
 
     return {
-      status: reply_channel === "whatsapp" && whatsappSid
-        ? "draft_saved_and_sent_whatsapp"
-        : "draft_pending_approval",
+      status: "draft_pending_approval" as const,
       wedding_id,
       thread_id,
       draftId,
-      whatsappSid,
+      whatsapp_send_skipped: true as const,
     };
   },
 );

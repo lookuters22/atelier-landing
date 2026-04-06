@@ -39,13 +39,18 @@ export const studioFunction = inngest.createFunction(
   { id: "studio-worker", name: "Studio Worker — Post-Production & Upsells" },
   { event: "ai/intent.studio" },
   async ({ event, step }) => {
-    const { wedding_id, raw_message } = event.data;
+    const { wedding_id, raw_message, photographer_id } = event.data;
+
+    if (!photographer_id || typeof photographer_id !== "string") {
+      throw new Error("ai/intent.studio: missing photographer_id (tenant-proof required)");
+    }
 
     const wedding = await step.run("fetch-wedding", async () => {
       const { data, error } = await supabaseAdmin
         .from("weddings")
         .select("id, couple_names, wedding_date, stage")
         .eq("id", wedding_id)
+        .eq("photographer_id", photographer_id)
         .single();
 
       if (error || !data) {
@@ -65,6 +70,7 @@ export const studioFunction = inngest.createFunction(
         .from("threads")
         .select("id")
         .eq("wedding_id", wedding_id)
+        .eq("photographer_id", photographer_id)
         .order("last_activity_at", { ascending: false })
         .limit(1);
 
@@ -90,6 +96,7 @@ export const studioFunction = inngest.createFunction(
       const { data, error } = await supabaseAdmin
         .from("drafts")
         .insert({
+          photographer_id,
           thread_id: threadId,
           status: "pending_approval",
           body,

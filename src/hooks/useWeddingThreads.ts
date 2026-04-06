@@ -134,7 +134,6 @@ export function useWeddingThreads({
       const { error } = await supabase.functions.invoke("webhook-approval", {
         body: {
           draft_id: pendingDraft.id,
-          photographer_id: photographerId,
         },
       });
       if (error) throw error;

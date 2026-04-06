@@ -1,0 +1,6 @@
+# Raw RET1 / log exports may contain PII — do not commit by default
+*.log
+
+# V3 harness transcripts (may contain client text)
+v3-thread-verification-*.md
+v3-thread-verification-*.json

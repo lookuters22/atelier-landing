@@ -1,11 +1,32 @@
 /**
  * Approval Webhook — fires the approval/draft.approved event.
  *
- * Stateless bridge: accepts { draft_id, photographer_id } from the frontend,
- * emits the Inngest event, and returns 200. The Outbound Worker handles
- * validation, sending, and recording.
+ * Requires a valid Supabase JWT. Photographer tenant id is taken from `auth.getUser()`,
+ * not from the request body (prevents client spoofing).
+ *
+ * Service-role ownership check: draft must belong to a thread owned by the JWT user
+ * (same pattern as `api-resolve-draft`).
  */
 import { inngest } from "../_shared/inngest.ts";
+import { supabaseAdmin } from "../_shared/supabase.ts";
+import { requirePhotographerIdFromJwt } from "../_shared/authPhotographer.ts";
+
+async function assertDraftOwnedByPhotographer(
+  draftId: string,
+  photographerId: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from("drafts")
+    .select("id, threads!inner(photographer_id)")
+    .eq("id", draftId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return false;
+  }
+  const thread = data.threads as unknown as { photographer_id: string };
+  return thread.photographer_id === photographerId;
+}
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -27,27 +48,43 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { draft_id, photographer_id } = await req.json();
+    const body = await req.json();
+    const draft_id = body.draft_id as string | undefined;
 
-    if (!draft_id || !photographer_id) {
-      return new Response(
-        JSON.stringify({ error: "draft_id and photographer_id are required" }),
-        { status: 400, headers: CORS_HEADERS },
-      );
+    if (!draft_id) {
+      return new Response(JSON.stringify({ error: "draft_id is required" }), {
+        status: 400,
+        headers: CORS_HEADERS,
+      });
+    }
+
+    const photographer_id = await requirePhotographerIdFromJwt(req);
+
+    const owned = await assertDraftOwnedByPhotographer(draft_id, photographer_id);
+    if (!owned) {
+      return new Response(JSON.stringify({ error: "Draft not found or access denied" }), {
+        status: 403,
+        headers: CORS_HEADERS,
+      });
     }
 
     await inngest.send({
       name: "approval/draft.approved",
-      data: { draft_id, photographer_id },
+      data: { draft_id, photographer_id, edited_body: null },
     });
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: CORS_HEADERS,
     });
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid request body" }), {
-      status: 400,
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const authFail =
+      msg.includes("Unauthorized") ||
+      msg.includes("Authorization") ||
+      msg.includes("Missing SUPABASE");
+    return new Response(JSON.stringify({ error: msg }), {
+      status: authFail ? 401 : 400,
       headers: CORS_HEADERS,
     });
   }

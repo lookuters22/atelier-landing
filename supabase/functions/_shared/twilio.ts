@@ -16,6 +16,45 @@ function toBase64(str: string): string {
   return btoa(str);
 }
 
+function timingSafeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/**
+ * Twilio webhook signature validation (X-Twilio-Signature).
+ * @see https://www.twilio.com/docs/usage/webhooks/webhooks-security
+ */
+export async function verifyTwilioWebhookSignature(
+  fullUrl: string,
+  postParams: Record<string, string>,
+  xTwilioSignature: string | null,
+  authToken: string,
+): Promise<boolean> {
+  if (!xTwilioSignature?.trim()) return false;
+
+  const sortedKeys = Object.keys(postParams).sort();
+  let payload = fullUrl;
+  for (const k of sortedKeys) {
+    payload += k + postParams[k];
+  }
+
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(authToken),
+    { name: "HMAC", hash: "SHA-1" },
+    false,
+    ["sign"],
+  );
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(payload));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+
+  return timingSafeEqualString(xTwilioSignature.trim(), expected);
+}
+
 /**
  * Send a WhatsApp message through Twilio.
  *

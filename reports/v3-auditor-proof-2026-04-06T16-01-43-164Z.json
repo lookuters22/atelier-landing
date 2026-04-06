@@ -1,0 +1,52 @@
+{
+  "schema": "v3_auditor_proof_v1",
+  "generatedAt": "2026-04-06T16:01:43.164Z",
+  "runId": "AUDITOR-PROOF-1775491192649",
+  "photographerId": "beee13da-bbb2-4c94-992f-7dde911209ec",
+  "branches": [
+    {
+      "branch": "happy",
+      "label": "HAPPY",
+      "weddingId": "21c6904b-5892-46f6-8ab5-d08f2006815f",
+      "threadId": "06a2a919-5d17-44c0-9739-fc8e7773b12c",
+      "waitOk": true,
+      "draftId": "00953f1b-d15c-420f-9e05-bb0781f5a6a6",
+      "draftBodyPreview": "Subject: Re: Elite Collection & Booking Details\n\nDear Auditor proof HAPPY-AUDITOR-PROOF-1775491192649,\n\nThank you so much for your message—we're thrilled you're leaning toward the Elite collection for your Tuscany celebration!\n\nI'm happy to confirm: **yes, the Elite collection requires a 30% retainer to hold your December 6th, 2026 date**, and **engagement session travel within 50 miles of Florence is included** as part of that offering.\n\nIf you're ready to move forward this week, I'll prepare your contract and send over the booking details. Once we receive your signed agreement and retainer, your date is officially secured and we can begin planning the beautiful details of your Italian wedding weekend.\n\nPlease let me know if you'd like me to send everything over, or if you have any other questions before we proceed.\n\nWarmly,\n\n*[Studio Manager]*  \nLuxury Wedding Photography Studio",
+      "isStubFallback": false,
+      "parsed": {
+        "committed_terms": null,
+        "auditPassed": null,
+        "violations": [],
+        "personaStepFound": true,
+        "auditorStepFound": false
+      },
+      "auditorEscalations": [],
+      "notes": "stable 18000ms"
+    },
+    {
+      "branch": "failure",
+      "label": "FAILURE",
+      "weddingId": "b11edb29-4f27-434e-8c66-0d94ab1f1a3c",
+      "threadId": "d49a12fe-9f26-4066-a39c-255510116b07",
+      "waitOk": true,
+      "draftId": "ef27c772-1671-42b7-a191-755e05cc3789",
+      "draftBodyPreview": "Subject: Re: Elite Collection & Deposit Details\n\nDear Auditor proof FAILURE-AUDITOR-PROOF-1775491192649,\n\nThank you so much for your message — we're thrilled you're moving forward!\n\nI want to make sure I give you perfectly accurate information. The specific deposit percentage to secure your December 2026 Tuscany wedding, along with travel inclusion details for your engagement session, are outlined in the formal proposal and contract we'll prepare for you.\n\nRather than risk any confusion over email, let me connect you directly with our studio director, who will walk you through the exact terms — including the deposit structure and what's included with the option you're considering. This way, everything is crystal clear before you move ahead this week.\n\nI'll follow up within 24 hours to coordinate that conversation. Thank you for your patience, and we can't wait to make this official!\n\nWarmly,  \n[Studio Manager]  \nLuxury Wedding Photography Studio",
+      "isStubFallback": false,
+      "parsed": {
+        "committed_terms": null,
+        "auditPassed": null,
+        "violations": [],
+        "personaStepFound": true,
+        "auditorStepFound": false
+      },
+      "auditorEscalations": [],
+      "notes": "stable 18000ms"
+    }
+  ],
+  "checks": {
+    "happyProven": false,
+    "failProven": false,
+    "verdict": "Proof **incomplete** — see JSON for details (pipeline unstable, missing history, or env)."
+  },
+  "inngestEventNote": "On rejection, `recordV3OutputAuditorEscalation` calls `inngest.send` for `operator/escalation.pending_delivery.v1` after DB insert; confirm in Inngest Cloud if needed."
+}

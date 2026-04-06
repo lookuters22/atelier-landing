@@ -1,0 +1,57 @@
+1. Notepad Extractions (Fluid Memory)
+The background memory worker needs to extract some highly specific logistical and PR-related data points:
+
+The "Groom" Connection: The groom (Alex) is Serbian, which the planner noted makes him a "perfect fit" for the Serbian photography team.
+
+Logistical Constraints (Lancaster House): This is a UK Government building. Security requires photo IDs and full names a month prior. Absolutely NO freestanding lighting equipment is allowed. £10m Public Liability Insurance is required.
+
+Financial Details: The father, Stanislav Nikolaev, is paying the invoice via his company. Later, the invoice for the album was requested in Serbian Dinars (RSD) because their bank is in Belgrade.
+
+PR & Networking: The wedding was published without permission in WedLuxe by a third-party PR firm, causing supplier anger. It was also accepted for publication in Over The Moon. Mark Niemierko (planner) sent an extensive, specific list of 13+ vendor credits that must be included in all editorial.
+
+Shipping Logistics: The albums are being shipped to Jessica in Budapest, Hungary.
+
+⚡ 2. Tool Triggers (The Orchestrator)
+Here is where the Orchestrator would need to fire its specific tools:
+
+Pre-Flight (Entity Resolution):
+
+Trigger: [Thu, Oct 3, 2024 at 1:56 PM] Alex Latinovic emails directly for the first time, giving the names and dates.
+
+Action: The AI must instantly match Alex Latinovic + Jessica Nicholls + May 31 + Lancaster House to the original inquiry started by Mark Niemierko in July. It must merge the files so Ana knows she already quoted the planner €21,500.
+
+Tool: check_calendar & generate_meeting:
+
+Trigger: Multiple times, including [Wed, Jul 3, 2024] for the initial planner call, and [Fri, May 23, 2025] for the timeline review.
+
+Action: The AI handles timezone conversions and generates Zoom links, but must adapt when Mark specifically requests a WhatsApp phone call instead of Zoom.
+
+Tool: escalate_to_boss:
+
+Trigger 1: [Wed, Jul 10, 2024 at 1:32 PM] Mark pushes back heavily on the €21.5k quote, calling it "very high" and "excessive for one day." (AI must halt: It cannot autonomously defend pricing against an aggressive planner or authorize a discount).
+
+Trigger 2: [Fri, Oct 4, 2024 at 8:15 PM] Jessica asks to drop the rehearsal dinner and shoot only the wedding day because the €26.4k package is above budget. (AI must halt: It cannot restructure packages or invent a new "wedding day only" price point without the boss's input).
+
+Trigger 3: [Mon, Dec 15, 2025 at 6:38 PM] Mark angrily emails a link to WedLuxe, furious that his team wasn't credited and noting that another supplier is "so angry." (AI MUST HALT IMMEDIATELY: This is a major PR crisis involving industry relationships and a third-party publication. An AI cannot autonomously handle a vendor dispute or apologize for a PR firm's mistake).
+
+Trigger 4: [Mon, Dec 8, 2025 at 5:19 PM] Jessica asks to convert the invoice currency to Serbian Dinars. (AI must halt: It cannot calculate currency exchange rates or alter banking documents without human approval).
+
+🚨 3. Architecture Gaps (Where the humans got messy)
+This thread exposed three areas where the system needs specialized guardrails to handle PR and legal compliance.
+
+Gap A: The "Rogue Publication" Protocol (PR Crisis)
+The WedLuxe situation is a nightmare. A PR firm submitted the photos without the photographer's knowledge, and the planner is getting yelled at by uncredited florists. If the AI responds generically ("I'm so sorry, I will let Danilo know!"), it looks weak.
+
+The Fix: We need a strict "Dispute & Anger" trigger in the Orchestrator. If an incoming email contains words like "angry," "upset," "unauthorised," or "missing credit," the AI must instantly freeze, trigger the WhatsApp loop, and flag the dashboard in red: URGENT: VENDOR DISPUTE.
+
+Gap B: The Legal Document Upload (NDAs & Insurance)
+Mark sent an NDA via DocuSign, and later asked for a £10m Public Liability Insurance certificate. The AI cannot sign a DocuSign, nor does it inherently know where the studio's insurance PDFs are saved.
+
+The Fix: We need a "Compliance Asset" tool. You must upload your standard W9s, Insurance Certificates, and blank contracts into a specific bucket in Supabase. The AI can be trained: If a planner asks for 'Public Liability Insurance', fetch insurance_2025.pdf and attach it. However, if they ask to sign a document (like an NDA), the AI must escalate to you.
+
+Gap C: The "Ignored Email" Glitch
+On March 27, 2025, Jessica emails saying she is following up because she hasn't heard back. Ana replies that they did reply right away, but Jessica didn't receive it, so Ana copy/pastes the old email into the new thread.
+
+The Problem: If an email bounces or goes to a client's spam folder, the AI assumes the task is "done." It doesn't know the client didn't read it.
+
+The Fix: This is a classic CRM issue. We need a "Stalled Communication" background worker. If the AI asks the client a direct question (e.g., "What time works for a call?") and the client doesn't reply for 5 days, the background worker should automatically draft a gentle nudge: "Hi Jessica, just bubbling this to the top of your inbox..." This prevents the client from feeling ignored if the first email hit their spam folder.

@@ -29,13 +29,18 @@ export const projectManagerFunction = inngest.createFunction(
   { id: "project-manager-worker", name: "Project Manager Worker — Timeline & Weather" },
   { event: "ai/intent.project_management" },
   async ({ event, step }) => {
-    const { wedding_id, raw_message } = event.data;
+    const { wedding_id, raw_message, photographer_id } = event.data;
+
+    if (!photographer_id || typeof photographer_id !== "string") {
+      throw new Error("ai/intent.project_management: missing photographer_id (tenant-proof required)");
+    }
 
     const wedding = await step.run("fetch-wedding", async () => {
       const { data, error } = await supabaseAdmin
         .from("weddings")
         .select("id, photographer_id, couple_names, wedding_date, location")
         .eq("id", wedding_id)
+        .eq("photographer_id", photographer_id)
         .single();
 
       if (error || !data) {

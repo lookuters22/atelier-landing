@@ -41,9 +41,18 @@ import { InvoiceSetupProvider } from "../components/modes/settings/InvoiceSetupC
 import { SettingsPreview } from "../components/modes/settings/SettingsPreview";
 
 import { OfferBuilderSettingsProvider } from "../pages/settings/offerBuilderSettingsContext";
+import { EscalationsPage } from "../pages/EscalationsPage";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-type Mode = "today" | "inbox" | "pipeline" | "calendar" | "workspace" | "directory" | "settings";
+type Mode =
+  | "today"
+  | "inbox"
+  | "pipeline"
+  | "calendar"
+  | "workspace"
+  | "directory"
+  | "settings"
+  | "escalations";
 
 function detectMode(pathname: string): Mode {
   if (pathname.startsWith("/inbox")) return "inbox";
@@ -52,6 +61,7 @@ function detectMode(pathname: string): Mode {
   if (pathname.startsWith("/workspace")) return "workspace";
   if (pathname.startsWith("/directory")) return "directory";
   if (pathname.startsWith("/settings")) return "settings";
+  if (pathname.startsWith("/escalations")) return "escalations";
   return "today";
 }
 
@@ -268,6 +278,17 @@ function SettingsMode() {
   );
 }
 
+/** Phase 11 Step 11C — escalation queues (full-width shell like settings). */
+function EscalationsMode() {
+  return (
+    <div className="h-full overflow-y-auto bg-background">
+      <div className="mx-auto max-w-3xl px-8 py-8">
+        <EscalationsPage />
+      </div>
+    </div>
+  );
+}
+
 function ModeSwitch({ mode }: { mode: Mode }) {
   switch (mode) {
     case "today": return <TodayMode />;
@@ -277,6 +298,7 @@ function ModeSwitch({ mode }: { mode: Mode }) {
     case "workspace": return <WorkspaceMode />;
     case "directory": return <DirectoryMode />;
     case "settings": return <SettingsMode />;
+    case "escalations": return <EscalationsMode />;
   }
 }
 

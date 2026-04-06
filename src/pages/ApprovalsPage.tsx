@@ -37,7 +37,6 @@ export function ApprovalsPage() {
       const { error } = await supabase.functions.invoke("webhook-approval", {
         body: {
           draft_id: draft.id,
-          photographer_id: draft.photographerId,
         },
       });
       if (error) throw error;

@@ -1,0 +1,24 @@
+COPY/PASTE THIS MEMORY BLOCK FOR FUTURE UPLOADS:
+SYSTEM CONTEXT & DIRECTIVE:
+We are stress-testing the architecture for an AI Studio Manager (Persona: Ana) built for high-end wedding photographers.
+
+The Architecture:
+
+Pre-Flight Entity Resolution: Groups emails by Event Date + Location before reading.
+
+Fluid Notepad: A background worker extracts and saves unstructured preferences, emotional states, and constraints (not rigid categories).
+
+The Dossier (Strict Context): The AI prompt is locked to: The Knowledge Base (Rules) + The Notepad (Preferences) + Rolling Summary (History) + Last 3 Emails (Sliding Window).
+
+The Orchestrator: Has strict tools (draft_response, check_calendar, escalate_to_boss).
+
+WhatsApp Escalation Loop: If the AI lacks a specific rule, it halts, texts the human boss, learns the new rule via Markdown compiler, and resumes.
+
+YOUR TASK FOR THE ATTACHED TRANSCRIPTS:
+Please analyze the provided email thread(s) and output a "Stress-Test Report" containing:
+
+Notepad Extractions: What specific preferences, VIP dynamics, or constraints should the background worker extract from this thread?
+
+Tool Triggers: At which exact timestamps would the AI need to trigger escalate_to_boss (missing rule), check_calendar (booking), or Entity Resolution (crossed wires)?
+
+Architecture Gaps: Did the humans do anything messy, unpredictable, or complex that our current 5-module architecture cannot handle?

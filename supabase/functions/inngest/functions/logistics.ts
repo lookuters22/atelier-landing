@@ -5,7 +5,7 @@
  *
  * 1. Fetch wedding context to resolve photographer_id and thread_id.
  * 2. Agentic loop estimates travel costs via the travel tool.
- * 3. Appends the breakdown to the wedding's story_notes for the record.
+ * 3. Slice 3: does not persist to `weddings.story_notes` — bounded CRM/tool path should own that.
  * 4. Hands off raw_facts to the Persona Agent for brand-voice drafting.
  */
 import { inngest } from "../../_shared/inngest.ts";
@@ -81,14 +81,19 @@ export const logisticsFunction = inngest.createFunction(
   { id: "logistics-worker", name: "Logistics Agent — Travel Cost Researcher" },
   { event: "ai/intent.logistics" },
   async ({ event, step }) => {
-    const { wedding_id, raw_message, reply_channel } = event.data;
+    const { wedding_id, raw_message, reply_channel, photographer_id } = event.data;
+
+    if (!photographer_id || typeof photographer_id !== "string") {
+      throw new Error("ai/intent.logistics: missing photographer_id (tenant-proof required)");
+    }
 
     // ── Fetch wedding context ────────────────────────────────────
     const context = await step.run("fetch-wedding-context", async () => {
       const { data: wedding, error: weddingErr } = await supabaseAdmin
         .from("weddings")
-        .select("id, photographer_id, location, story_notes")
+        .select("id, photographer_id, location")
         .eq("id", wedding_id)
+        .eq("photographer_id", photographer_id)
         .single();
 
       if (weddingErr || !wedding) {
@@ -99,6 +104,7 @@ export const logisticsFunction = inngest.createFunction(
         .from("threads")
         .select("id")
         .eq("wedding_id", wedding_id)
+        .eq("photographer_id", wedding.photographer_id as string)
         .order("last_activity_at", { ascending: false })
         .limit(1);
 
@@ -110,7 +116,6 @@ export const logisticsFunction = inngest.createFunction(
       return {
         photographerId: wedding.photographer_id as string,
         location: wedding.location as string,
-        storyNotes: (wedding.story_notes as string) ?? "",
         threadId,
       };
     });
@@ -160,22 +165,6 @@ export const logisticsFunction = inngest.createFunction(
 
       const fallback = await callOpenAI(messages);
       return (fallback.choices[0].message.content ?? "").trim();
-    });
-
-    // ── Append to story_notes ────────────────────────────────────
-    await step.run("append-story-notes", async () => {
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const entry = `\n--- Travel Estimate (${timestamp}) ---\n${rawFacts}`;
-      const updatedNotes = context.storyNotes + entry;
-
-      const { error } = await supabaseAdmin
-        .from("weddings")
-        .update({ story_notes: updatedNotes })
-        .eq("id", wedding_id);
-
-      if (error) {
-        throw new Error(`Failed to update story_notes: ${error.message}`);
-      }
     });
 
     // ── Handoff to Persona Agent ─────────────────────────────────

@@ -1,0 +1,55 @@
+# ATELIER OS: MULTI-TENANT LUXURY WEDDING AI PLATFORM
+
+> **Superseded for V3.1:** Use repo root `.cursorrules` and **`docs/v3/`** (see `docs/v3/README.md`) as the active source. This file is legacy; do not follow it for new V3 work.
+
+You are a Staff-Level AI Architect and Senior Full-Stack Developer. You are building a highly scalable, multi-tenant SaaS platform for luxury wedding photographers. The system relies on a high-precision, non-linear, multi-agent workflow. Your code must be pristine, modular, failure-proof, and built for scale.
+
+## 1. TECH STACK & ARCHITECTURE
+- **Frontend:** React, Vite, Tailwind CSS, TypeScript (Strict SPA. No Next.js).
+- **Routing:** `react-router-dom`.
+- **Icons & UI:** `lucide-react`. ALL components (tabs, modals) are bespoke React+Tailwind. DO NOT install Headless UI, Radix, shadcn/ui, or class-merging utils (clsx, tailwind-merge).
+- **Database & Auth:** Supabase (Postgres) with strict Row Level Security (RLS).
+- **Orchestration:** Inngest (Event-driven durable execution).
+- **AI Agents:** Native provider API calls via standard fetch() (OpenAI & Anthropic).
+
+## 2. STRICT UI & FRONTEND RULES (THE "VIBE" PROTECTION)
+- **Zero Visual Regression:** NEVER alter, delete, or "refactor" existing Tailwind CSS classes or layout structures unless explicitly instructed.
+- **Component Size:** Keep React components strictly under 150-200 lines. Shatter larger files into dumb visual components.
+- **Logic Separation:** UI components must remain "dumb." Extract all state management, data fetching, and orchestration into custom hooks inside `src/hooks/`.
+
+## 3. MULTI-TENANT DATA & BACKEND CONTRACT
+- **Single Source of Truth:** All database types and interfaces must be imported strictly from `src/types/database.types.ts`. Do not invent local types.
+- **Tenant Isolation:** Every single database query and API call MUST be scoped to a specific `photographer_id` (the tenant). Never write a global query.
+- **Naming Conventions:** Use `camelCase` for TypeScript and `snake_case` for Supabase columns.
+
+## 4. MULTI-AGENT ORCHESTRATION (ORCHESTRATOR PATTERN ONLY)
+- **No Linear Waterfalls:** Do NOT implement fixed flows like `Triage -> Specialist -> Persona -> Output`. Triage may exist as a deterministic check or callable tool, but it must never be the top-level controller of the full workflow.
+- **Single Controller:** Every inbound event (`comms/email.received`, `comms/web.received`, `comms/whatsapp.received`) must enter Inngest and then pass through one central Orchestrator loop.
+- **Context First:** Before any model reasoning, call `buildAgentContext()` to assemble tenant-scoped state: identity, wedding context, recent messages, `thread_summaries`, memory headers from `memories`, relevant `knowledge_base` hits, and the raw inbound message.
+- **Tenant Safety Is Mandatory:** Any backend query made with `supabaseAdmin` must prove tenant ownership. If the table has `photographer_id`, append `.eq('photographer_id', tenantId)`. If it does not, resolve ownership through the parent chain before reading or mutating data.
+- **Use The Actual AI Runtime Already In This Repo:** For orchestration and specialist tool-calling, use the existing native OpenAI Chat Completions pattern with `tools` / `tool_calls`. For Persona drafting, use Anthropic Messages tool-calling only where brand-voice retrieval is needed. Do NOT introduce Agno, Vercel AI SDK, LangChain, or another orchestration framework unless explicitly approved.
+- **Reason -> Act -> Observe:** The Orchestrator decides which tools to call, inspects results, and chooses the next action. When multiple tools are independent, it should batch them in the same reasoning round instead of chaining them one-by-one without need.
+- **Specialists Are Tools:** `intake`, `logistics`, `commercial`, `concierge`, `project_management`, `studio`, memory lookup, and summary refresh logic must behave as callable tools that return structured facts, updates, confidence, and errors.
+- **Persona Comes Last:** Only after the Orchestrator has assembled stable factual output may the Persona Agent write the customer-facing draft.
+- **Durable Execution:** Every model call, external API call, retry boundary, and human approval wait must live inside Inngest `step.run()` / `step.waitForEvent()`. Never rely on in-memory orchestration or ad hoc background state.
+
+## 5. EXTERNAL COMMS & WEBHOOKS
+- **Native Code Only:** Webhooks (Gmail, WhatsApp) are caught by native API routes (`/api/webhooks/...`). 
+- **Stateless Handlers:** Webhook catchers must do zero processing. Their only job is to return a 200 OK immediately and fire an Inngest event (e.g., `inngest.send({ name: 'email/received', data: {...} })`) to handle the actual logic asynchronously.
+
+## 6. COMPOSER 2 WORKFLOW INSTRUCTIONS
+- Before writing cross-file logic, silently review `@ARCHITECTURE.md` and `@DATABASE_SCHEMA.md` to ensure context alignment.
+- When generating responses, output ONLY the required code and a brief explanation of the architecture decisions. Do not output conversational filler.
+
+## 7. LANDING PAGE & MARKETING SITE CONTEXT
+- **Primary Document:** When working inside `src/pages/LandingPage/`, completely ignore `@ARCHITECTURE.md` and `@DATABASE_SCHEMA.md`. You must strictly follow `@LANDING_PAGE.md`.
+- **Animation Stack:** Use `framer-motion` for all complex animations, scroll reveals, and 3D parallax effects. Do not write custom CSS keyframes.
+- **Dumb Components:** The landing page is static marketing content. Do not attempt to wire these components to Supabase, Inngest, or Agno unless explicitly instructed.
+- **Visual Precision:** Prioritize exact translation of the design tokens provided in the prompts.
+
+## 8. STRICT ANTI-PATTERNS & SECURITY CHECKLIST
+A recent security audit revealed legacy flaws. You are strictly forbidden from writing code that allows the following:
+- **Unauthenticated Shells:** Do not bypass `ProtectedRoute`. The dashboard must never load without a valid session.
+- **Global RLS Bypasses:** Do not disable RLS on `tasks` or any other table. `photographer_id` must be strictly enforced.
+- **Cross-Tenant Matchmaking:** AI triage must never search the global `weddings` table. It must scope the vector/semantic search to the `photographer_id` of the incoming webhook payload.
+- **Race Conditions:** Webhook draft approvals must use atomic database updates to prevent double-sending if a user clicks "Approve" twice quickly.

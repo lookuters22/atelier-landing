@@ -66,10 +66,10 @@ export function TodayWorkspace() {
     try {
       setIsSimulating(true);
       setSimResult(null);
+      /** Tenant for webhook-web comes from the Supabase session JWT on this invoke — not from body fields. */
       const { error } = await supabase.functions.invoke("webhook-web", {
         body: {
           source: "test_button",
-          photographer_id: photographerId,
           lead: {
             name: "Sarah & James",
             email: "sarah.test@example.com",
@@ -263,7 +263,7 @@ export function TodayWorkspace() {
                 setProcessingId(selection.id);
                 try {
                   await supabase.functions.invoke("webhook-approval", {
-                    body: { draft_id: selection.id, photographer_id: draft.photographer_id },
+                    body: { draft_id: selection.id },
                   });
                   fireDraftsChanged();
                   select({ type: "overview" });

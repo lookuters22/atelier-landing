@@ -1,0 +1,606 @@
+1. Turn Lifecycle
+
+For a single user turn, the main path is:
+
+The UI hands the raw user input to QueryEngine.submitMessage().
+submitMessage() builds the per-turn execution context:
+current config and model,
+current working directory,
+permission-aware canUseTool,
+system-prompt parts,
+memory/CLAUDE.md-related prompt fragments,
+tool availability and mode.
+It calls processUserInput() to convert the raw input into actual conversation messages.
+processUserInput() returns one or more SDKMessages plus updated prompt metadata. Those messages are appended to the conversation state and persisted before the LLM call.
+submitMessage() then starts the main orchestrator by iterating for await ... of query(...) from query.ts.
+Inside query.ts, the runtime enters the main while/looping query cycle:
+prepare message history for the model,
+apply context trimming / compaction / tool-result budgeting,
+send the request to the LLM,
+stream assistant output,
+inspect whether the assistant produced plain text or tool_use blocks.
+If the assistant produced no tool calls, that assistant text is the terminal answer for this loop, subject to stop hooks / continuation checks.
+If the assistant produced tool calls, the loop executes those tools, converts their outputs into tool-result messages, appends them to the transcript, and then runs another LLM round with that expanded history.
+When the loop finally ends on a normal assistant response, QueryEngine extracts the final assistant text/content blocks and yields the user-visible final output.
+So the shape is:
+
+Enter -> QueryEngine.submitMessage -> processUserInput -> persist user turn -> query loop -> LLM -> tools if needed -> LLM again -> final assistant text
+
+What processUserInput() Adds Before The LLM
+
+processUserInput.ts is not just parsing text. It enriches the turn quite a bit before the model sees it.
+
+It can attach:
+
+The actual text prompt, converted into a user message.
+Image blocks from pasted/uploaded images, including normalization/resizing.
+Stored pasted-image metadata as hidden/meta messages.
+Attachment-derived context from attachments.ts, which is where a lot of prompt enrichment happens.
+Hook-provided additional context.
+Hook-generated messages or blocking warnings.
+Slash-command / special command routing behavior when relevant.
+In practice, the attachments layer can inject things like:
+
+referenced files or directories,
+IDE/editor context,
+previously read or edited file snippets,
+memory-related context,
+MCP/resource context,
+agent mentions,
+queued task / command context,
+tool or permission-related reminders,
+output-style / system guidance.
+So by the time the prompt reaches the LLM, it is often not “just the user’s sentence.” It is a small bundle of user text plus structured contextual messages.
+
+Exact Behavior Of The Main Tool Loop
+
+The important runtime detail is in query.ts:
+
+One LLM turn may emit multiple tool_use blocks.
+The loop collects those tool calls from that assistant turn.
+It executes the tools for that batch.
+It accumulates their results into tool-result messages.
+Only after that batch is complete does it go back to the LLM.
+So the answer to your batching question is:
+
+It does not immediately round-trip to the LLM after each individual tool returns.
+It batches tool results per assistant turn.
+The next LLM call happens after the tool batch has finished and the tool-result messages have been appended.
+That means the lifecycle is:
+
+Assistant emits tool_use A, tool_use B, maybe tool_use C.
+Runtime executes A/B/C.
+Runtime gathers their results.
+Runtime appends all those tool results to the conversation.
+Runtime sends the updated transcript back to the LLM for the next reasoning step.
+There can still be streamed progress events while tools are running, but those are for the runtime/UI. The model itself gets the results on the next loop iteration, not one-by-one mid-turn.
+
+What The While Loop Is Really Doing
+
+Conceptually, the loop in query.ts is:
+
+Build the model-facing message list from current state.
+Trim/compact if necessary.
+Call the model.
+Capture assistant output.
+If no tool use, try to finish.
+If tool use exists, run tools and append tool-result messages.
+Repeat.
+So Claude Code’s orchestrator is really a classic agent loop:
+
+reason -> act -> observe -> reason again
+
+with tool_use as the “act” step and tool-result messages as the “observe” step.
+
+How QueryEngine.ts Fits In
+
+QueryEngine.ts is the outer coordinator around that loop. Its responsibilities are roughly:
+
+accept a user turn,
+prepare config/system context,
+run processUserInput,
+persist conversation state,
+invoke query(),
+relay streamed intermediate events,
+persist assistant/tool outputs,
+extract the final assistant response.
+So QueryEngine is the entrypoint and state manager; query.ts is the iterative runtime loop; processUserInput.ts is the pre-LLM enrichment stage.
+
+Short Answer
+
+If you want the exact mental model:
+
+processUserInput.ts turns raw input into enriched conversation messages.
+QueryEngine.ts sets up the turn and manages persistence/streaming.
+query.ts runs the core LLM <-> tools <-> LLM loop.
+Tool calls are batched per assistant turn, not sent back to the LLM one-by-one immediately.
+
+
+
+
+2. Selector Methodology
+
+The retrieval path is intentionally cheap.
+
+findRelevantMemories() in findRelevantMemories.ts does this:
+
+Calls scanMemoryFiles(memoryDir, signal).
+scanMemoryFiles() in memoryScan.ts walks the memory directory recursively.
+It only reads the first 30 lines of each .md file via readFileInRange(...) to parse frontmatter, not the full file body.
+It builds a MemoryHeader for each memory.
+It sorts headers by mtimeMs descending and keeps at most 200 files.
+findRelevantMemories() filters out anything already surfaced.
+It formats those headers into a one-line-per-memory manifest.
+It sends that manifest plus the user query to a smaller side-model call.
+The side-model returns JSON with selected filenames.
+Claude Code maps those filenames back to { path, mtimeMs } and only then can the selected files be loaded later by the main flow.
+So the memory-saving trick is: selector model sees only lightweight header metadata, not full memory content.
+
+Exact Selector Prompt
+
+The exact system prompt in findRelevantMemories.ts (line 18) is:
+
+You are selecting memories that will be useful to Claude Code as it processes a user's query. You will be given the user's query and a list of available memory files with their filenames and descriptions.
+
+Return a list of filenames for the memories that will clearly be useful to Claude Code as it processes the user's query (up to 5). Only include memories that you are certain will be helpful based on their name and description.
+- If you are unsure if a memory will be useful in processing the user's query, then do not include it in your list. Be selective and discerning.
+- If there are no memories in the list that would clearly be useful, feel free to return an empty list.
+- If a list of recently-used tools is provided, do not select memories that are usage reference or API documentation for those tools (Claude Code is already exercising them). DO still select memories containing warnings, gotchas, or known issues about those tools — active use is exactly when those matter.
+And the user message sent to that side-model is built at findRelevantMemories.ts (line 105) as:
+
+Query: ${query}
+
+Available memories:
+${manifest}${toolsSection}
+The output is constrained to JSON schema:
+
+{
+  selected_memories: string[]
+}
+What It Tells The Model To Do
+
+The instructions are very specific:
+
+select at most 5 memories,
+only choose memories that are clearly useful,
+skip anything uncertain,
+allow empty selection,
+avoid tool usage docs for tools already being used,
+but still include warnings/gotchas about those tools.
+So Anthropic is biasing hard toward precision over recall.
+
+Exact TypeScript Shape
+
+There is not a full SavedMemory TypeScript interface in these files for the on-disk memory file.
+
+The exact TS type used during retrieval is the header type in memoryScan.ts (line 13):
+
+export type MemoryHeader = {
+  filename: string
+  filePath: string
+  mtimeMs: number
+  description: string | null
+  type: MemoryType | undefined
+}
+And the return type from findRelevantMemories() is in findRelevantMemories.ts (line 13):
+
+export type RelevantMemory = {
+  path: string
+  mtimeMs: number
+}
+Saved Memory File Format
+
+For the actual saved memory file, the schema is defined by prompt instructions rather than a TS interface. In memoryTypes.ts (line 261), the expected frontmatter format is:
+
+---
+name: {{memory name}}
+description: {{one-line description — used to decide relevance in future conversations, so be specific}}
+type: {{user, feedback, project, reference}}
+---
+
+{{memory content — for feedback/project types, structure as: rule/fact, then **Why:** and **How to apply:** lines}}
+So the practical saved-memory structure is:
+
+name
+description
+type
+markdown body content
+But only description and type are actually extracted in the retrieval scan path here, plus filename/path/mtime from the filesystem.
+
+Does It Send Full Content Or Just Headers?
+
+Just headers.
+
+scanMemoryFiles() reads only the first 30 lines, parses frontmatter, and returns:
+
+filename
+filePath
+mtimeMs
+description
+type
+Then formatMemoryManifest() turns that into one-line entries like this in memoryScan.ts (line 84):
+
+[type] filename (timestamp): description
+So the evaluator model does not get full memory bodies during selection. It gets a manifest of summaries/headers only.
+
+Bottom Line
+
+Anthropic’s long-term memory retrieval here is:
+
+scan cheap metadata only,
+shortlist with a smaller model,
+keep the shortlist tiny,
+avoid loading full memory files unless they survive selection.
+That’s exactly how they keep long-term memory from exploding the context window.
+
+
+
+
+
+
+3. AgentTool Input
+
+The exact internal TS input type in AgentTool.tsx (line 132) is:
+
+type AgentToolInput = z.infer<ReturnType<typeof baseInputSchema>> & {
+  name?: string
+  team_name?: string
+  mode?: z.infer<ReturnType<typeof permissionModeSchema>>
+  isolation?: 'worktree' | 'remote'
+  cwd?: string
+}
+Expanding baseInputSchema from AgentTool.tsx (line 82), the practical shape is:
+
+type AgentToolInput = {
+  description: string
+  prompt: string
+  subagent_type?: string
+  model?: 'sonnet' | 'opus' | 'haiku'
+  run_in_background?: boolean
+  name?: string
+  team_name?: string
+  mode?: z.infer<ReturnType<typeof permissionModeSchema>>
+  isolation?: 'worktree' | 'remote'
+  cwd?: string
+}
+One nuance: the public schema can omit run_in_background or cwd behind feature gates, but the internal call signature still supports them.
+
+How Fork Differs From A Normal Sub-Agent
+
+A normal sub-agent:
+
+gets its own agent definition and system prompt,
+gets a fresh prompt message like createUserMessage({ content: prompt }),
+does not inherit the parent transcript by default.
+That branch is in AgentTool.tsx (line 513).
+
+A forked sub-agent is different in 3 important ways.
+
+It inherits the parent’s rendered system prompt exactly, not a regenerated specialist prompt.
+
+forkSubagent.ts (line 54)
+AgentTool.tsx (line 495)
+AgentTool.tsx (line 623)
+It inherits the parent conversation history, not a summary.
+
+forkContextMessages: isForkPath ? toolUseContext.messages : undefined
+AgentTool.tsx (line 630)
+Then runAgent() prepends those messages directly into initialMessages
+runAgent.ts (line 370)
+It also injects a synthetic fork prefix based on the parent’s last assistant message:
+
+keeps the full parent assistant message, including thinking/text/tool_use blocks,
+adds placeholder tool_result blocks for each tool call,
+appends a fork directive message.
+forkSubagent.ts (line 96)
+forkSubagent.ts (line 104)
+So the answer is: fork inherits the parent’s full transcript context, not a summary. The code literally passes toolUseContext.messages, filters incomplete tool calls, and uses those messages as context.
+
+What The Fork Actually Inherits
+
+From the fork path in AgentTool.tsx (line 483):
+
+parent system prompt bytes,
+parent message history,
+parent exact tool pool,
+parent thinking config,
+parent non-interactive/session flags.
+That is why the fork path uses useExactTools: true in AgentTool.tsx (line 631) and preserves cache-identical prefixes in runAgent.ts (line 500) and runAgent.ts (line 668).
+
+What A Finished Sub-Agent Returns
+
+The core finished-result schema is in agentToolUtils.ts (line 227):
+
+{
+  agentId: string
+  agentType?: string
+  content: Array<{ type: 'text'; text: string }>
+  totalToolUseCount: number
+  totalDurationMs: number
+  totalTokens: number
+  usage: {
+    input_tokens: number
+    output_tokens: number
+    cache_creation_input_tokens: number | null
+    cache_read_input_tokens: number | null
+    server_tool_use: {
+      web_search_requests: number
+      web_fetch_requests: number
+    } | null
+    service_tier: 'standard' | 'priority' | 'batch' | null
+    cache_creation: {
+      ephemeral_1h_input_tokens: number
+      ephemeral_5m_input_tokens: number
+    } | null
+  }
+}
+That object is produced by finalizeAgentTool() in agentToolUtils.ts (line 276).
+
+For a normal synchronous Agent tool call, the parent gets this wrapped as:
+
+{
+  status: 'completed',
+  prompt: string,
+  ...agentResult,
+  ...worktreeResult
+}
+That wrapper is returned in AgentTool.tsx (line 1253).
+
+So the parent-facing completed payload is effectively:
+
+{
+  status: 'completed'
+  prompt: string
+  agentId: string
+  agentType?: string
+  content: Array<{ type: 'text'; text: string }>
+  totalToolUseCount: number
+  totalDurationMs: number
+  totalTokens: number
+  usage: { ... }
+  worktreePath?: string
+  worktreeBranch?: string
+}
+What content Actually Contains
+
+finalizeAgentTool() extracts text blocks from the last assistant message, or the most recent assistant message with text if the last one is only tool calls.
+
+agentToolUtils.ts (line 297)
+So the parent does not receive the child’s full transcript as the return value. It receives:
+
+the child’s final text blocks,
+plus usage/metrics metadata.
+Async Case
+
+If the sub-agent runs in background, the immediate tool return is not a completed result. It returns an async-launch payload:
+
+{
+  status: 'async_launched',
+  agentId: string,
+  description: string,
+  prompt: string,
+  outputFile: string,
+  canReadOutputFile?: boolean
+}
+That schema is in AgentTool.tsx (line 146).
+
+Later, when the background agent finishes, its stored task result is still built from the same finalizeAgentTool() payload in agentToolUtils.ts (line 597), and the notification text is derived from extractTextContent(agentResult.content, '\n').
+
+Short Version
+
+AgentTool input is basically description + prompt + optional agent type/model/background/team/isolation/cwd.
+A normal sub-agent gets a fresh prompt and its own system prompt.
+A forked sub-agent inherits the parent’s full transcript and exact system prompt bytes, not a summary.
+A finished synchronous sub-agent returns status: 'completed' plus final text blocks and usage metadata, not its whole transcript.
+
+
+
+
+4. Auto-compact trigger
+
+The exact trigger math is in autoCompact.ts:
+
+Compute effectiveContextWindow:
+
+contextWindow = getContextWindowForModel(model, getSdkBetas())
+if CLAUDE_CODE_AUTO_COMPACT_WINDOW is set, use min(contextWindow, envOverride)
+reserve output budget: min(getMaxOutputTokensForModel(model), 20_000)
+effectiveContextWindow = contextWindow - reservedTokensForSummary
+Compute auto-compact threshold:
+
+AUTOCOMPACT_BUFFER_TOKENS = 13_000
+autoCompactThreshold = effectiveContextWindow - 13_000
+Compare estimated token usage:
+
+tokenCount = tokenCountWithEstimation(messages) - snipTokensFreed
+compact triggers when tokenCount >= autoCompactThreshold
+So the core formula is:
+
+autoCompactThreshold =
+  (min(modelContextWindow, CLAUDE_CODE_AUTO_COMPACT_WINDOW?) -
+   min(modelMaxOutputTokens, 20_000))
+  - 13_000
+There is one override:
+
+if CLAUDE_AUTOCOMPACT_PCT_OVERRIDE is set, threshold becomes:
+min(
+  floor(effectiveContextWindow * pct / 100),
+  effectiveContextWindow - 13_000
+)
+Related limits in the same file:
+
+warning threshold: threshold - 20_000
+error threshold: threshold - 20_000
+blocking/manual limit: effectiveContextWindow - 3_000
+What gets deleted vs preserved
+
+There are really 3 compaction behaviors across these files.
+
+1. Session-memory compaction first
+In autoCompact.ts, auto-compact tries trySessionMemoryCompaction() before legacy compact.
+
+What it preserves perfectly:
+
+a recent tail of original messages, verbatim, as messagesToKeep
+tool-use/tool-result pairs are kept intact
+assistant streaming fragments with the same message.id are kept together so thinking/tool blocks still merge correctly
+a plan attachment, if present
+session-start hook results
+How that tail is chosen in sessionMemoryCompact.ts:
+
+start after lastSummarizedMessageId
+expand backward until both are true:
+at least 10_000 tokens preserved
+at least 5 messages with text blocks preserved
+stop expanding once preserved tail reaches 40_000 tokens
+then adjust backward further if needed to preserve API invariants
+Exact defaults:
+
+minTokens: 10_000
+minTextBlockMessages: 5
+maxTokens: 40_000
+What gets summarized:
+
+everything before that preserved tail is replaced by the already-built session memory file content
+What gets deleted from live context:
+
+older original messages not included in messagesToKeep
+old compact boundaries are filtered out of messagesToKeep
+So session-memory compact is a summary + preserved recent tail strategy.
+
+2. Legacy full compact
+In compactConversation(), the whole active conversation is summarized.
+
+What gets preserved perfectly:
+
+not the old raw messages themselves
+only reconstructed attachments/state:
+recently read files, re-read and reattached
+async-agent status attachments
+plan attachment
+plan-mode attachment
+invoked skills attachment
+deferred tool delta attachments
+agent listing delta attachments
+MCP instruction delta attachments
+session-start hook messages
+What gets summarized:
+
+the conversation since the last compact boundary, sent to the compact summarizer model
+What gets deleted from live context:
+
+the raw pre-compact message history
+What replaces it:
+
+one compact_boundary system message
+one compact-summary user message
+the reattached attachments/hook results
+So full compact is basically delete raw history, keep only summary + restored context objects.
+
+3. Partial compact
+Also in compact.ts, manual partial compact can preserve one side verbatim and summarize the other.
+
+direction: 'up_to'
+summarize earlier messages
+preserve later messages verbatim
+direction: 'from'
+summarize later messages
+preserve earlier messages verbatim
+It also strips:
+
+progress messages from preserved segments
+for up_to, old compact boundaries and old compact summaries from the kept side
+Exact prompt in sessionMemoryCompact.ts
+
+There is no LLM summarization prompt inside sessionMemoryCompact.ts.
+
+That file does not call a model. It:
+
+loads existing session memory with getSessionMemoryContent()
+truncates oversized sections
+wraps that content with getCompactUserSummaryMessage(...)
+preserves recent raw messages
+returns a CompactionResult
+So the honest answer is: sessionMemoryCompact.ts does not itself summarize the active session with an LLM prompt.
+
+What it injects into the compacted transcript is the wrapper from prompt.ts:
+
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+${formattedSummary}
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: ${transcriptPath}
+
+Recent messages are preserved verbatim.
+If suppressFollowUpQuestions is true, it also appends:
+
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+Where the active-session summary is actually generated
+
+The real LLM prompt that builds the session memory comes from SessionMemory/prompts.ts, not sessionMemoryCompact.ts.
+
+The default update prompt starts with:
+
+IMPORTANT: This message and these instructions are NOT part of the actual user conversation. Do NOT include any references to "note-taking", "session notes extraction", or these update instructions in the notes content.
+
+Based on the user conversation above (EXCLUDING this note-taking instruction message as well as system prompt, claude.md entries, or any past session summaries), update the session notes file.
+Then it instructs the model to:
+
+edit the notes file only
+preserve the exact section structure
+keep detailed, info-dense notes
+keep each section under ~2000 tokens
+always update Current State
+That prompt is used in sessionMemory.ts when the session memory file is maintained.
+
+Bottom line
+
+Auto-compact triggers at effectiveContextWindow - 13,000.
+Session-memory compact preserves a recent raw tail and replaces older context with the session-memory file.
+Legacy compact replaces raw history with one summary plus reconstructed attachments/state.
+sessionMemoryCompact.ts itself does not run a summarizer LLM; it consumes precomputed session memory.
+
+
+
+
+
+5. Anthropic’s built-in tools here are defined mostly with Zod schemas, then surfaced through the common Tool interface in Tool.ts. The interesting part is that the runtime validates tool input again locally with tool.inputSchema.safeParse(...) before the tool runs, so even if the model emits bad params, the call is rejected in a structured way instead of blindly executing it.
+
+For example, FileReadTool.ts uses:
+
+const inputSchema = lazySchema(() =>
+  z.strictObject({
+    file_path: z.string(),
+    offset: semanticNumber(z.number().int().nonnegative().optional()),
+    limit: semanticNumber(z.number().int().positive().optional()),
+    pages: z.string().optional(),
+  }),
+)
+and its output is a discriminated union over type (text, image, notebook, pdf, parts, file_unchanged). BashTool.tsx uses a z.strictObject(...) too, with fields like command, timeout, description, and run_in_background. AgentTool.tsx does the same for sub-agent delegation. So for Anthropic’s own tools in this repo, the pattern is: Zod-first schemas, not handwritten JSON Schema. The one exception is that the generic Tool type in Tool.ts also supports inputJSONSchema for tools that want to provide raw JSON Schema directly, which is mainly there for MCP-style tools.
+
+They also add another guardrail: tools can set strict: true. You can see that on FileReadTool.ts and BashTool.tsx. Combined with local safeParse, that’s how they keep the model from hallucinating parameter shapes.
+
+On failures, the system usually does not crash the orchestrator. Instead, tool failures are converted into a synthetic tool_result with is_error: true, and that gets fed back into the LLM loop like any other tool result. The main execution path is in toolExecution.ts. It handles:
+
+unknown tool names,
+schema validation failures,
+tool-specific validateInput() failures,
+permission denials,
+runtime exceptions from tool.call(...),
+user aborts / interrupts.
+In all those normal failure cases, it creates a user message containing something like:
+
+{
+  type: 'tool_result',
+  content: "...error text...",
+  is_error: true,
+  tool_use_id: toolUseID,
+}
+You can see that in several places, especially around toolExecution.ts (line 664), toolExecution.ts (line 717), and the generic catch block at toolExecution.ts (line 1715). Then query.ts appends those tool results and gives them back to the LLM on the next loop iteration.
+
+So the short answer is:
+
+Tool schemas are primarily Zod, often z.strictObject(...), sometimes with unions/discriminated unions.
+The runtime validates tool inputs again before execution.
+Tool failures are generally fed back to the model as errored tool_result blocks, not treated as fatal process crashes.
+Only truly exceptional outer-runtime failures would break the loop; ordinary tool errors are part of the agent conversation state.

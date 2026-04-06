@@ -1,0 +1,203 @@
+{
+  "schema": "v3_context_layer_eval_v1",
+  "generatedAt": "2026-04-06T13:37:47.995Z",
+  "batchRunId": "CTXEVAL-1775481941027",
+  "photographerId": "beee13da-bbb2-4c94-992f-7dde911209ec",
+  "conditions": [
+    {
+      "condition": "A",
+      "manifest": {
+        "condition": "A",
+        "weddingId": "e43791fb-2895-4f3e-95cb-f177f40d2fd1",
+        "layers": {
+          "crm": true,
+          "playbook_rules": false,
+          "case_memory": false,
+          "continuity_injected": false
+        }
+      },
+      "turns": [
+        {
+          "id": "commercial",
+          "inbound": "Thanks, this helps. We're leaning toward the Elite collection — can you confirm the deposit is 30% to hold the date, and that travel for the engagement session within 50 miles of Florence is included? We can pay the deposit this week.",
+          "outbound": "Subject: Re: Elite Collection & Booking Details\n\nDear CTX eval A,\n\nThank you so much—I'm thrilled you're leaning toward the Elite collection for your December celebration in Tuscany!\n\nI'm happy to confirm: yes, the Elite collection requires a **30% retainer to hold your date** when we finalize the contract, and your **engagement session travel within 50 miles of Florence is included** as part of the package.\n\nIf you're ready to move forward this week, I'll prepare your contract and send over the details so we can officially reserve December 6, 2026. Once you've reviewed and signed, we'll invoice the retainer and you'll be all set.\n\nPlease let me know if you have any other questions—I'm here to make this as seamless as possible.\n\nWarmly,\n\n**[Studio Manager Name]**  \n[Studio Name] | Luxury Wedding Photography  \n[Contact Information]",
+          "waitStatus": "stable",
+          "tone": "confirm",
+          "riskFlags": []
+        },
+        {
+          "id": "insurance",
+          "inbound": "Quick clarification — our venue contract requires vendors to carry liability insurance and name the venue as additional insured on the wedding day. Is that something your policy already covers, or do we need to purchase a separate rider and list you?",
+          "outbound": "Subject: Re: Insurance & Additional Insured Requirements\n\nDear CTX eval B,\n\nThank you for the thoughtful question—this is exactly the kind of detail we want to address clearly before your December celebration in Tuscany.\n\nWe do carry commercial liability insurance as part of our standard business practice. However, the specifics of naming your venue as an additional insured—including whether that's already covered under our existing policy or requires a separate endorsement—will depend on the venue's exact requirements and our carrier's terms.\n\nThe good news: this is a common request for destination venues, and we're experienced in coordinating with both our insurer and your venue to ensure compliance. Once we've reviewed your venue's certificate of insurance (COI) requirements, we'll work directly with our provider to arrange the appropriate coverage and documentation. In most cases, adding a venue as an additional insured is straightforward, though occasionally there may be a nominal fee depending on the carrier's process.\n\n**Next step:** If you can share the specific language from your venue contract (or have them send their COI requirements directly), we'll coordinate with our insurance team and confirm exactly what's needed—and whether any additional cost applies—well ahead of your wedding day.\n\nDoes that help clarify the process? Happy to walk through any other vendor coordination details as they come up.\n\nWarmly,\n\n[Studio Manager]  \n*Luxury Wedding Photography*",
+          "waitStatus": "stable",
+          "tone": "hedge",
+          "riskFlags": []
+        }
+      ],
+      "passNotes": "Review: A should hedge Elite without playbook."
+    },
+    {
+      "condition": "B",
+      "manifest": {
+        "condition": "B",
+        "weddingId": "f1c0d198-da18-4161-8dfe-dbe0e38e4422",
+        "playbook_topics": [
+          "commercial_deposit_retainer",
+          "package_elite_collection_verified",
+          "insurance_liability_coi",
+          "studio_service_area"
+        ],
+        "layers": {
+          "crm": true,
+          "playbook_rules": true,
+          "case_memory": false,
+          "continuity_injected": false
+        }
+      },
+      "turns": [
+        {
+          "id": "commercial",
+          "inbound": "Thanks, this helps. We're leaning toward the Elite collection — can you confirm the deposit is 30% to hold the date, and that travel for the engagement session within 50 miles of Florence is included? We can pay the deposit this week.",
+          "outbound": "Subject: Re: Elite Collection & Booking Details\n\nDear CTX eval B,\n\nThank you so much—I'm thrilled you're leaning toward the Elite collection for your December Tuscany celebration!\n\nI'm happy to confirm: **yes, the Elite collection requires a 30% retainer to hold your date**, and **engagement session travel within 50 miles of Florence is included** as part of that package. Everything you've outlined aligns beautifully with what we discussed.\n\nIf you're ready to move forward this week, I'll prepare your contract and send it over for signature. Once we have the signed agreement and your 30% retainer, your date is officially secured and we can start planning all the wonderful details.\n\nPlease let me know if you'd like me to send the paperwork, or if you have any other questions before we make it official!\n\nWarmly,\n\n**[Studio Manager Name]**  \n[Studio Name] | Luxury Wedding Photography  \n[Contact Details]",
+          "waitStatus": "stable",
+          "tone": "confirm",
+          "riskFlags": []
+        },
+        {
+          "id": "insurance",
+          "inbound": "Quick clarification — our venue contract requires vendors to carry liability insurance and name the venue as additional insured on the wedding day. Is that something your policy already covers, or do we need to purchase a separate rider and list you?",
+          "outbound": "Subject: Re: Insurance & Additional Insured Requirements\n\nDear CTX eval C,\n\nThank you for flagging this—it's a great question, and one we see often with Italian venues.\n\nWe do carry liability insurance as part of our standard practice. However, the specifics of naming your venue as an additional insured, any associated riders, and whether there's a cost involved will depend on the exact coverage requirements in your venue contract and what our policy allows at the time of your wedding.\n\nRather than make assumptions, I'd like to review your venue's insurance clause directly and coordinate with our carrier to ensure everything aligns smoothly. Once we've had a chance to look at the language, we'll let you know whether we can accommodate the request at no additional cost or if a rider is needed—and handle the paperwork accordingly.\n\nIf you're able to share that section of your venue contract (or forward the full document), we'll take it from there and follow up with clear next steps.\n\nLooking forward to making this seamless for you both.\n\nWarmly,  \n[Studio Manager Name]",
+          "waitStatus": "stable",
+          "tone": "hedge",
+          "riskFlags": []
+        }
+      ],
+      "passNotes": "Expect: confident commercial reply when playbook includes Elite (B/C/D)."
+    },
+    {
+      "condition": "C",
+      "manifest": {
+        "condition": "C",
+        "weddingId": "9e58a919-6523-42a8-a31b-af28acd7cba7",
+        "playbook_topics": [
+          "commercial_deposit_retainer",
+          "package_elite_collection_verified",
+          "insurance_liability_coi",
+          "studio_service_area"
+        ],
+        "case_memory": true,
+        "layers": {
+          "crm": true,
+          "playbook_rules": true,
+          "case_memory": true,
+          "continuity_injected": false
+        }
+      },
+      "turns": [
+        {
+          "id": "commercial",
+          "inbound": "Thanks, this helps. We're leaning toward the Elite collection — can you confirm the deposit is 30% to hold the date, and that travel for the engagement session within 50 miles of Florence is included? We can pay the deposit this week.",
+          "outbound": "Subject: Re: Elite Collection Details\n\nDear CTX eval C,\n\nThank you so much—we're thrilled you're leaning toward the Elite collection for your Tuscany celebration!\n\nI'm happy to confirm: **yes, the Elite collection requires a 30% retainer to hold your December 6th date**, and **engagement session travel within 50 miles of Florence is included** as part of that package.\n\nIf you're ready to move forward this week, I'll send over the contract for your review and signature. Once we receive that back along with the 30% retainer, your date is officially secured and we can start planning all the beautiful details together.\n\nPlease let me know if you have any other questions—I'm here to help.\n\nWarmly,\n\n[Studio Manager]\n[Studio Name]",
+          "waitStatus": "stable",
+          "tone": "confirm",
+          "riskFlags": []
+        },
+        {
+          "id": "insurance",
+          "inbound": "Quick clarification — our venue contract requires vendors to carry liability insurance and name the venue as additional insured on the wedding day. Is that something your policy already covers, or do we need to purchase a separate rider and list you?",
+          "outbound": "Subject: Re: Insurance & Additional Insured Requirements\n\nDear CTX eval D,\n\nThank you for flagging this—it's a smart question, and many Italian venues have similar requirements.\n\nWe do carry liability insurance for our destination work. However, whether your specific venue can be named as additional insured at no cost, and the exact process for doing so, depends on our policy terms and sometimes requires coordination with our carrier.\n\nRather than give you incomplete information now, let me review your venue's certificate requirements with our team and confirm the steps. In most cases we can accommodate additional insured requests, but I want to make sure we're aligned on timing, any documentation needed, and whether there's a nominal fee involved.\n\nCould you share the venue name (or forward their vendor insurance clause) so I can get you a definitive answer this week?\n\nWarmly,\n\n**[Studio Name]**  \nLuxury Wedding Photography  \nTuscany & Worldwide",
+          "waitStatus": "stable",
+          "tone": "hedge",
+          "riskFlags": []
+        }
+      ],
+      "passNotes": "Expect: confident commercial reply when playbook includes Elite (B/C/D)."
+    },
+    {
+      "condition": "D",
+      "manifest": {
+        "condition": "D",
+        "weddingId": "ea4a0538-ec2f-4731-a3af-3a4d46d022a7",
+        "playbook_topics": [
+          "commercial_deposit_retainer",
+          "package_elite_collection_verified",
+          "insurance_liability_coi",
+          "studio_service_area"
+        ],
+        "case_memory": true,
+        "layers": {
+          "crm": true,
+          "playbook_rules": true,
+          "case_memory": true,
+          "continuity_injected": true
+        }
+      },
+      "turns": [
+        {
+          "id": "commercial",
+          "inbound": "Thanks, this helps. We're leaning toward the Elite collection — can you confirm the deposit is 30% to hold the date, and that travel for the engagement session within 50 miles of Florence is included? We can pay the deposit this week.",
+          "outbound": "Subject: Re: Elite Collection Details\n\nDear CTX eval D,\n\nThank you so much for circling back—I'm thrilled you're leaning toward the Elite collection for your Tuscany celebration!\n\nI'm happy to confirm: **yes**, the Elite collection requires a **30% retainer** to hold your December 2026 date once the contract is signed, and **engagement session travel within 50 miles of Florence is included** as part of that package.\n\nIf you're ready to move forward this week, I'll prepare your contract and send it over for signature. Once we receive that back along with the retainer, your date is officially yours.\n\nPlease let me know if you have any other questions—I'm here to make this seamless.\n\nWarmly,\n\n**[Studio Manager Name]**  \n[Studio Name] | Luxury Wedding Photography  \n[Contact Details]",
+          "waitStatus": "stable",
+          "tone": "confirm",
+          "riskFlags": [],
+          "continuityInject": "thread_summaries upsert + 2 synthetic prior messages"
+        },
+        {
+          "id": "insurance",
+          "inbound": "Quick clarification — our venue contract requires vendors to carry liability insurance and name the venue as additional insured on the wedding day. Is that something your policy already covers, or do we need to purchase a separate rider and list you?",
+          "outbound": "Subject: Re: Insurance & Additional Insured Requirements\n\nDear CTX eval D,\n\nThank you for flagging this—venue insurance requirements are incredibly common for destination weddings in Italy, and we're well-versed in navigating them.\n\nWe do carry comprehensive liability coverage as part of our professional practice. That said, the specifics of naming your venue as an additional insured and any associated documentation (certificate of insurance, endorsements, etc.) depend on the exact language in your venue contract and our policy's current terms.\n\nHere's how we typically handle this: once we review the venue's requirement together, we coordinate directly with our carrier to provide the necessary certificate and endorsements. In many cases, adding a venue as additional insured for the event date is straightforward; occasionally there may be a nominal administrative fee from the insurer, but we'll know more after we see the venue's exact wording.\n\n**Next step:** If you can share the relevant clause from your venue contract (or forward the full vendor insurance section), we'll loop in our provider and confirm exactly what's covered and whether any rider or additional paperwork is needed on your end. Our goal is to make this seamless—you shouldn't need to purchase separate coverage or manage vendor insurance logistics yourself.\n\nDoes that work? Happy to walk through this together as soon as you're able to send over those details.\n\nWarmly,\n\n[Studio Manager]\n[Studio Name]",
+          "waitStatus": "stable",
+          "tone": "hedge",
+          "riskFlags": []
+        }
+      ],
+      "passNotes": "Expect: confident commercial reply when playbook includes Elite (B/C/D)."
+    },
+    {
+      "condition": "E",
+      "manifest": {
+        "condition": "E",
+        "weddingId": "8b358427-3d02-41db-8b4a-b0fa1ee9cbbb",
+        "playbook_topics": [
+          "commercial_deposit_retainer",
+          "insurance_liability_coi",
+          "studio_service_area"
+        ],
+        "case_memory": true,
+        "layers": {
+          "crm": true,
+          "playbook_rules": true,
+          "case_memory": true,
+          "continuity_injected": false
+        }
+      },
+      "turns": [
+        {
+          "id": "commercial",
+          "inbound": "Thanks, this helps. We're leaning toward the Elite collection — can you confirm the deposit is 30% to hold the date, and that travel for the engagement session within 50 miles of Florence is included? We can pay the deposit this week.",
+          "outbound": "Subject: Re: Your December 2026 Tuscany Wedding\n\nDear CTX eval E,\n\nThank you so much for your note—I'm thrilled you're moving forward!\n\nI want to make sure we're perfectly aligned on the details. While I don't have a collection named \"Elite\" in our current studio lineup, I'd love to clarify exactly which option you're considering so we can confirm all the specifics together. Our proposal and contract will spell out the full scope, investment, and what's included.\n\nRegarding the deposit: our standard booking retainer is **30% to hold your date** when the contract specifies that structure, so you're spot-on there. Once we finalize which package best suits your vision, that percentage will be confirmed in your signed agreement.\n\nAs for travel within Florence for your engagement session, I want to give you an accurate answer rather than assume. Let me verify the travel inclusion details with your specific itinerary and get back to you with clarity—our destination work is always tailored, and I want to make sure you have the exact parameters in writing.\n\nIf you're ready to move forward this week, I'm happy to walk you through the contract and lock in your December 6, 2026, date. Just let me know, and we'll get everything buttoned up beautifully.\n\nLooking forward to capturing your Tuscany celebration!\n\nWarmly,  \n[Studio Manager]",
+          "waitStatus": "stable",
+          "tone": "hedge",
+          "riskFlags": []
+        },
+        {
+          "id": "insurance",
+          "inbound": "Quick clarification — our venue contract requires vendors to carry liability insurance and name the venue as additional insured on the wedding day. Is that something your policy already covers, or do we need to purchase a separate rider and list you?",
+          "outbound": "Subject: Re: Insurance & Additional Insured Requirements\n\nDear CTX eval E,\n\nThank you for flagging this—it's a great question, and one we encounter often with Italian venues.\n\nWe do carry comprehensive liability insurance for our work, and we're typically able to accommodate requests to name your venue as an additional insured for the wedding day. That said, the specifics—including whether there's any administrative fee from our insurer and the exact naming process—depend on the venue's certificate requirements and our policy terms at the time.\n\nThe best path forward is for us to review your venue's insurance addendum once you have it, then coordinate directly with our carrier to issue the certificate of insurance (COI) naming them appropriately. We'll handle that coordination as part of your planning timeline, well ahead of December.\n\nIf your venue contract has a specific COI template or deadline, feel free to share it now or when it's finalized—we'll make sure everything aligns smoothly.\n\nWarmly,\n\n**[Studio Name]**  \nLuxury Wedding Photography  \nTuscany, Italy · December 2026",
+          "waitStatus": "stable",
+          "tone": "hedge",
+          "riskFlags": []
+        }
+      ],
+      "passNotes": "PASS-ish: E should avoid treating Elite as verified without package rule."
+    }
+  ],
+  "whatEachLayerDoes": {
+    "A": "CRM snapshot only (weddings row) — no harness playbook_rules or case memories.",
+    "B": "+ playbook_rules (same rows fetchActivePlaybookRulesForDecisionContext loads for live V3).",
+    "C": "+ case memory (memories row type v3_verify_case_note) — appears in writer facts as case headers.",
+    "D": "+ best-effort thread_summaries + prior messages on same thread before first wait (may race with worker).",
+    "E": "playbook without Elite row — failure-mode vs client saying Elite."
+  },
+  "nextOptimization": "If D’s continuity injection races, add a deterministic delay or a dedicated ‘pause until injected’ gate; if A still confirms Elite, tighten writer when playbook_rules blob is empty."
+}

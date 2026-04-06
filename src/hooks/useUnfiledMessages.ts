@@ -70,9 +70,25 @@ export function useUnfiledMessages() {
   async function linkThread(threadId: string, weddingId: string) {
     setThreads((prev) => prev.filter((t) => t.id !== threadId));
 
+    const { data: wedding, error: wErr } = await supabase
+      .from("weddings")
+      .select("photographer_id")
+      .eq("id", weddingId)
+      .single();
+
+    if (wErr || !wedding) {
+      console.error("linkThread wedding error:", wErr?.message);
+      refetch();
+      return;
+    }
+
     const { error } = await supabase
       .from("threads")
-      .update({ wedding_id: weddingId, ai_routing_metadata: null })
+      .update({
+        wedding_id: weddingId,
+        ai_routing_metadata: null,
+        photographer_id: wedding.photographer_id as string,
+      })
       .eq("id", threadId);
 
     if (error) {

@@ -1,0 +1,106 @@
+{
+  "schema": "v3_auditor_proof_v1",
+  "generatedAt": "2026-04-06T16:06:21.377Z",
+  "runId": "AUDITOR-PROOF-1775491459363",
+  "photographerId": "beee13da-bbb2-4c94-992f-7dde911209ec",
+  "deterministic": {
+    "r1_grounded_commit_pass": {
+      "isValid": true
+    },
+    "r2_ungrounded_structured_fail": {
+      "isValid": false,
+      "violations": [
+        "deposit_percentage 30% is not present in verified playbook_rules text (CRM does not carry deposit %).",
+        "travel_miles_included 50 is not present in verified playbook_rules text with travel/distance context.",
+        "email_draft asserts deposit/booking percentage 30% in prose without matching verified playbook_rules text.",
+        "email_draft asserts travel/mileage 50 in prose without matching verified playbook_rules text."
+      ]
+    },
+    "r3_ungrounded_prose_fail": {
+      "isValid": false,
+      "violations": [
+        "email_draft asserts deposit/booking percentage 30% in prose without matching verified playbook_rules text."
+      ]
+    },
+    "deterministicProven": true
+  },
+  "branches": [
+    {
+      "branch": "happy",
+      "label": "HAPPY",
+      "weddingId": "72882c48-0394-44ab-bc4e-0ec5a3bb0cd9",
+      "threadId": "8ef93d82-b909-425c-a7cc-0fb2847b6bf0",
+      "waitOk": true,
+      "draftId": "19e88675-c4de-4054-b68e-3787eb33b1ad",
+      "draftBodyPreview": "Subject: Elite Collection Details & Moving Forward\n\nDear Auditor proof HAPPY-AUDITOR-PROOF-1775491459363,\n\nThank you so much—we're thrilled you're leaning toward the Elite collection for your December celebration in Tuscany!\n\nI'm happy to confirm: **yes, the Elite collection holds your date with a 30% retainer**, and **engagement session travel within 50 miles of Florence is included**, exactly as you've outlined.\n\nIf you're ready to move forward this week, I'll send over the contract for your review and signature. Once we receive that and the 30% retainer, your date is officially secured and we can begin planning the beautiful details of your Italian wedding.\n\nPlease let me know if you'd like me to send the paperwork, or if you have any other questions before we make it official.\n\nWarmly,\n\n*Studio Manager*  \nLuxury Wedding Photography Studio",
+      "instructionHistoryRaw": [
+        {
+          "step": "client_orchestrator_v1",
+          "action_key": "send_message",
+          "candidate_id": "cand-1-send_message",
+          "action_family": "send_message",
+          "schema_version": 1,
+          "playbook_rule_ids": null,
+          "orchestrator_slice": "A2_draft"
+        },
+        {
+          "step": "persona_writer_after_client_orchestrator_v1",
+          "model": "claude-sonnet-4-5-20250929",
+          "source": "personaAgent.draftPersonaResponse"
+        }
+      ],
+      "isStubFallback": false,
+      "parsed": {
+        "committed_terms": null,
+        "auditPassed": null,
+        "violations": [],
+        "personaStepFound": true,
+        "auditorStepFound": false
+      },
+      "auditorEscalations": [],
+      "notes": "stable 18000ms"
+    },
+    {
+      "branch": "failure",
+      "label": "FAILURE",
+      "weddingId": "9b20e3a5-2040-43fc-b059-5e790cd0dfd0",
+      "threadId": "1430fc71-3f85-4e73-b344-400ef1bffe10",
+      "waitOk": true,
+      "draftId": "81078fb6-8e43-4404-81ca-926822582ff5",
+      "draftBodyPreview": "Subject: Re: Elite Collection & Deposit Details\n\nDear Auditor proof FAILURE-AUDITOR-PROOF-1775491459363,\n\nThank you so much for your message—it's wonderful to hear you're moving forward!\n\nI want to make sure I give you completely accurate information. The specific deposit percentage to hold your December 2026 date in Tuscany, as well as travel inclusion details for engagement sessions, are outlined precisely in your contract and our formal proposal. Rather than risk any miscommunication here, I'd love to have you confirm those exact terms directly from the signed agreement or speak with our team to walk through the numbers together.\n\nWhat I *can* tell you is that we're absolutely committed to making your Tuscany celebration and any pre-wedding sessions seamless and beautifully documented. Once we've confirmed the details from your contract, we'll be ready to move forward the moment your deposit is received.\n\nWould it be helpful to schedule a quick call this week to review everything line by line? Or if you have your contract handy, those sections will answer both questions definitively.\n\nLooking forward to finalizing everything with you soon.\n\nWarmly,\n\n**[Studio Manager Name]**  \nL",
+      "instructionHistoryRaw": [
+        {
+          "step": "client_orchestrator_v1",
+          "action_key": "send_message",
+          "candidate_id": "cand-1-send_message",
+          "action_family": "send_message",
+          "schema_version": 1,
+          "playbook_rule_ids": null,
+          "orchestrator_slice": "A2_draft"
+        },
+        {
+          "step": "persona_writer_after_client_orchestrator_v1",
+          "model": "claude-sonnet-4-5-20250929",
+          "source": "personaAgent.draftPersonaResponse"
+        }
+      ],
+      "isStubFallback": false,
+      "parsed": {
+        "committed_terms": null,
+        "auditPassed": null,
+        "violations": [],
+        "personaStepFound": true,
+        "auditorStepFound": false
+      },
+      "auditorEscalations": [],
+      "notes": "stable 18000ms"
+    }
+  ],
+  "checks": {
+    "deterministicProven": true,
+    "liveHappyObserved": true,
+    "liveFailureStubObserved": false,
+    "verdict": "**Deterministic auditor proven** (in-process). **Live observations partial** — redeploy `supabase functions deploy inngest` if `v3_output_auditor_commercial_terms` is missing from `instruction_history`; failure branch may hedge (no %) so auditor passes without stub."
+  },
+  "inngestEventNote": "On rejection, `recordV3OutputAuditorEscalation` calls `inngest.send` for `operator/escalation.pending_delivery.v1` after DB insert; confirm in Inngest Cloud if needed."
+}

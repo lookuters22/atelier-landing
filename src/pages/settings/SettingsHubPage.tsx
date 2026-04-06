@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, FlaskConical, MessageCircle, Sparkles } from "lucide-react";
+import { Activity, Check, FlaskConical, MessageCircle, Phone, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  readPhotographerSettings,
+  writePhotographerSettingsMerged,
+} from "@/lib/photographerSettings";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
@@ -92,28 +96,133 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
   const [isSimulating, setIsSimulating] = useState(false);
   const [simResult, setSimResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  const [studioName, setStudioName] = useState("");
+  const [managerName, setManagerName] = useState("");
+  const [photographerNames, setPhotographerNames] = useState("");
+  const [timezone, setTimezone] = useState("");
+  const [currency, setCurrency] = useState("");
+  const [adminMobileNumber, setAdminMobileNumber] = useState("");
+  const [playbookVersion, setPlaybookVersion] = useState("");
+  const [onboardingCompletedAt, setOnboardingCompletedAt] = useState<string | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  const [opSaving, setOpSaving] = useState(false);
+  const [opSaved, setOpSaved] = useState(false);
+  const [opError, setOpError] = useState<string | null>(null);
+
+  /** Phase 11.5 Step 11.5C — one dashboard readout (open escalations; not the full observability surface). */
+  const [openEscalationsCount, setOpenEscalationsCount] = useState<number | null>(null);
+  const [observabilityLoading, setObservabilityLoading] = useState(false);
+  const [observabilityError, setObservabilityError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!photographerId) return;
-    supabase
-      .from("photographers")
-      .select("settings")
-      .eq("id", photographerId)
-      .single()
-      .then(({ data }) => {
-        const settings = (data?.settings ?? {}) as Record<string, unknown>;
-        const saved = (settings.whatsapp_number as string) ?? "";
-        if (saved) {
-          const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
-          const match = sorted.find((c) => saved.startsWith(c.code));
-          if (match) {
-            setCountryCode(match.code);
-            setPhoneNumber(saved.slice(match.code.length));
-          } else {
-            setPhoneNumber(saved);
-          }
+    void (async () => {
+      const loaded = await readPhotographerSettings(supabase, photographerId);
+      if (!loaded) return;
+      const { contract, raw } = loaded;
+      setStudioName(contract.studio_name ?? "");
+      setManagerName(contract.manager_name ?? "");
+      setPhotographerNames(contract.photographer_names ?? "");
+      setTimezone(contract.timezone ?? "");
+      setCurrency(contract.currency ?? "");
+      setAdminMobileNumber(contract.admin_mobile_number ?? "");
+      setPlaybookVersion(
+        contract.playbook_version !== undefined ? String(contract.playbook_version) : "",
+      );
+      setOnboardingCompletedAt(contract.onboarding_completed_at ?? null);
+
+      const saved = (raw.whatsapp_number as string) ?? "";
+      if (saved) {
+        const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length);
+        const match = sorted.find((c) => saved.startsWith(c.code));
+        if (match) {
+          setCountryCode(match.code);
+          setPhoneNumber(saved.slice(match.code.length));
+        } else {
+          setPhoneNumber(saved);
         }
-      });
+      }
+    })();
   }, [photographerId]);
+
+  useEffect(() => {
+    if (!photographerId) return;
+    let cancelled = false;
+    void (async () => {
+      setObservabilityLoading(true);
+      setObservabilityError(null);
+      const { count, error } = await supabase
+        .from("escalation_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("photographer_id", photographerId)
+        .eq("status", "open");
+      if (cancelled) return;
+      if (error) {
+        setObservabilityError(error.message);
+        setOpenEscalationsCount(null);
+      } else {
+        setOpenEscalationsCount(count ?? 0);
+      }
+      setObservabilityLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [photographerId]);
+
+  async function saveProfileContract() {
+    if (!photographerId) return;
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSaved(false);
+    try {
+      let playbookVersionParsed: string | number | undefined;
+      const pb = playbookVersion.trim();
+      if (pb === "") {
+        playbookVersionParsed = undefined;
+      } else if (/^\d+$/.test(pb)) {
+        playbookVersionParsed = Number(pb);
+      } else {
+        playbookVersionParsed = pb;
+      }
+
+      await writePhotographerSettingsMerged(supabase, photographerId, {
+        studio_name: studioName.trim() || undefined,
+        manager_name: managerName.trim() || undefined,
+        photographer_names: photographerNames.trim() || undefined,
+        timezone: timezone.trim() || undefined,
+        currency: currency.trim() || undefined,
+        playbook_version: playbookVersionParsed,
+      });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (err: unknown) {
+      setProfileError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function saveOperatorNumber() {
+    if (!photographerId) return;
+    setOpSaving(true);
+    setOpError(null);
+    setOpSaved(false);
+    try {
+      await writePhotographerSettingsMerged(supabase, photographerId, {
+        admin_mobile_number: adminMobileNumber.trim() || undefined,
+      });
+      setOpSaved(true);
+      setTimeout(() => setOpSaved(false), 3000);
+    } catch (err: unknown) {
+      setOpError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setOpSaving(false);
+    }
+  }
 
   async function saveWhatsAppNumber() {
     if (!photographerId) return;
@@ -124,20 +233,9 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
     const fullNumber = phoneNumber.trim() ? `${countryCode}${phoneNumber.trim().replace(/^0+/, "")}` : "";
 
     try {
-      const { data: current } = await supabase
-        .from("photographers")
-        .select("settings")
-        .eq("id", photographerId)
-        .single();
-
-      const existing = (current?.settings ?? {}) as Record<string, unknown>;
-
-      const { error } = await supabase
-        .from("photographers")
-        .update({ settings: { ...existing, whatsapp_number: fullNumber || null } })
-        .eq("id", photographerId);
-
-      if (error) throw error;
+      await writePhotographerSettingsMerged(supabase, photographerId, {
+        whatsapp_number: fullNumber || undefined,
+      });
       setWaSaved(true);
       setTimeout(() => setWaSaved(false), 3000);
     } catch (err: unknown) {
@@ -151,10 +249,10 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
     try {
       setIsSimulating(true);
       setSimResult(null);
+      /** Tenant for webhook-web comes from the Supabase session JWT on this invoke — not from body fields. */
       const { error } = await supabase.functions.invoke("webhook-web", {
         body: {
           source: "test_button",
-          photographer_id: photographerId,
           lead: {
             name: "Sarah & James",
             email: "sarah.test@example.com",
@@ -196,17 +294,170 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
       {/* ── General ── */}
       <section className="mt-10">
         <h3 className="border-b border-border pb-2 text-[15px] font-medium text-foreground">General</h3>
-        <p className="mt-3 text-[13px] text-muted-foreground">Studio identity and connectivity.</p>
+        <p className="mt-3 text-[13px] text-muted-foreground">
+          Studio identity and connectivity. Saved to <span className="font-mono text-[11px]">photographers.settings</span>{" "}
+          (contract keys from Step 1A).
+        </p>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <label className="space-y-1.5 text-[13px]">
-            <span className="font-medium text-foreground">Display name</span>
-            <input defaultValue="Atelier · Elena Duarte" className={inputCls} />
+            <span className="font-medium text-foreground">Studio name</span>
+            <input
+              value={studioName}
+              onChange={(e) => setStudioName(e.target.value)}
+              placeholder="Atelier · Elena Duarte"
+              className={inputCls}
+            />
+            <span className="text-[11px] text-muted-foreground">settings.studio_name</span>
           </label>
           <label className="space-y-1.5 text-[13px]">
             <span className="font-medium text-foreground">Default currency</span>
-            <input defaultValue="EUR" className={inputCls} />
+            <input
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              placeholder="EUR"
+              className={inputCls}
+            />
+            <span className="text-[11px] text-muted-foreground">settings.currency</span>
           </label>
+          <label className="space-y-1.5 text-[13px]">
+            <span className="font-medium text-foreground">Timezone</span>
+            <input
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              placeholder="Europe/Belgrade"
+              className={inputCls}
+            />
+            <span className="text-[11px] text-muted-foreground">settings.timezone</span>
+          </label>
+          <label className="space-y-1.5 text-[13px]">
+            <span className="font-medium text-foreground">Manager name</span>
+            <input
+              value={managerName}
+              onChange={(e) => setManagerName(e.target.value)}
+              className={inputCls}
+            />
+            <span className="text-[11px] text-muted-foreground">settings.manager_name</span>
+          </label>
+          <label className="md:col-span-2 space-y-1.5 text-[13px]">
+            <span className="font-medium text-foreground">Photographer names</span>
+            <input
+              value={photographerNames}
+              onChange={(e) => setPhotographerNames(e.target.value)}
+              placeholder="Elena & Marco"
+              className={inputCls}
+            />
+            <span className="text-[11px] text-muted-foreground">settings.photographer_names</span>
+          </label>
+          <label className="space-y-1.5 text-[13px]">
+            <span className="font-medium text-foreground">Playbook version</span>
+            <input
+              value={playbookVersion}
+              onChange={(e) => setPlaybookVersion(e.target.value)}
+              placeholder="1 or 1.0.0"
+              className={inputCls}
+            />
+            <span className="text-[11px] text-muted-foreground">settings.playbook_version</span>
+          </label>
+          <div className="space-y-1.5 text-[13px]">
+            <span className="font-medium text-foreground">Onboarding completed</span>
+            <div className={inputCls + " text-muted-foreground"}>
+              {onboardingCompletedAt ? onboardingCompletedAt : "—"}
+            </div>
+            <span className="text-[11px] text-muted-foreground">settings.onboarding_completed_at (read-only here)</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={profileSaving}
+            onClick={saveProfileContract}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 text-[13px] font-semibold text-foreground transition hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {profileSaved ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : null}
+            {profileSaving ? "Saving…" : profileSaved ? "Profile saved" : "Save profile"}
+          </button>
+          {profileError ? <p className="text-[13px] text-red-500">{profileError}</p> : null}
+        </div>
+      </section>
+
+      {/* ── Observability: one stat (execute_v3 §11.5C) ── */}
+      <section className="mt-10">
+        <h3 className="border-b border-border pb-2 text-[15px] font-medium text-foreground">Observability snapshot</h3>
+        <p className="mt-3 max-w-2xl text-[13px] text-muted-foreground">
+          Phase 11.5 — single live readout only. Use it alongside rollout questions in{" "}
+          <span className="font-mono text-[11px]">execute_v3.md</span> §11.5C (e.g. pressure from unresolved escalations).
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-background px-4 py-4">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+            <span className="text-[13px] font-medium text-foreground">Open escalation requests</span>
+          </div>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums text-foreground">
+              {observabilityLoading ? "—" : openEscalationsCount ?? "—"}
+            </span>
+            <Link
+              to="/escalations"
+              className="text-[13px] font-medium text-foreground underline-offset-2 hover:underline"
+            >
+              Open queue
+            </Link>
+          </div>
+        </div>
+        {observabilityError ? (
+          <p className="mt-2 text-[13px] text-red-500">{observabilityError}</p>
+        ) : (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Verifier block telemetry (<span className="font-mono">blocks_by_verifier</span>) is structured JSON in Edge
+            logs — filter <span className="font-mono">v315_telemetry</span>.
+          </p>
+        )}
+      </section>
+
+      {/* ── Operator number (Phase 11 Step 11A) ── */}
+      <section className="mt-10">
+        <h3 className="border-b border-border pb-2 text-[15px] font-medium text-foreground">Operator number</h3>
+        <p className="mt-3 max-w-2xl text-[13px] text-muted-foreground">
+          The number where Ana reaches you on the operator lane (blocked actions, escalations, slash commands). This is
+          separate from the client-facing WhatsApp line under Integrations. Stored as{" "}
+          <span className="font-mono text-[11px]">settings.admin_mobile_number</span> (E.164).
+        </p>
+
+        <div className="mt-5 rounded-lg border border-border bg-background px-4 py-4">
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+            <p className="text-[13px] font-semibold text-foreground">Operator WhatsApp (E.164)</p>
+          </div>
+          <label className="mt-3 block space-y-1.5 text-[13px]">
+            <span className="font-medium text-foreground">Mobile number</span>
+            <input
+              value={adminMobileNumber}
+              onChange={(e) => {
+                setAdminMobileNumber(e.target.value);
+                setOpSaved(false);
+              }}
+              placeholder="+381601234567"
+              className={inputCls}
+              autoComplete="tel"
+            />
+          </label>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={opSaving}
+              onClick={saveOperatorNumber}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 text-[13px] font-semibold text-foreground transition hover:bg-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {opSaved ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : null}
+              {opSaving ? "Saving…" : opSaved ? "Saved" : "Save operator number"}
+            </button>
+            {opError ? <p className="text-[13px] text-red-500">{opError}</p> : null}
+            {opSaved && !opError ? (
+              <p className="text-[13px] text-emerald-600">Operator number updated.</p>
+            ) : null}
+          </div>
         </div>
       </section>
 

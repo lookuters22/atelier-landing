@@ -7,6 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:context": "vitest run --config vitest.context.config.ts",
+    "v3:verify-workers": "npx tsx scripts/simulate_v3_worker_verification.ts",
+    "v3:verify-smoke-strict": "npx tsx scripts/v3_verify_smoke_strict_entry.ts",
+    "v3:verify-conversation-smoke-3": "npx tsx scripts/v3_verify_conversation_smoke_3_entry.ts",
+    "v3:eval-context-layers": "npx tsx scripts/v3_context_layer_eval_harness.ts",
+    "v3:proof-auditor": "npx tsx scripts/v3_auditor_proof_harness.ts",
+    "backfill:12a": "npx tsx scripts/backfill-step12a-settings-to-playbook.ts",
     "postinstall": "patch-package",
     "preview": "vite preview"
   },
@@ -55,6 +62,7 @@
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^3.2.4"
   }
 }

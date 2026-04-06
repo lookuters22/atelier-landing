@@ -1,0 +1,89 @@
+{
+  "schema": "v3_auditor_proof_v1",
+  "generatedAt": "2026-04-06T16:25:50.624Z",
+  "runId": "AUDITOR-PROOF-1775492682617",
+  "photographerId": "beee13da-bbb2-4c94-992f-7dde911209ec",
+  "deterministic": {
+    "r1_grounded_commit_pass": {
+      "isValid": true
+    },
+    "r2_ungrounded_structured_fail": {
+      "isValid": false,
+      "violations": [
+        "deposit_percentage 30% is not present in verified playbook_rules text (CRM does not carry deposit %).",
+        "travel_miles_included 50 is not present in verified playbook_rules text with travel/distance context.",
+        "email_draft asserts deposit/booking percentage 30% in prose without matching verified playbook_rules text.",
+        "email_draft asserts travel/mileage 50 in prose without matching verified playbook_rules text."
+      ]
+    },
+    "r3_ungrounded_prose_fail": {
+      "isValid": false,
+      "violations": [
+        "email_draft asserts deposit/booking percentage 30% in prose without matching verified playbook_rules text."
+      ]
+    },
+    "deterministicProven": true
+  },
+  "branches": [
+    {
+      "branch": "happy",
+      "label": "HAPPY",
+      "weddingId": "3d9257e7-6e5c-41c3-9b10-090294d53088",
+      "threadId": "d45a4eca-fbad-4bc1-9428-11c904bcf96c",
+      "waitOk": true,
+      "draftId": "4913bbd9-2a4a-4b06-a4b7-b03dfe30ed12",
+      "draftBodyPreview": "Dear Auditor proof HAPPY-AUDITOR-PROOF-1775492682617,\n\nThank you so much for your message—it's wonderful to hear you're moving forward!\n\nI'm happy to confirm the details for the Elite collection:\n\n• **Booking retainer:** 30% to hold your December 6, 2026 date in Tuscany, as outlined in your contract.\n• **Engagement session travel:** Included within 50 miles of Florence.\n\nOnce you're ready to proceed this week, I'll send over the contract and payment instructions. Please don't hesitate to reach out if you have any other questions—we're here to make this seamless.\n\nWarmly,\n\n[Studio Manager]\n[Studio Name]",
+      "instructionHistoryRaw": [
+        {
+          "step": "client_orchestrator_v1",
+          "action_key": "send_message",
+          "candidate_id": "cand-1-send_message",
+          "action_family": "send_message",
+          "schema_version": 1,
+          "playbook_rule_ids": null,
+          "orchestrator_slice": "A2_draft"
+        },
+        {
+          "step": "persona_writer_after_client_orchestrator_v1",
+          "model": "claude-sonnet-4-5-20250929",
+          "source": "personaAgent.draftPersonaStructuredResponse",
+          "committed_terms": {
+            "package_names": [
+              "Elite collection"
+            ],
+            "deposit_percentage": 30,
+            "travel_miles_included": 50
+          }
+        },
+        {
+          "step": "v3_output_auditor_commercial_terms",
+          "passed": true
+        }
+      ],
+      "isStubFallback": false,
+      "parsed": {
+        "committed_terms": {
+          "package_names": [
+            "Elite collection"
+          ],
+          "deposit_percentage": 30,
+          "travel_miles_included": 50
+        },
+        "auditPassed": true,
+        "violations": [],
+        "personaStepFound": true,
+        "auditorStepFound": true
+      },
+      "auditorEscalations": [],
+      "notes": "stable 18000ms"
+    }
+  ],
+  "checks": {
+    "deterministicProven": true,
+    "liveHappyObserved": true,
+    "liveFailureStubObserved": false,
+    "smokeHappyOnly": true,
+    "verdict": "**Deterministic auditor proven** (in-process). **Live happy path:** grounded persona draft + auditor passed."
+  },
+  "inngestEventNote": "On rejection, `recordV3OutputAuditorEscalation` calls `inngest.send` for `operator/escalation.pending_delivery.v1` after DB insert; confirm in Inngest Cloud if needed."
+}

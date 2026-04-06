@@ -86,6 +86,7 @@ export function SupportAssistantWidget() {
     setAnaTyping(true);
 
     try {
+      /** Authenticated app shell: tenant comes from the Supabase session JWT on `functions.invoke` (not body fields). */
       const { error } = await supabase.functions.invoke("webhook-web", {
         body: { message: text },
       });

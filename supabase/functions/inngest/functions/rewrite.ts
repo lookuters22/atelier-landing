@@ -1,6 +1,8 @@
 /**
  * Rewrite Worker — regenerates a rejected draft using photographer feedback.
  *
+ * Step 9C: rewrite feedback is captured as a `memories` learning input — not playbook_rules.
+ *
  * Listens for ai/draft.rewrite_requested.
  *
  * 1. Fetch the draft, its thread, and wedding context.
@@ -8,6 +10,7 @@
  * 3. Update the draft with the new body, flip status back to pending_approval,
  *    and append the feedback to instruction_history for audit.
  */
+import { captureDraftLearningInput } from "../../_shared/captureDraftLearningInput.ts";
 import { inngest } from "../../_shared/inngest.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { runPersonaAgent, type PersonaContext } from "../../_shared/agents/persona.ts";
@@ -45,6 +48,7 @@ export const rewriteFunction = inngest.createFunction(
       return {
         draftBody: draft.body as string,
         instructionHistory: (draft.instruction_history ?? []) as Record<string, unknown>[],
+        photographerId: draft.photographer_id as string,
         threadId: thread.id as string,
         weddingId,
         couple_names: wedding.couple_names as string,
@@ -91,6 +95,18 @@ export const rewriteFunction = inngest.createFunction(
       if (error) {
         throw new Error(`Failed to update draft: ${error.message}`);
       }
+    });
+
+    await step.run("capture-draft-rewrite-feedback-learning", async () => {
+      const fb = String(feedback ?? "").trim();
+      if (!fb) return;
+      await captureDraftLearningInput(supabaseAdmin, {
+        channel: "rewrite_feedback",
+        photographerId: context.photographerId,
+        weddingId: context.weddingId,
+        draftId: draft_id,
+        feedback: fb,
+      });
     });
 
     return { status: "rewrite_complete", draft_id };

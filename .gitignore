@@ -51,3 +51,8 @@ public/models/custom_iphone_17_3d_model.glb
 .env
 .env.*
 supabase/.env
+
+# V3 verification harness — local mirror of Edge triage/intake gate secrets (copy from scripts/v3_verify_gate_posture.env.example)
+scripts/v3_verify_gate_posture.env
+
+supabase/functions/inngest/.qa_fixtures.json

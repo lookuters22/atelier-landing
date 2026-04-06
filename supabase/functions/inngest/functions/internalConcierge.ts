@@ -1,6 +1,10 @@
 /**
  * Internal Concierge — Boss's Private WhatsApp AI Assistant.
  *
+ * Phase 8 Step 8C: Production operator WhatsApp uses `operator/whatsapp.inbound.v1` → `operatorOrchestrator`.
+ * This worker remains for legacy triage ingress (`comms/whatsapp.received` or
+ * `operator/whatsapp.legacy.received`) → `ai/intent.internal_concierge` only (Phase 0D / Step 8D).
+ *
  * Listens for ai/intent.internal_concierge (WhatsApp-only).
  *
  * This is NOT the client-facing email pipeline.
@@ -164,7 +168,8 @@ async function handleToolCall(
 
       let query = supabaseAdmin
         .from("clients")
-        .select("id, name, email, role, wedding_id, weddings(couple_names)")
+        .select("id, name, email, role, wedding_id, weddings!inner(couple_names)")
+        .eq("weddings.photographer_id", photographerId)
         .limit(15);
 
       if (args.search_term && typeof args.search_term === "string") {
@@ -206,6 +211,7 @@ async function handleToolCall(
       const { data, error } = await supabaseAdmin
         .from("drafts")
         .select("id, body, status, created_at, threads(title, weddings(couple_names))")
+        .eq("photographer_id", photographerId)
         .eq("status", "pending_approval")
         .order("created_at", { ascending: false })
         .limit(5);
@@ -288,6 +294,7 @@ export const internalConciergeFunction = inngest.createFunction(
       const { data: existingThread } = await supabaseAdmin
         .from("threads")
         .select("id")
+        .eq("photographer_id", photographer_id)
         .is("wedding_id", null)
         .eq("title", internalTitle)
         .eq("kind", "other")
@@ -301,7 +308,12 @@ export const internalConciergeFunction = inngest.createFunction(
       } else {
         const { data: newThread, error } = await supabaseAdmin
           .from("threads")
-          .insert({ wedding_id: null, title: internalTitle, kind: "other" })
+          .insert({
+            wedding_id: null,
+            photographer_id,
+            title: internalTitle,
+            kind: "other",
+          })
           .select("id")
           .single();
 
@@ -318,6 +330,7 @@ export const internalConciergeFunction = inngest.createFunction(
         .from("messages")
         .select("direction, sender, body, sent_at")
         .eq("thread_id", setup.threadId)
+        .eq("photographer_id", photographer_id)
         .eq("direction", "internal")
         .order("sent_at", { ascending: false })
         .limit(MEMORY_DEPTH);
@@ -334,6 +347,7 @@ export const internalConciergeFunction = inngest.createFunction(
     await step.run("log-inbound-message", async () => {
       await supabaseAdmin.from("messages").insert({
         thread_id: setup.threadId,
+        photographer_id,
         direction: "internal",
         sender: from_number || "photographer",
         body: raw_message,
@@ -381,6 +395,7 @@ export const internalConciergeFunction = inngest.createFunction(
     await step.run("log-outbound-response", async () => {
       await supabaseAdmin.from("messages").insert({
         thread_id: setup.threadId,
+        photographer_id,
         direction: "internal",
         sender: "ai-assistant",
         body: response,

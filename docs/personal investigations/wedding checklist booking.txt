@@ -1,0 +1,942 @@
+***Booking wedding
+
+- [1 ]  Email to ask them to send you information needed for the agreement and the invoice
+    - email
+        
+        Hi Client,
+        I’m really excited that you'd like to move forward with us!
+        To officially secure your dates, you should sign an agreement and pay the retainer (35% of the total price).
+        To prepare everything, I just need:
+        - your full names
+        - address
+        - the billing details (we can issue a company invoice as well if needed)
+        Please don't hesitate to let me know if you have any questions!
+        Warmly,
+        Ana
+
+2. In Inquiries table in Notion add emoji to the page and add tag “BOOKED” to “Status”
+
+3. Create agreement and send it to them via Hello Sign (cc planner if needed)
+
+Please review the document before signing. For any questions, contact us via email at hello@daniloandsharon.com or by phone at +381603073337.
+Thank you!
+
+
+4. Send retainer invoice
+
+Hi Client/Planner,
+Thank you for getting back to me!
+I've attached the invoice to this email, and the agreement is coming in a few minutes in a separate email.
+Please let me know if you have any questions!
+Warmly,
+Ana
+
+5. Add this wedding to Klem’s page with status “In process”
+
+6. Follow up about the agreement and invoice - 3 days after sending
+
+Hi Client,
+I hope you’re well!
+I just wanted to check if you have any questions about the agreement or the invoice?
+I’m here to help!
+Warmly,
+Ana
+
+7. Email to let them know we received signed agreement 
+
+Hi Client,
+I hope you're well!
+We received a signed agreement, and I've attached the copy below.
+Please don't hesitate to let me know if you have any questions about the invoice. I'm here to help!
+Warmly,
+Ana
+
+8. Email to let them know we received payment, send paid invoice, and say “dates are officially booked”
+
+- email for client
+    
+    Hi Client,
+    I hope you're well!
+    We received the payment, and the dates is/are now officially booked. Danilo and Sharon are really looking forward to capturing your special memories!
+    As the next step, we’ll schedule a video call a month or two before the wedding to discuss your vision, style, and ideas in more detail.
+    Of course, if there’s anything we can assist with in the meantime, we’re happy to organize additional consultation calls to support the planning process.
+    Warmly,
+    Ana
+
+
+email for planner
+
+Hi Planer,
+We just received the payment, and I'm attaching the receipt/invoice.
+The dates are now officially booked, and we're really looking forward to collaborating with you at this wedding!
+As the next step, we’ll schedule a video call a month or two before the wedding to discuss the couple's vision, style, and ideas in more detail.
+Of course, if there’s anything we can assist with in the meantime, we’re happy to organize additional consultation calls to support the planning process.
+Warmly,
+Ana
+
+
+9. Add invoice to their folder in Drive
+
+10. Check procedure for handling payments
+
+11. Change status of payment to “paid” and add link of the invoice
+
+
+
+
+
+
+***WEDDING IS BOOKED
+
+1. Change wedding status to “Booked”
+
+2. Add the wedding to our calendars
+
+3. Add the wedding to the Production page and fill out the needed details for editing table, for book table and magazine
+
+4. Fill out the “Booking Data” page in Notion 
+
+5. Check with photographer who will be second shooters
+
+6. Book second shooter and send them agreement to sign if second shooter needed
+
+Hi Photographer,
+I hope you're well!
+Before our collaboration, we should sign an agreement that outlines the code of conduct, rules for handling and using photographs, and confidentiality terms during and after working on a wedding with our studio.
+I'll send it to you for signing in a separate email in a few minutes.
+Please don't hesitate to let me know if you have any questions. I'm here to help!
+Warmly,
+Ana
+
+7. In clients page in Notion add who the second shooters are and how much they’ll be paid
+
+8. Check-in email 6 months before the wedding to check how are they and if they need any help
+
+- email for planner
+    
+    Hi Planner,
+    I hope you’re well!
+    With Client’s wedding just a few months away, I wanted to gently check in to see how everything is shaping up on your end?
+    If there’s anything you need from us at this stage, or anything we can support you with, just let me know. We’re always happy to help!
+    Warmly,
+    Ana
+
+9. Email clients about “About” call, send questionnaire, send reminder invoice - around 2 months before the wedding
+
+
+email for client
+
+Hi Client,
+I hope you're well!
+With the big day approaching, I hope everything is coming together beautifully in these final planning stages.
+I've attached the invoice for the final part of the payment.
+I'd love to schedule a call for you and Danilo and Sharon to discuss more details. You can book a time slot that works best for you here: {Calendly link}.
+If you’d prefer a different day than the ones listed, just let me know.
+Ahead of the call, it'd be great if you could complete a pre-wedding questionnaire that helps us make even more meaningful photos for you. It takes approximately 15 minutes to complete, and you can do so via the following link: {Questionnaire link}.
+Please don't hesitate to let me know if you have any questions in the meantime. I'm here to help!
+Warmly,
+Ana
+
+- email for planner
+    
+    Hi Planner,
+    I hope you're well!
+    Client's wedding is approaching, and we're excited about our collaboration!
+    I've attached the invoice for the final part of the payment.
+    I'd love to schedule a call for the couple and Danilo and Sharon to discuss more details and get to know better. They can book a time slot that works best here: {Calendly link}.
+    If they’d prefer a different day than the ones listed, just let me know.
+    Ahead of the call, it'd be great if they could complete a pre-wedding questionnaire that helps us make even more meaningful photos for them. It takes approximately 15 minutes to complete, and they can do so via the following link: {Questionnaire link}.
+    Please don't hesitate to let me know if you have any questions in the meantime. I'm here to help!
+    Warmly,
+    Ana
+
+10. Change status of the invoice to “sent”
+
+11. Follow ups after 5/7 days
+
+- follow up client
+    
+    Hi Client,
+    I hope you're well!
+    I just wanted to follow up on my previous email to help you check these final items off your list. To ensure everything is perfectly set for Danilo and Sharon to capture your wedding, could you please:
+    
+    - Complete the pre-wedding questionnaire: This helps us understand the most meaningful moments for you both. You can find it here: {Link}.
+    - Book call: It’d be perfect to schedule a call for you and Danilo and Sharon to discuss more details and get to know better. You can book a time slot that works best for you on the following link: {Calendly link}.
+    - Finalize the last invoice: I’ve re-attached it here for easy access.
+    
+    We are so excited to see it all come together! Please let me know if you have any questions at all.
+    
+    Warmly,
+    Ana
+
+
+- follow up planner
+    
+    Hi Planner,
+    I hope you’re well!
+    I just wanted to quickly follow up on the email below to make sure we're all set for Client’s wedding.
+    Could you please check in with the couple regarding the questionnaire, catch-up call, and final invoice? 
+    We’re so excited to collaborate with you on this one!
+    Warmly,
+    Ana
+
+
+12. Add questionnaire to the client page
+
+13. Fill in “Contact” table on client page
+
+14. send email to client that they booked “About” call
+
+Hi Client,
+I saw you booked a call for Saturday (August 16th).
+Danilo is looking forward to speaking with you!
+Please note that the call might be recorded for quality purposes.
+I'm here to help if you have any questions in the meantime.
+Warmly,
+Ana
+
+
+15. email if they didn’t meet with photographer yet
+
+Hi Client,
+I hope this email finds you well!
+My name is Ana, and I’m the client manager at Danilo & Sharon Studio. I’ll be your main point of contact via email and here to support you throughout the process.
+I just wanted to confirm that your call is booked for tomorrow. Danilo is really looking forward to meeting you and learning more about your wedding plans!
+Please note that the call may be recorded for quality purposes.
+If you have any questions or updates before the call, feel free to reach out. 
+Warmly,
+Ana
+
+
+16. send email to planner to let them know and ask if they’d like to join
+
+Hi Planner,
+I hope you’re well.
+Client just booked a call with us for {Date and time}.
+Would you like to join as well?
+If yes, I'm sharing the Zoom link and password below:
+
+- [l](https://us06web.zoom.us/j/85770127084?pwd=wjqV3cgOot6kWvYfMyGztsjs0NlQ48.1)ink
+- Password:
+
+Please don't hesitate to let me know if you have any questions in the meantime.
+Warmly,
+Ana
+
+
+17. schedule 1 day before remainder email
+
+Hi Client,
+Just a quick reminder that your call with Danilo is scheduled for tomorrow.
+He's looking forward to speaking with you and going over everything together.
+If you have any last-minute questions or updates before the call, feel free to reply to this email.
+Warmly,
+Ana
+
+18. schedule 1 hour before remainder email
+
+Hi Client,
+Your call with Danilo starts in about an hour — just a little reminder so it doesn’t get lost in the day!
+Warmly,
+Ana
+
+
+19. put it in photographer calendar, and then on do list on the day of the call
+
+remaind them on the day of the call
+
+20. put it in the “Call database”
+
+21. Put photographer’s notes on their page
+
+22. When payment is made - change status to “paid” and add link of the invoice
+
+23. Send email to let them know we received payment
+
+- email for client
+    
+    Hi Client,
+    I hope you’re well!
+    We received the payment, and I've attached a confirmation invoice.
+    Thank you!
+    Warmly,
+    Ana
+
+- email for planner
+    
+    Hi Planner,
+    I hope you’re well!
+    We received the payment from the couple, and I've attached a confirmation invoice.
+    Thank you so much for your help!
+    Warmly,
+    Ana
+
+
+
+24. Check procedure for handling payments
+
+25. Email planner about the moodboard and send due date (6 weeks before) - 2 months before the wedding
+
+email for planner
+
+Hi Planner,
+
+I hope you’re doing well!
+
+As we’re getting closer to Couple’s Names wedding, I wanted to check in and see if you could share the design materials or moodboards?
+
+We’re currently in the art direction phase and preparing the couple’s lookbook, which we’ve promised to deliver ahead of the wedding. So, having insight into the design, florals, and overall styling helps us align everything beautifully with your vision and make sure the couple feels completely taken care of.
+
+Ideally, it would be amazing to have this around 6 weeks before the wedding, so we have enough time to thoughtfully prepare and finalize the lookbook for the couple.
+
+If there’s anything you’re especially excited about design-wise, or any spots on site you feel could be really special for photos, we’d love to hear your thoughts.
+
+Thank you so much, and as always, let me know if you need anything from us. We’re really looking forward to working together on this one!
+
+Warmly,
+
+Ana
+
+
+Follow up after 5/7 days
+
+- follow up for planner
+    
+    Hi Planner,
+    I hope you’re well!
+    I’m just following up on my previous to see if the design materials or moodboards for Client are ready to share?
+    We’re finalizing the couple’s lookbook now and would love to align our art direction with your styling and florals. Having those details would be amazing as we head into these final weeks!
+    Looking forward to hearing from you.
+    Warmly,
+    Ana
+
+
+26. Email planner to ask for dress code - 1,5 month before the wedding
+
+
+- email for planner
+    
+    Hi Planner,
+    I hope you’re well!
+    Could you please let me know the dress code for each day? We’d love to make sure our team’s attire aligns perfectly with the event.
+    Thank you!
+    Warmly,
+    Ana
+
+
+27. Send dress code to photographer and second shooters
+
+
+28. Email planner to ask for timeline - 1 month before the wedding
+
+Hi Planner,
+
+I hope you’re doing well!
+
+As we’re now about a month out from Couple’s Names wedding, could you please share the full wedding timeline with us?
+
+Having the timeline at this stage helps our team prepare in detail and make sure everything runs smoothly on the day. If any parts are still being finalized, a working version is absolutely fine.
+
+Thank you so much, and of course let me know if there’s anything you need from us.
+
+Warmly,
+
+Ana
+
+
+28.1 Create photography timeline
+
+28.2 Include in timeline to do for photographer to take a photo of planners
+
+28.3 Send timeline to photographer and second shooters
+
+29. Email to schedule “Timeline call”
+
+- email for client
+    
+    Hi Client,
+    I hope you're having a lovely day!
+    I’d love to schedule one last call for you and Danilo and Sharon to go through all the details and timeline.
+    You can book a time that works best for you: {Calendly link}.
+    If none of the suggested times suit your schedule, just let me know and we’ll happily find another option.
+    Looking forward to hearing from you!
+    Warmly,
+    Ana
+
+- email for planner
+    
+    Hi Planner,
+    I hope you’re well!
+    I just wanted to quickly follow up on the final call for Client. Have they had a chance to look at the calendar yet?
+    Warmly,
+    Ana
+
+
+30. Follow up after 5 days
+
+- follow up for client
+    
+    Hi Client,
+    I hope you’re well!
+    I just wanted to quickly follow up to ensure we get a final call on the calendar to walk through your timeline.
+    You can book a time that works best for you here: {Calendly link}.
+    Looking forward to catching up!
+    Warmly,
+    Ana
+
+
+- follow up for planner
+    
+    Hi Client,
+    I hope you’re well!
+    I just wanted to quickly follow up to ensure we get a final call on the calendar to walk through your timeline.
+    You can book a time that works best for you here: {Calendly link}.
+    Looking forward to catching up!
+    Warmly,
+    Ana
+
+
+
+31. send email to client that they booked “Timeline” call
+
+- email
+    
+    Hi Client,
+    I saw you booked a call for Saturday (August 16th).
+    Danilo is looking forward to speaking with you!
+    Please note that the call might be recorded for quality purposes.
+    I'm here to help if you have any questions in the meantime.
+    Warmly,
+    Ana
+
+
+- email if they didn’t meet with photographer yet
+    
+    Hi Client,
+    I hope this email finds you well!
+    My name is Ana, and I’m the client manager at Danilo & Sharon Studio. I’ll be your main point of contact via email and here to support you throughout the process.
+    I just wanted to confirm that your call is booked for tomorrow. Danilo is really looking forward to meeting you and learning more about your wedding plans!
+    Please note that the call may be recorded for quality purposes.
+    If you have any questions or updates before the call, feel free to reach out. 
+    Warmly,
+    Ana
+
+
+send email to planner to let them know and ask if they’d like to join
+
+- email
+    
+    Hi Planner,
+    I hope you’re well.
+    Client just booked a call with us for {Date and time}.
+    Would you like to join as well?
+    If yes, I'm sharing the Zoom link and password below:
+    
+    - [l](https://us06web.zoom.us/j/85770127084?pwd=wjqV3cgOot6kWvYfMyGztsjs0NlQ48.1)ink
+    - Password:
+    
+    Please don't hesitate to let me know if you have any questions in the meantime.
+    Warmly,
+    Ana
+
+
+32. schedule 1 day before remainder email
+
+- email
+    
+    Hi Client,
+    Just a quick reminder that your call with Danilo is scheduled for tomorrow.
+    He's looking forward to speaking with you and going over everything together.
+    If you have any last-minute questions or updates before the call, feel free to reply to this email.
+    Warmly,
+    Ana
+
+33. schedule 1 hour before remainder email
+
+- email
+    
+    Hi Client,
+    Your call with Danilo starts in about an hour — just a little reminder so it doesn’t get lost in the day!
+    Warmly,
+    Ana
+
+
+34. put it in photographers to do list on the day of the call
+
+35. put it in the “Call database”
+
+36. Put photographer’s notes on their page
+
+37. Email planner to ask about timeline updates - 2 weeks before the wedding
+
+email for planner
+Hi Planner,
+
+I hope you’re doing well!
+
+Hard to believe Couple’s Names wedding is just two weeks away! We’re really looking forward to it
+
+I just wanted to check quickly: have there been any updates or changes to the timeline since the last version you shared with us?
+
+If everything is still the same, no action needed. 
+
+Just wanted to make sure we’re fully aligned on our end.
+
+Thank you so much!
+
+Warmly,
+
+Ana
+
+38. Update the photography timeline
+
+39. Send updated timeline to photographer and second shooters
+
+40. “Please consider email” send to planner - 1 week before the wedding
+email for planner
+
+Subject: Please consider: How we can capture your work beautifully
+
+Hi Planner,
+
+I hope you're well and that the last stages of Client's names wedding planning are going smoothly! Our team is looking forward to our collaboration and wants to ensure that every part of the wedding is captured in the best possible way, especially the decoration and details that matter to you and the couple. So, I wanted to quickly touch base and coordinate a few things ahead of time.
+
+**For the Bride’s Prep**
+
+It would be great if you could help us ensure the following:
+
+- that the getting-ready room is clean and clutter-free, especially near windows for natural light
+- that all flat-lay items are ready in one place when we arrive — including the full invitation suite, bridal bouquet, and any other meaningful details the couple would like us to capture (such as jewelry, perfume, heirlooms, etc.).
+
+**For the Decor Photos**
+
+To truly capture your beautiful design in the way it deserves, we need at least 20 minutes of alone time in the space before guests enter. This allows us to create those breathtaking “money shots” that will highlight your incredible work and elevate everyone’s portfolio to attract future dream clients.
+
+For the best results, we need a big ladder to photograph decoration from above, as different angles can make all the difference in bringing the space and your creative vision to life.
+
+Also, if possible, it would be amazing to have the cake placed during the decor shoot so we can photograph it in daylight.We know how much time, intention, and love you put into each detail, so please don’t hesitate to share which elements are most important to you, and we'll make sure they're captured.
+
+I believe we’re on the same page and want to make sure everything runs smoothly and looks amazing.
+
+So, please let us know if there’s anything you need from our side in the meantime.
+
+Thank you in advance!
+
+Warmly,
+
+Ana
+
+
+41. Put all pages “available offline” - 2 days before the wedding
+
+42. Export timeline and questionnaire page and send to photographer - 2 days before the wedding
+
+
+
+
+
+***AFTER WEDDING
+
+43. Check if photographer paid to second shooters
+
+44. Check if photographer sent highlight gallery
+
+44.1 Magazines?
+
+45. Check if photographer talked with planners about submitting wedding to blogs
+
+45.1 If they didn’t, check with them if it’s for submitting and where
+
+46. “Thank you” email for planner - 1 day after wedding
+
+thank you email for planner
+Dear Planner,
+
+I hope you’re well and that Mariah and Adam’s wedding went beautifully!
+
+I just wanted to thank you for an amazing collaboration. It was such a pleasure working with you!We hope there'll be another occasion for us to work together in the future.
+
+Let's keep in touch!
+
+Warmly,
+
+Ana
+
+P.S. We actually feel this wedding turned out really special and could be a great candidate for [Vogue, OTM…]. If that’s something you’d be excited to explore, we’d love to collaborate and support the process together.
+
+
+thank you email for planner if he is getting fees %
+
+Hi Silvia,
+
+I hope you’re well and that Katharina and Fabian’s wedding went beautifully!
+
+I just wanted to thank you for another amazing collaboration. It’s always such a pleasure working with you!
+
+Also, I’ve attached our details for the invoice for the agreed planner commission (€1,600).
+
+Please don’t hesitate to let me know if you have any questions in the meantime.
+
+Warmly,
+
+Ana
+
+P.S. We actually feel this wedding turned out really special and could be a great candidate for [Vogue, OTM…]. If that’s something you’d be excited to explore, we’d love to collaborate and support the process together.
+
+
+47. Ask for invoice for % if needed
+
+48. include P.S. about submitting wedding if needed
+
+
+49. Send invoice for paying planner % to photographer
+
+50. Let the planner when we paid the invoice
+
+Hi Planner,
+I just wanted to let you know that we made the payment and please let me know when you receive it.
+Thank you!
+Warmly,
+Ana
+
+51. “Thank you” email for client - 1 day after wedding
+
+thank you email
+Subject: Thank you! 💌
+
+Dear _____ and _____,
+
+We’d love to take a moment to thank you for choosing our studio to capture such meaningful moments from your wedding day.
+
+It was truly a pleasure working with you, and we’re grateful for the trust you placed in our team. If there’s anything at all we could have done better, please don’t hesitate to let us know.
+
+Your full wedding gallery will be ready within 6 to 8 weeks, and we’ll be in touch with the exact delivery date as soon as it’s confirmed.
+
+In the meantime, we’re always here if any questions come up.
+
+Wishing you a lifetime filled with love, joy, and the sweetest memories together.
+
+Warmly,
+
+Ana and Danilo & Sharon team 🤍
+
+
+52. Include tips link if needed
+
+Subject: Thank you! 💌
+
+Dear _____ and _____,
+
+We’d love to take a moment to thank you for choosing our studio to capture such meaningful moments from your wedding day.
+
+It was truly a pleasure working with you, and we’re grateful for the trust you placed in our team. If there’s anything at all we could have done better, please don’t hesitate to let us know.
+
+Your full wedding gallery will be ready within 6 to 8 weeks, and we’ll be in touch with the exact delivery date as soon as it’s confirmed.
+
+If you feel the experience exceeded expectations and would like to leave a tip for the team, you’re welcome to do so via the optional link below. There is, of course, absolutely no obligation.
+
+[Leave a tip here]
+
+In the meantime, we’re always here if any questions come up.
+
+Wishing you a lifetime filled with love, joy, and the sweetest memories together.
+
+Warmly,
+
+Ana and Danilo & Sharon team 🤍
+
+53. “Testimonial” email for client - 3 dana after “Thank you” email was sent
+
+testimonial email
+Subject: We’d love your thoughts 🤍 
+
+Hi Client,
+
+I hope you’re still feeling all the love and joy from your special day!
+
+If you’d be open to it, we’d truly love to hear a few words about your experience working with us. Just 3-4 sentences are more than enough.
+
+Whatever comes naturally is perfect, but if it helps, you could mention how the experience felt for you, how it was working with our team, or how you feel about the photographs.
+
+We ask because hearing directly from our couples helps future couples feel more confident and at ease when choosing the right team to capture their story.
+
+Thank you again for trusting us with your lifetime memories.
+
+Warmly,
+
+Ana
+
+54. Follow up - 10 days after
+testimonial follow up email
+
+Hi Client,
+
+I hope you're well!
+
+I just wanted to follow up on my previous email.If you feel inspired to share a few words about your experience with us, we’d absolutely love that. Or would you prefer to do it after you’ve had more time to enjoy the gallery together?
+
+There’s no rush at all. I simply wanted to check in and see what feels best for you.
+
+Warmly,
+
+Ana
+
+
+55. Check with photographer about the gallery delivery date
+
+56. Change status on the Production page to “In progress” when Sharon starts to edit their gallery
+
+57. “Save the date” email to client
+
+Subject: Save The Date!
+
+Dear Client,
+
+We invite you to set aside Tuesday evening, May 13th, for a romantic dinner followed by the first look at your wedding gallery!
+
+Picture this: a bottle of fine wine, soft candlelight, your favorite person by your side, and [the music setting the mood](https://open.spotify.com/playlist/2IRBZTU442QBse1wPxnQrL?si=908c78b3fee845d9). When the moment feels just right, check your inbox and you’ll find a gallery filled with beautiful memories from your special day.
+
+We can’t wait to hear your thoughts!
+
+Love,
+
+Ana and Danilo & Sharon team 🤍
+
+
+58. Put the date into the “Production table”
+
+59. Prepare draft emails for sending gallery - PicTime email
+
+Dear Client,
+
+It was such a pleasure to work and create with you. Putting together this collection of images brought back so many beautiful memories from our time together, and so, before pointing you to the gallery, we’d love to share a couple of words with you.
+
+Photos will always stay the same, but their purpose will not. And we believe the value of our images is only equal to the purpose given to them:
+
+They can be viewed as a full chronological list of photos that showcase your wedding day or as a handpicked collection of portraits you want to look at more often. It can be an abstract photograph of nothing, or a breathtaking scene of everything. Some of them will make you happy, and at some you will look when sad. Some will eventually be lost, and some you’ll forever keep in frame. For rediscovering blurry memories or making the old visions bright again…
+
+For the two of you and for all of them.
+
+We can’t wait to hear what you think about the gallery!
+
+Hugs,
+
+Danilo and Sharon
+
+
+60. Prepare draft emails for sending gallery - email if they haven’t received the PicTime email
+
+Dear Client,
+We’ve just shared your full wedding gallery in a separate email, but in case it didn’t come through, I’m including the link here as well: {link}
+We’re so excited for you to see it and can’t wait to hear your thoughts!
+Warmly,
+Ana
+
+
+61. Prepare draft emails for sending gallery - email to planner
+
+Dear Planner,
+
+I hope you're well!
+
+We sent the full wedding gallery to Cherry and Grant, and wanted to share it with you too:
+
+Thank you once again for an amazing collaboration.
+
+We're excited to hear your thoughts!
+
+Warmly,
+
+Ana
+
+
+
+62. Change wedding status to “Delivered” after gallery is delivered
+
+63. Change status on the Production page to “Done”
+
+64. Send email to ask for testimonial if not left earlier - 2 days after gallery was delivered
+
+Hi Client,
+
+I hope you’ve had a chance to enjoy your gallery together and relive all those beautiful moments from your celebration!
+
+If you feel like it, we’d absolutely love to hear a few words about your experience working with us. Just 3-4 sentences is more than enough, and whatever comes naturally is perfect.
+
+If it helps, you could mention how you felt working with our team, how the experience was overall, or how you feel about the photographs now that you’ve seen the full gallery.
+
+Of course, there’s no rush at all and no pressure. We’re simply so grateful we got to be part of your story.
+
+Warmly,
+
+Ana
+
+
+65. In Production page add if they approved gallery or requested changes
+
+66. Email about the book - first book offer or remainder for them to select photos for the book - 3 days after gallery delivery
+
+Subject: Your Reflections Photobook 🔖
+
+Hi Client,
+
+Ana here. I hope you’re well!
+
+You may have noticed an email in your inbox titled “Your album is ready.” I wanted to share a little more about what you’ll find inside.
+
+In that email, you’ll see a design suggestion showing how your wedding story could be brought to life in our [Reflections Photobook](https://www.daniloandsharon.com/reflections-photobook).
+
+For a bit of background: the Reflections Photobook is our signature coffee table book. The real magic is that it’s bound in a unique mirror cover, where your story begins even before you open it. With every glance at the cover, your memories blend with your reflection, becoming a living story you can return to again and again.
+
+The layout we sent is simply there to inspire you and give you a sense of how your memories could look. I have to say, this book is genuinely my favorite recommendation to couples. I truly believe there’s nothing quite like seeing your story come to life in print.
+
+If this sounds interesting to you, just reply to this email and I'll send you all the information about our offers and process.
+
+Warmly,
+
+Ana
+
+
+67. On Production page change status of the book to “To select” and schedule follow ups
+
+68. When they make a selection, change status on Production page in the book table to “To design” 
+
+69. Add this book to designer’s page 
+
+70. When designer creates a design and send it to them, change status on Production to “Design sent” and schedule follow ups
+
+70.1 change status on Ivan’s page to “Design sent”
+
+71. When they request changes, call Ivan to make the changes
+
+72 change status on Production to “Changes requested”
+
+73. change status on Ivan’s page to “Changes requested”
+
+74. When Ivan send them new updated design, change status on Production to “Book redesign” and schedule follow ups
+
+74.1 change status on Ivan’s page to “Book redesign”
+
+75. When they approve book, change status on Production to “Approved”
+
+76. ask clients for the shipping details (full name, address, phone number)
+
+Hi Client,
+
+Thank you for getting back to me!
+
+We’re happy to hear that you like the design.
+
+Can you please send me the full name, address, and phone number of the person to whom the package will be addressed?
+
+Warmly,
+
+Ana
+
+
+77. change status on Ivan’s page to “Approved” and call Ivan to send photobook to Fravero
+
+78. When Ivan sends book to Fravero, change status on Production to “Sent to Fravero” and schedule follow up
+
+78.1 change status on Ivan’s page to “Sent to Fravero”
+
+79. When Fravero notifies us that the package has been sent, send clients email with tracking number
+
+Hi Client,
+
+I hope you're well!
+
+The book has been sent your way, and the DHL tracking number is [copy the number].
+
+We're excited to hear your impressions!
+
+Warmly,
+
+Ana
+
+
+80. change status on Production page to “Delivering” and schedule follow up
+
+81. change status on Ivan’s page to “Delivering”
+
+82. Follow up if they didn’t let me know they received book(s)
+
+Hi Client,
+
+I just wanted to follow up and check if the book has arrived safely!
+
+We’re excited to hear your impressions once you’ve had a chance to go through it.
+
+Warmly,
+
+Ana
+
+83. When they let me know they received the book(s), change status on Production to “Done”
+
+83.1 change status on Ivan’s page to “Done”
+
+83.2 pay Ivan
+
+84. Christmas book offer - around November 1st
+
+85. “Testimonial” email for planner - around November 15th
+
+Subject: We’d love your thoughts 🤍
+
+Hi Planner,
+
+As we’re wrapping up the year, I wanted to reach out with a small favor.
+
+Could you please write a few words about what it felt like working with our team this season? Just 3-4 sentences is more than enough, anything that comes naturally to you. And if there’s one thing we could improve, we’d truly appreciate that as well.
+
+Your perspective means a lot to us, especially coming from someone we genuinely value working with.
+
+Thank you again for such a lovely collaboration this year!
+
+Warmly,
+
+Ana
+
+
+86. “One year anniversary” - include voucher of 500€ they can use for purchasing magazines bundle or book
+
+Subject: Happy Anniversary! 💌
+
+Dear Clients,
+
+Congratulations on your wedding anniversary! It feels like just yesterday we were capturing your special day.
+
+We hope this year has been filled with love and joy, and that you continue to relive the wonderful memories through your photos.
+
+Wishing you many more years of happiness together!
+
+Love,
+
+Ana and Danilo & Sharon team 🤍
+
+
+email + voucher of 500€
+
+Subject: Happy Anniversary! 💌
+
+Dear Clients,
+
+Congratulations on your wedding anniversary! It feels like just yesterday we were capturing your special day.
+
+We hope this year has been filled with love and joy, and that you continue to relive the wonderful memories through your photos.
+
+To celebrate, we’d love to gift you a €500 voucher to use toward a Magazine Bundle or for a Photobook. This is a little something to help you keep those beautiful memories close.
+
+Just let us know if you’d like to use it and I’ll send over more details!
+
+Wishing you many more years of happiness together!
+
+Love,
+
+Ana and Danilo & Sharon team 🤍
+
+87. Change wedding status to “DONE” 
+
+
+88. 
+

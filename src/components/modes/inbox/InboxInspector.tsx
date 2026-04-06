@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertTriangle,
@@ -8,14 +8,18 @@ import {
   MapPin,
   MessageSquare,
   Plus,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../../context/AuthContext";
 import { useUnfiledInbox } from "../../../hooks/useUnfiledInbox";
 import { useWeddings } from "../../../hooks/useWeddings";
+import { supabase } from "../../../lib/supabase";
 import { useInboxMode } from "./InboxModeContext";
 import { getPipelineMoneyLine } from "../../../data/weddingFinancials";
 import { ProjectStoryAndNotes } from "../../shared/ProjectStoryAndNotes";
+
+type ThreadAutomationMode = "auto" | "draft_only" | "human_only";
 
 function formatStageLabel(stage: string): string {
   return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -54,9 +58,55 @@ function LinkerState() {
   const { activeWeddings, linkThread } = useUnfiledInbox();
   const [showLinker, setShowLinker] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [automationMode, setAutomationMode] = useState<ThreadAutomationMode | null>(null);
+  const [automationLoading, setAutomationLoading] = useState(true);
+  const [automationError, setAutomationError] = useState<string | null>(null);
 
-  if (selection.kind !== "thread") return null;
-  const thread = selection.thread;
+  const threadId = selection.kind === "thread" ? selection.thread.id : "";
+  const thread = selection.kind === "thread" ? selection.thread : null;
+
+  useEffect(() => {
+    if (!threadId) {
+      setAutomationLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setAutomationLoading(true);
+    setAutomationError(null);
+    void supabase
+      .from("threads")
+      .select("automation_mode")
+      .eq("id", threadId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          setAutomationError(error.message);
+          setAutomationMode("auto");
+        } else {
+          const m = data?.automation_mode as ThreadAutomationMode | undefined;
+          setAutomationMode(m ?? "auto");
+        }
+        setAutomationLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId]);
+
+  async function handleAutomationChange(mode: ThreadAutomationMode) {
+    if (!thread) return;
+    setAutomationError(null);
+    const prev = automationMode;
+    setAutomationMode(mode);
+    const { error } = await supabase.from("threads").update({ automation_mode: mode }).eq("id", thread.id);
+    if (error) {
+      setAutomationError(error.message);
+      setAutomationMode(prev);
+    }
+  }
+
+  if (selection.kind !== "thread" || !thread) return null;
   const meta = thread.ai_routing_metadata;
 
   async function handleLink(weddingId: string) {
@@ -140,6 +190,38 @@ function LinkerState() {
             )}
           </div>
         )}
+
+        {/* Phase 11 Step 11B — outbound control: thread automation mode */}
+        <div className="rounded-lg border border-border bg-background px-3 py-3">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Outbound automation
+            </h3>
+          </div>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+            Controls how Ana handles this thread after send (draft queue vs full auto). Phase 11B inbox slice.
+          </p>
+          {automationLoading ? (
+            <p className="mt-2 text-[12px] text-muted-foreground">Loading mode…</p>
+          ) : (
+            <label className="mt-2 block text-[13px]">
+              <span className="sr-only">Automation mode</span>
+              <select
+                value={automationMode ?? "auto"}
+                onChange={(e) => void handleAutomationChange(e.target.value as ThreadAutomationMode)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-[13px] text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="auto">Auto — AI may draft and queue outbound per policy</option>
+                <option value="draft_only">Draft only — AI drafts; you approve all sends</option>
+                <option value="human_only">Human only — no AI drafts on this thread</option>
+              </select>
+            </label>
+          )}
+          {automationError ? (
+            <p className="mt-2 text-[12px] text-red-600">{automationError}</p>
+          ) : null}
+        </div>
 
         {/* Sender info */}
         <div>

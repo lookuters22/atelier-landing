@@ -1,0 +1,51 @@
+1. Notepad Extractions (Fluid Memory)
+The background memory worker would need to capture a shifting landscape of logistics and VIPs over the course of this year-long relationship:
+
+The "Payer" Pivot (Financial Dynamics): Javier (the father) is the initial financial gatekeeper and pays the main wedding invoice. However, post-wedding, Belen becomes the payer for the 4,000€ album upsell. The AI must cleanly separate Javier's billing info from Belen's billing info.
+
+Banking Constraints: Belen’s bank (Bank of America) has a character limit for wire transfer names. The studio's legal name must be shortened specifically to "DANILO VASIC PR" for her transactions.
+
+Custom Deal Structures: A custom flat rate of 4,000€ was agreed upon for three Jumbo Reflections photobooks.
+
+Logistical Requirements: The planner (Daniela Lopera) requires full passport numbers and DOBs for the entire team to secure venue access. The team has no dietary restrictions.
+
+Complex Shipping: Physical albums must be shipped to two entirely different countries (Florida, USA and Cali, Colombia), with customs warnings applied to the Colombian shipment.
+
+⚡ 2. Tool Triggers (The Orchestrator)
+Here is exactly when the Orchestrator would need to fire its specific tools to keep the workflow moving without making a mistake:
+
+Pre-Flight (Entity Resolution):
+
+Trigger 1: [Mon, Aug 19, 2024 at 1:12 PM] Javier Torrens jumps into the thread. The system must map Javier to Belen's file as the "Father/Payer."
+
+Trigger 2: [Fri, Apr 4, 2025 at 5:03 PM] Daniela Lopera (planner) emails. The AI must instantly map her and "Caribe Cordial Weddings" to the B&A Cartagena wedding file so Ana doesn't ask, "Which wedding is this for?"
+
+Tool: check_calendar & generate_meeting:
+
+Trigger: Multiple times between [Fri, Aug 2, 2024] and [Wed, Aug 14, 2024] as Belen reschedules, Ana reschedules, and Javier needs to be looped in. Also triggered again on [Mon, Mar 31, 2025] for the final prep call.
+
+Tool: escalate_to_boss:
+
+Trigger 1: [Mon, Jul 28, 2025 at 5:33 PM] Belen asks: "Would it be possible to work on the price if we are going to get 3 of the jumbo" (AI must halt: It cannot autonomously grant bulk discounts on luxury physical products).
+
+Trigger 2: [Mon, Aug 11, 2025 at 9:05 PM] Belen states the studio's legal name is too long for the Bank of America portal and asks for a condensed version. (AI must halt: It cannot invent or authorize shortened legal banking names without strict financial approval).
+
+Trigger 3: [Wed, Aug 13, 2025 at 9:10 AM] Ana and Belen discuss swapping "photo 770" from "spread 84" to "spread 75" in a visual album design. (AI must halt: A text-based AI cannot see visual album layouts to make aesthetic judgments about spread designs).
+
+Trigger 4: [Thu, Aug 28, 2025 at 7:20 PM] Belen asks for permission to submit images to Galia Lahav for publication. (AI must halt: It cannot grant copyright or publication permissions to third-party fashion brands without the photographer's consent).
+
+🚨 3. Architecture Gaps (Where the humans got messy)
+This thread exposed a few critical areas where a standard AI setup would become a security risk or miss out on revenue. Here is how the architecture needs to adapt:
+
+Gap A: Sensitive Document Handling (Passports & PII)
+On April 17th, Ana casually emails the full passport numbers and dates of birth for the entire team to the planner. If the AI is trained to pull this from the knowledge_base, you are putting highly sensitive personal data (PII) at risk of being hallucinated or sent to the wrong person.
+
+The Fix: Team passports and ID numbers should never be stored in the AI's general memory bank. The system needs a strict rule: If a planner asks for passport/ID details, escalate to the boss to manually insert them. Gap B: The Proactive Sales Pitch (The Album Upsell)
+On July 2nd, Ana sends a beautifully crafted, completely proactive sales pitch for the Reflections Photobook. AI assistants are naturally reactive—they wait to be spoken to. The AI wouldn't inherently know that it should try to sell an album two months after the wedding.
+
+The Fix: We need an automated "Post-Wedding Workflow" trigger built into your background task runner. For example, exactly 60 days after the final gallery is delivered, the system wakes up the AI and says: "Draft the Reflections Photobook sales pitch using the standard template and send it to the Approval Inbox."
+
+Gap C: The "Visual Exception" Rule
+Belen sends pictures of her dresses and notes that the shoes in the "Hora Loca" photo aren't the real shoes. The AI is blind to these attachments.
+
+The Fix: We need an "Attachment Protocol." If an email contains image attachments (like dress fittings or album redesign proofs), the AI should draft a polite acknowledgment but flag the thread in your dashboard so the human photographer can actually look at the visuals before finalizing any plans.

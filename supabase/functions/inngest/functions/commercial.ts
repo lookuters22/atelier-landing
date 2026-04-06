@@ -1,12 +1,13 @@
 /**
- * Commercial Worker — Quote Assembly.
+ * Commercial Worker — Quote Assembly (read-only CRM in Slice 3).
  *
  * Listens for ai/intent.commercial.
  *
  * 1. Fetch the wedding record for package_name and story_notes.
  * 2. Calculate the total quote: base package price + travel costs
- *    (extracted from story_notes if the Logistics Agent ran first).
- * 3. Update contract_value and advance the stage to proposal_sent.
+ *    (extracted from story_notes when present).
+ *
+ * Slice 3: does not mutate `weddings` — CRM stage/contract updates belong on the strict tool/verifier path.
  */
 import { inngest } from "../../_shared/inngest.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
@@ -33,13 +34,18 @@ export const commercialFunction = inngest.createFunction(
   { id: "commercial-worker", name: "Commercial Worker — Quote Assembly" },
   { event: "ai/intent.commercial" },
   async ({ event, step }) => {
-    const { wedding_id } = event.data;
+    const { wedding_id, photographer_id } = event.data;
+
+    if (!photographer_id || typeof photographer_id !== "string") {
+      throw new Error("ai/intent.commercial: missing photographer_id (tenant-proof required)");
+    }
 
     const wedding = await step.run("fetch-wedding", async () => {
       const { data, error } = await supabaseAdmin
         .from("weddings")
-        .select("id, package_name, story_notes, contract_value, stage")
+        .select("id, photographer_id, package_name, story_notes, contract_value, stage")
         .eq("id", wedding_id)
+        .eq("photographer_id", photographer_id)
         .single();
 
       if (error || !data) {
@@ -48,6 +54,7 @@ export const commercialFunction = inngest.createFunction(
 
       return data as {
         id: string;
+        photographer_id: string;
         package_name: string | null;
         story_notes: string | null;
         contract_value: number | null;
@@ -69,22 +76,8 @@ export const commercialFunction = inngest.createFunction(
       };
     });
 
-    await step.run("update-database", async () => {
-      const { error } = await supabaseAdmin
-        .from("weddings")
-        .update({
-          contract_value: quote.totalValue,
-          stage: "proposal_sent",
-        })
-        .eq("id", wedding_id);
-
-      if (error) {
-        throw new Error(`Failed to update wedding: ${error.message}`);
-      }
-    });
-
     return {
-      status: "quote_assembled",
+      status: "quote_computed_crm_write_skipped",
       wedding_id,
       package: quote.packageName,
       base_price: quote.basePrice,

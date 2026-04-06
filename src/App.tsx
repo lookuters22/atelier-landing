@@ -106,6 +106,9 @@ export default function App() {
         {/* Settings mode */}
         <Route path="settings" element={<SettingsHubPage />} />
         <Route path="settings/ai" element={<Navigate to="/settings" replace />} />
+
+        {/* Phase 11 Step 11C — escalation surface (content from FourPaneLayout ModeSwitch) */}
+        <Route path="escalations" element={null} />
       </Route>
 
       {/* Legacy redirects */}

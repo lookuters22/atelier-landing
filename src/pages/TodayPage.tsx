@@ -79,10 +79,10 @@ export function TodayPage() {
     try {
       setIsSimulating(true);
       setSimResult(null);
+      /** Tenant for webhook-web comes from the Supabase session JWT on this invoke — not from body fields. */
       const { error } = await supabase.functions.invoke("webhook-web", {
         body: {
           source: "test_button",
-          photographer_id: photographerId,
           lead: {
             name: "Sarah & James",
             email: "sarah.test@example.com",

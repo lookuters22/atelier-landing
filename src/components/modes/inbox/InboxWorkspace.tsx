@@ -1,36 +1,37 @@
 import { useMemo, useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { useInboxMode } from "./InboxModeContext";
-import { useWeddingProject } from "../../../hooks/useWeddingProject";
+import {
+  PipelineTimelinePane,
+  PipelineWeddingProviderByWeddingId,
+  usePipelineWedding,
+} from "../pipeline/PipelineWeddingContext";
 import { ConversationFeed, type ChatMessage } from "../../chat/ConversationFeed";
 import { UniversalComposeBox } from "../../chat/ComposeBar";
-
-function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (isToday(iso)) {
-    return `Today \u00b7 ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
-  }
-  const day = d.toLocaleDateString("en-GB", { weekday: "short" });
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  return `${day} \u00b7 ${time}`;
-}
 
 export function InboxWorkspace() {
   const { selection } = useInboxMode();
 
   if (selection.kind === "none") return <IdleState />;
   if (selection.kind === "thread") return <ThreadView />;
-  return <ProjectFeed />;
+  return (
+    <PipelineWeddingProviderByWeddingId weddingId={selection.projectId}>
+      <InboxProjectPipelineChat />
+    </PipelineWeddingProviderByWeddingId>
+  );
+}
+
+/** Matches Pipeline center pane: tabs, TimelineTab, draft approval, inline reply, composer modal. */
+function InboxProjectPipelineChat() {
+  const state = usePipelineWedding();
+  if (!state) {
+    return (
+      <div className="flex h-full items-center justify-center bg-background">
+        <span className="text-[13px] text-muted-foreground">Loading wedding…</span>
+      </div>
+    );
+  }
+  return <PipelineTimelinePane />;
 }
 
 function IdleState() {
@@ -95,67 +96,6 @@ function ThreadView() {
       )}
 
       <UniversalComposeBox value={reply} onChange={setReply} placeholder="Reply to thread\u2026" />
-    </div>
-  );
-}
-
-function ProjectFeed() {
-  const { selection } = useInboxMode();
-  const [reply, setReply] = useState("");
-
-  const projectId = selection.kind === "project" ? selection.projectId : undefined;
-  const projectName = selection.kind === "project" ? selection.projectName : "";
-  const { timeline, isLoading } = useWeddingProject(projectId);
-
-  const { earlier, today } = useMemo(() => {
-    const allRaw: { id: string; direction: string; sender: string; body: string; sent_at: string }[] = [];
-
-    for (const thread of timeline) {
-      for (const msg of thread.messages) {
-        allRaw.push(msg);
-      }
-    }
-
-    allRaw.sort(
-      (a, b) => new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime(),
-    );
-
-    const mapMsg = (m: typeof allRaw[number]): ChatMessage => ({
-      id: m.id,
-      direction: m.direction === "internal" ? "out" : (m.direction as "in" | "out"),
-      sender: m.sender,
-      body: m.body,
-      time: formatTime(m.sent_at),
-    });
-
-    return {
-      earlier: allRaw.filter((m) => !isToday(m.sent_at)).map(mapMsg),
-      today: allRaw.filter((m) => isToday(m.sent_at)).map(mapMsg),
-    };
-  }, [timeline]);
-
-  if (selection.kind !== "project") return null;
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="shrink-0 px-6 py-5 min-h-[88px] flex flex-col justify-center">
-        <h2 className="text-lg font-semibold text-foreground">{projectName}</h2>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">Project conversation feed</p>
-      </div>
-
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-[13px] text-muted-foreground">Loading messages\u2026</p>
-        </div>
-      ) : (
-        <ConversationFeed
-          earlierMessages={earlier}
-          todayMessages={today}
-          emptyText="No messages linked to this project yet."
-        />
-      )}
-
-      <UniversalComposeBox value={reply} onChange={setReply} placeholder={`Message ${projectName}\u2026`} />
     </div>
   );
 }

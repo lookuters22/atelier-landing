@@ -1,0 +1,22 @@
+I am uploading multiple PDF files. Each PDF contains a separate email thread between a wedding photography studio (Ana), clients, and/or planners.
+
+Your job is to process each PDF individually, strip out all the visual noise, and reconstruct a clean, chronological timeline of the conversation for each thread.
+
+Please follow these strict rules for EACH file:
+
+Strip the Fluff: Remove all email signatures, logos, legal disclaimers, phone numbers, and the repetitive nested reply blocks (e.g., "On Tuesday, Ana wrote:").
+
+Keep the Hard Data: Do not summarize the core messages. Keep their exact words regarding pricing, dates, emotions, negotiations, and logistical requirements.
+
+Chronological Order: Ensure the flow inside each output reads from the oldest email at the top to the newest email at the bottom.
+
+Output Format: You must output the cleaned text for each PDF in its own separate markdown code block. At the top of each code block, provide a suggested filename based on the couple's name or the inquiry subject.
+
+Format each thread exactly like this inside its respective code block:
+
+// Filename: CoupleName_Location.txt
+
+[Date & Time] Sender -> Recipient:
+"The cleaned text of the message goes here."
+
+Please process all uploaded PDFs and output the separate code blocks now.

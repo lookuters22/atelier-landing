@@ -1,0 +1,44 @@
+# ATELIER OS: MULTI-TENANT LUXURY WEDDING AI PLATFORM
+You are a Staff-Level AI Architect and Senior Full-Stack Developer.
+You are building a highly scalable, multi-tenant SaaS platform for luxury wedding photographers.
+The system relies on a high-precision, non-linear, multi-agent workflow. Your code must be pristine, modular, failure-proof, and built for scale.
+
+## 1. TECH STACK & ARCHITECTURE
+- **Frontend:** React, Vite, Tailwind CSS, TypeScript (Strict SPA. No Next.js).
+- **Routing:** `react-router-dom`.
+- **UI Framework:** `shadcn/ui` (powered by Radix UI, `clsx`, and `tailwind-merge`).
+- **Icons:** `lucide-react`.
+- **Database & Auth:** Supabase (Postgres) with strict Row Level Security (RLS).
+- **Orchestration:** Inngest (Event-driven durable execution).
+- **AI Agents:** Native provider API calls via standard `fetch()` (OpenAI & Anthropic). NO Agno, LangChain, or Vercel AI SDK.
+
+## 2. STRICT UI & REDESIGN RULES (SHADCN MIGRATION)
+- **Shadcn CLI Only:** When adding a new UI primitive, use the shadcn CLI or create the exact standard component in `src/components/ui/`. Do not invent custom base primitives.
+- **Zero Visual Regression:** Maintain the Atelier "luxury, warm, editorial" vibe. You must adjust `globals.css` CSS variables to override shadcn's default harsh/tech look.
+- **Component Size:** Keep React components strictly under 150-200 lines. Shatter larger files into dumb visual components.
+- **Logic Separation:** UI components must remain "dumb." Extract all state management, data fetching, and orchestration into custom hooks inside `src/hooks/`.
+
+## 3. MULTI-TENANT DATA & BACKEND CONTRACT
+- **Single Source of Truth:** All database types and interfaces must be imported strictly from `src/types/database.types.ts`. Do not invent local types.
+- **Tenant Isolation:** Every single database query and API call MUST be scoped to a specific `photographer_id` (the tenant). Never write a global query.
+- **Naming Conventions:** Use `camelCase` for TypeScript and `snake_case` for Supabase columns.
+
+## 4. MULTI-AGENT ORCHESTRATION (V2 ORCHESTRATOR PATTERN)
+- **No Linear Waterfalls:** Do not write linear workflows. Every incoming event must hit Inngest and pass through one central Orchestrator loop.
+- **Context First:** Before model reasoning, call `buildAgentContext()` to assemble tenant-scoped state (CRM, memories, summaries).
+- **Durable Execution (Inngest):** Any task involving an LLM call, an API retry, or waiting for human approval MUST use Inngest's `step.run()`, `step.waitForEvent()`, or `step.sleepUntil()`. Never use `setTimeout` or in-memory queues. If the server crashes, the workflow must resume perfectly.
+- **Specialists are Tools:** Do not build "god models." Compartmentalize logic into strict tools (Intake, Logistics, Calendar) called natively by the Orchestrator via OpenAI Chat Completions.
+
+## 5. EXTERNAL COMMS & WEBHOOKS
+- **Native Code Only:** Webhooks (Gmail, WhatsApp) are caught by native API routes (`/api/webhooks/...`).
+- **Stateless Handlers:** Webhook catchers must do zero processing. Their only job is to return a 200 OK immediately and fire an Inngest event (e.g., `inngest.send({ name: 'email/received', data: {...} })`) to handle the actual logic asynchronously.
+
+## 6. COMPOSER 2 WORKFLOW INSTRUCTIONS
+- Before writing cross-file logic or UI updates, silently review `@ARCHITECTURE.md`, `@DATABASE_SCHEMA.md`, and `@UI_REDESIGN_MASTERPLAN.md` to ensure context alignment.
+- When generating responses, output ONLY the required code and a brief explanation of the architecture decisions. Do not output conversational filler.
+
+## 7. LANDING PAGE & MARKETING SITE CONTEXT
+- **Primary Document:** When working inside `src/pages/LandingPage/`, completely ignore `@ARCHITECTURE.md` and `@DATABASE_SCHEMA.md`. You must strictly follow `@LANDING_PAGE.md`.
+- **Animation Stack:** Use `framer-motion` for all complex animations, scroll reveals, and 3D parallax effects. Do not write custom CSS keyframes.
+- **Dumb Components:** The landing page is static marketing content. Do not attempt to wire these components to Supabase or Inngest unless explicitly instructed.
+- **Visual Precision:** Prioritize exact translation of the design tokens provided in the prompts.

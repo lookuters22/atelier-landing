@@ -90,13 +90,18 @@ export const conciergeFunction = inngest.createFunction(
   { id: "concierge-worker", name: "Concierge Agent — Factual Researcher" },
   { event: "ai/intent.concierge" },
   async ({ event, step }) => {
-    const { wedding_id, raw_message, reply_channel } = event.data;
+    const { wedding_id, raw_message, reply_channel, photographer_id } = event.data;
+
+    if (!photographer_id || typeof photographer_id !== "string") {
+      throw new Error("ai/intent.concierge: missing photographer_id (tenant-proof required)");
+    }
 
     const context = await step.run("fetch-wedding-context", async () => {
       const { data: wedding, error: weddingErr } = await supabaseAdmin
         .from("weddings")
         .select("id, photographer_id")
         .eq("id", wedding_id)
+        .eq("photographer_id", photographer_id)
         .single();
 
       if (weddingErr || !wedding) {
@@ -107,6 +112,7 @@ export const conciergeFunction = inngest.createFunction(
         .from("threads")
         .select("id")
         .eq("wedding_id", wedding_id)
+        .eq("photographer_id", wedding.photographer_id as string)
         .order("last_activity_at", { ascending: false })
         .limit(1);
 
