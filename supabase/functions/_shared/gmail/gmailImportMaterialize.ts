@@ -21,7 +21,71 @@ import {
 } from "./gmailImportObservability.ts";
 import { isGmailMaterializationArtifactV1 } from "./prepareImportCandidateMaterialization.ts";
 import { logGmailImportMaterializeAttachmentSubstepV1 } from "./gmailImportMaterializeAttachmentSubstepObservability.ts";
+import {
+  enqueueGmailImportSecondaryPending,
+  markImportCandidateSecondaryDegraded,
+  type GmailSecondaryPendingKind,
+} from "./gmailImportSecondaryFollowup.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+
+function pendingKindForSecondaryStep(step: string): GmailSecondaryPendingKind {
+  if (step === "staged_attachment_metadata_update" || step === "live_attachment_metadata_update") {
+    return "attachment_metadata_update";
+  }
+  return "render_or_metadata";
+}
+
+async function recordGmailSecondaryFailuresWithBacklog(
+  supabaseAdmin: SupabaseClient,
+  opts: {
+    photographerId: string;
+    importCandidateId: string;
+    threadId: string;
+    messageId: string;
+    baseMetadata: Record<string, unknown>;
+    failures: { step: string; error: string }[];
+  },
+): Promise<void> {
+  const { photographerId, importCandidateId, threadId, messageId, baseMetadata, failures } = opts;
+  if (failures.length === 0) return;
+
+  await markImportCandidateSecondaryDegraded(supabaseAdmin, importCandidateId, photographerId);
+
+  for (const f of failures) {
+    await enqueueGmailImportSecondaryPending(supabaseAdmin, {
+      photographerId,
+      importCandidateId,
+      messageId,
+      threadId,
+      pendingKind: pendingKindForSecondaryStep(f.step),
+      detail: { step: f.step, error: f.error.slice(0, 500) },
+    });
+  }
+
+  const prevGi =
+    baseMetadata.gmail_import && typeof baseMetadata.gmail_import === "object"
+      ? { ...(baseMetadata.gmail_import as Record<string, unknown>) }
+      : {};
+  const prev = Array.isArray(prevGi.secondary_write_failures)
+    ? [...(prevGi.secondary_write_failures as unknown[])]
+    : [];
+  const at = new Date().toISOString();
+  for (const f of failures) {
+    prev.push({ step: f.step, error: f.error.slice(0, 500), at });
+  }
+  const { error } = await supabaseAdmin
+    .from("messages")
+    .update({
+      metadata: {
+        ...baseMetadata,
+        gmail_import: { ...prevGi, secondary_write_failures: prev },
+      },
+    })
+    .eq("id", messageId);
+  if (error) {
+    console.error("[gmailImportMaterialize] secondary_write_failures persist", error.message);
+  }
+}
 
 export function gmailExternalThreadKey(rawProviderThreadId: string): string {
   return `gmail:${rawProviderThreadId}`;
@@ -106,20 +170,33 @@ export type MaterializeGmailImportCandidateParams = {
   gmailAccountTokenCache?: GmailAccountTokenCache | null;
   /** Grouped batch: reuse cold-path Gmail thread fetch when the same thread is processed twice in one chunk. */
   gmailThreadFetchCache?: GmailThreadFetchCache | null;
+  /** Grouped approval: clear import_approval_error when approving (RPC). */
+  clearImportApprovalError?: boolean;
 };
+
+export type MaterializeGmailImportCandidateResult =
+  | {
+      threadId: string;
+      needsThreadWeddingIdUpdate: boolean;
+      /** True when new thread path: `complete_gmail_import_materialize_new_thread` approved the candidate. */
+      finalizedCore: boolean;
+      messageId?: string;
+    }
+  | { error: string };
 
 /**
  * Creates or links canonical thread + first message for this candidate.
- * Does not update `import_candidates` — caller finalizes status/materialized_thread_id.
+ *
+ * New-thread path: DB core (thread + message + render FK + import_candidates approve) runs in one RPC.
+ * Reuse-thread path: returns existing `threadId`; caller must `finalizeApprovedImportCandidate` (RPC).
  *
  * `needsThreadWeddingIdUpdate`: when true, the thread row existed before materialize (reuse path)
- * and callers that file under a wedding must set `threads.wedding_id` themselves. When false, a new
- * thread was inserted with `wedding_id` already set (G5 grouped path) — skip redundant updates.
+ * and grouped callers pass `threadWeddingId` into finalize RPC. New threads set `wedding_id` on insert.
  */
 export async function materializeGmailImportCandidate(
   supabaseAdmin: SupabaseClient,
   params: MaterializeGmailImportCandidateParams,
-): Promise<{ threadId: string; needsThreadWeddingIdUpdate: boolean } | { error: string }> {
+): Promise<MaterializeGmailImportCandidateResult> {
   const {
     photographerId,
     importCandidateId,
@@ -130,6 +207,7 @@ export async function materializeGmailImportCandidate(
     now,
     gmailAccountTokenCache,
     gmailThreadFetchCache,
+    clearImportApprovalError = false,
   } = params;
 
   /** Grouped batch passes chunk caches — match fallback bundle substep telemetry scope. */
@@ -172,14 +250,16 @@ export async function materializeGmailImportCandidate(
       grouped_batch: Boolean(gmailLabelImportGroupId),
       reuse_existing_thread: true,
     });
-  } else {
-    const { data: acct } = await supabaseAdmin
-      .from("connected_accounts")
-      .select("email")
-      .eq("id", connectedAccountId)
-      .maybeSingle();
+    return { threadId, needsThreadWeddingIdUpdate: true, finalizedCore: false };
+  }
 
-    const senderLabel = (acct?.email as string | undefined)?.trim() || "Gmail";
+  const { data: acct } = await supabaseAdmin
+    .from("connected_accounts")
+    .select("email")
+    .eq("id", connectedAccountId)
+    .maybeSingle();
+
+  const senderLabel = (acct?.email as string | undefined)?.trim() || "Gmail";
 
     const title =
       typeof subject === "string" && subject.trim().length > 0
@@ -208,66 +288,55 @@ export async function materializeGmailImportCandidate(
       ...(materializedWeddingId ? { materialized_wedding_id: materializedWeddingId } : {}),
     };
 
-    const { data: ins, error: tErr } = await supabaseAdmin
-      .from("threads")
-      .insert({
-        photographer_id: photographerId,
-        wedding_id: weddingId,
-        title,
-        kind: "group",
-        channel: "email",
-        external_thread_key: externalKey,
-        last_activity_at: now,
-        ai_routing_metadata: provenance,
-      })
-      .select("id")
-      .single();
-
-    if (tErr || !ins?.id) {
-      console.error("[gmailImportMaterialize] thread insert", tErr?.message);
-      return { error: tErr?.message ?? "thread_insert_failed" };
-    }
-
-    threadId = ins.id as string;
-
-    const { data: msgInserted, error: mErr } = await supabaseAdmin
-      .from("messages")
-      .insert({
-        thread_id: threadId,
-        photographer_id: photographerId,
-        direction: "in",
-        sender: senderLabel,
-        body: bodyText,
-        sent_at: now,
-        metadata: msgMeta,
-        raw_payload: Object.keys(msgRaw).length > 0 ? msgRaw : null,
-      })
-      .select("id")
-      .single();
-
-    if (mErr || !msgInserted?.id) {
-      console.error("[gmailImportMaterialize] message insert", mErr?.message);
-      return { error: mErr?.message ?? "message_insert_failed" };
-    }
+    const importProvenance: Record<string, unknown> = {
+      source: "gmail_label_import",
+      gmail_thread_id: rawProviderThreadId,
+      materialized_at: now,
+      ...(gmailLabelImportGroupId ? { gmail_label_import_group_id: gmailLabelImportGroupId } : {}),
+      ...(materializedWeddingId ? { materialized_wedding_id: materializedWeddingId } : {}),
+    };
 
     const renderRef = parseGmailImportRenderHtmlRefFromMetadata(msgMeta);
-    if (renderRef) {
-      const { error: artErr } = await supabaseAdmin
-        .from("gmail_render_artifacts")
-        .update({ message_id: msgInserted.id as string })
-        .eq("id", renderRef.artifact_id)
-        .eq("photographer_id", photographerId);
-      if (artErr) {
-        console.warn("[gmailImportMaterialize] gmail_render_artifacts link", artErr.message);
-      }
-      const { error: colErr } = await supabaseAdmin
-        .from("messages")
-        .update({ gmail_render_artifact_id: renderRef.artifact_id })
-        .eq("id", msgInserted.id as string);
-      if (colErr) {
-        console.warn("[gmailImportMaterialize] message gmail_render_artifact_id", colErr.message);
-      }
+
+    const { data: rpcRows, error: rpcErr } = await supabaseAdmin.rpc(
+      "complete_gmail_import_materialize_new_thread",
+      {
+        p_photographer_id: photographerId,
+        p_import_candidate_id: importCandidateId,
+        p_connected_account_id: connectedAccountId,
+        p_external_thread_key: externalKey,
+        p_thread_title: title,
+        p_thread_wedding_id: weddingId,
+        p_last_activity_at: now,
+        p_ai_routing_metadata: provenance,
+        p_message_body: bodyText,
+        p_message_sender: senderLabel,
+        p_message_sent_at: now,
+        p_message_metadata: msgMeta,
+        p_message_raw_payload: Object.keys(msgRaw).length > 0 ? msgRaw : null,
+        p_import_provenance: importProvenance,
+        p_render_artifact_id: renderRef?.artifact_id ?? null,
+        p_clear_import_approval_error: clearImportApprovalError,
+      },
+    );
+
+    if (rpcErr) {
+      console.error("[gmailImportMaterialize] complete_gmail_import_materialize_new_thread", rpcErr.message);
+      return { error: rpcErr.message };
     }
+
+    const rpcRow = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+    const r = rpcRow as Record<string, unknown>;
+    const outThread = r.out_thread_id;
+    const outMessage = r.out_message_id;
+    if (typeof outThread !== "string" || typeof outMessage !== "string") {
+      return { error: "materialize_rpc_invalid_response" };
+    }
+
+    threadId = outThread;
+    const msgInserted = { id: outMessage };
+
+    const secondaryFailures: { step: string; error: string }[] = [];
 
     if (stagedAttachments.length > 0) {
       const tStaged = Date.now();
@@ -356,7 +425,18 @@ export async function materializeGmailImportCandidate(
         });
       }
       if (metaUpErr) {
-        console.warn("[gmailImportMaterialize] attachment metadata update", metaUpErr.message);
+        secondaryFailures.push({ step: "staged_attachment_metadata_update", error: metaUpErr.message });
+      }
+      if (fin.failed > 0) {
+        await markImportCandidateSecondaryDegraded(supabaseAdmin, importCandidateId, photographerId);
+        await enqueueGmailImportSecondaryPending(supabaseAdmin, {
+          photographerId,
+          importCandidateId,
+          messageId: msgInserted.id as string,
+          threadId,
+          pendingKind: "staged_attachments_finalize",
+          detail: { imported: fin.imported, failed: fin.failed },
+        });
       }
     } else if (gmailImport && gmailImport.candidates.length > 0) {
       const tLive = Date.now();
@@ -445,7 +525,7 @@ export async function materializeGmailImportCandidate(
         });
       }
       if (metaUpErr) {
-        console.warn("[gmailImportMaterialize] attachment metadata update", metaUpErr.message);
+        secondaryFailures.push({ step: "live_attachment_metadata_update", error: metaUpErr.message });
       }
     } else if (attachmentSubstepTel) {
       logGmailImportMaterializeAttachmentSubstepV1({
@@ -460,6 +540,15 @@ export async function materializeGmailImportCandidate(
         gmail_label_import_group_id: gmailLabelImportGroupId ?? null,
       });
     }
+
+    await recordGmailSecondaryFailuresWithBacklog(supabaseAdmin, {
+      photographerId,
+      importCandidateId,
+      threadId,
+      messageId: msgInserted.id as string,
+      baseMetadata: msgMeta,
+      failures: secondaryFailures,
+    });
 
     const htmlPath = classifyGmailHtmlRenderPath(msgMeta);
     const attPath = classifyGmailAttachmentMaterializePath({
@@ -479,9 +568,13 @@ export async function materializeGmailImportCandidate(
       attachment_path: attPath,
       grouped_batch: Boolean(gmailLabelImportGroupId),
     });
-  }
 
-  return { threadId, needsThreadWeddingIdUpdate };
+    return {
+      threadId,
+      needsThreadWeddingIdUpdate: false,
+      finalizedCore: true,
+      messageId: msgInserted.id as string,
+    };
 }
 
 /** Create a Pipeline wedding used as the G5 project container for a Gmail label batch. */

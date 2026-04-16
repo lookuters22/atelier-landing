@@ -38,9 +38,21 @@ export function adjacentWeddingIdInOrderedList(
 }
 
 /**
- * A7: Keep the active Pipeline wedding row in view. `nearest` scrolls only when needed (no fight with the user).
+ * A7: Keep the active list row in view. When `scrollContainer` is passed (Pipeline sidebar), skip
+ * `scrollIntoView` if the row is already fully visible — avoids visible jump from redundant smooth scroll.
  */
-export function scrollPipelineWeddingRowIntoView(element: HTMLElement): void {
+export function scrollPipelineWeddingRowIntoView(
+  element: HTMLElement,
+  scrollContainer?: HTMLElement | null,
+): void {
+  if (scrollContainer) {
+    const cr = scrollContainer.getBoundingClientRect();
+    const er = element.getBoundingClientRect();
+    const pad = 4;
+    if (er.top >= cr.top - pad && er.bottom <= cr.bottom + pad) {
+      return;
+    }
+  }
   element.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
 }
 

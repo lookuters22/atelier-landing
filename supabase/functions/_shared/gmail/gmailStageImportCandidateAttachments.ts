@@ -10,6 +10,8 @@ import { GMAIL_IMPORT_MEDIA_BUCKET } from "./gmailImportAttachments.ts";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
+export type StagingUploadFailure = { candidate_index: number; error: string };
+
 export type StagedImportAttachmentRef = {
   /** Object path within `message_attachment_media` (first segment = photographer_id). */
   storage_path: string;
@@ -41,10 +43,11 @@ export async function stageImportCandidateAttachments(
     importCandidateId: string;
     candidates: GmailAttachmentCandidate[];
   },
-): Promise<StagedImportAttachmentRef[]> {
+): Promise<{ staged: StagedImportAttachmentRef[]; upload_failures: StagingUploadFailure[] }> {
   const { accessToken, gmailMessageId, photographerId, importCandidateId, candidates } = opts;
   const prefix = buildStagingPrefix(photographerId, importCandidateId);
   const out: StagedImportAttachmentRef[] = [];
+  const uploadFailures: StagingUploadFailure[] = [];
 
   let index = 0;
   for (const c of candidates) {
@@ -73,7 +76,7 @@ export async function stageImportCandidateAttachments(
         contentType: c.mimeType || "application/octet-stream",
       });
     if (upErr) {
-      console.warn("[stageImportCandidateAttachments] upload", upErr.message);
+      uploadFailures.push({ candidate_index: index, error: upErr.message.slice(0, 500) });
       index += 1;
       continue;
     }
@@ -99,7 +102,7 @@ export async function stageImportCandidateAttachments(
     index += 1;
   }
 
-  return out;
+  return { staged: out, upload_failures: uploadFailures };
 }
 
 /**

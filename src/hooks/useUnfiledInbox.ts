@@ -1,11 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+/* Inbox bootstrap: batched reads via TanStack Query + URL/event invalidation. */
+import { useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatAttachmentRow } from "../components/chat/ConversationFeed";
 import { supabase } from "../lib/supabase";
-import { fireDataChanged, onDataChanged } from "../lib/events";
+import { fireDataChanged } from "../lib/events";
 import { useAuth } from "../context/AuthContext";
 import type { GmailImportRenderHtmlRefV1 } from "../lib/gmailImportMessageMetadata";
+import {
+  INBOX_LATEST_MESSAGE_SELECT_FULL,
+  INBOX_LATEST_MESSAGE_SELECT_LEGACY,
+  isMissingLatestProviderMessageIdPostgresError,
+} from "../lib/inboxLatestViewSelect";
 import { mapInboxLatestProjectionRow } from "../lib/inboxThreadProjection";
-import { deleteInboxThread, linkInboxThreadToWedding } from "../lib/inboxThreadLinking";
+import type { GmailInboxModifyAction, GmailInboxModifyResult } from "../lib/gmailInboxModify";
+import {
+  optimisticConvertUnfiledThreadToInquiry,
+  optimisticDeleteInboxThread,
+  optimisticGmailInboxModify,
+  optimisticLinkThreadToWedding,
+} from "../lib/inboxOptimisticCache";
+import type { ConvertUnfiledThreadToInquiryResult } from "../lib/inboxThreadLinking";
+import { INBOX_SEARCH_QUERY_PARAM } from "../lib/inboxUrlInboxParams";
+import { sanitizeInboxSearchForIlike } from "../lib/inboxSearchSanitize";
 
 export type AiRoutingMeta = {
   suggested_wedding_id: string | null;
@@ -34,6 +51,12 @@ export type UnfiledThread = {
   /** `message_attachments` for the latest message (e.g. Gmail import). */
   latestMessageAttachments: ChatAttachmentRow[];
   sender: string;
+  /** Gmail `messages.get` id on latest message when materialized from Gmail. */
+  latestProviderMessageId: string | null;
+  /** Latest message has `metadata.gmail_import` (Gmail materialization). */
+  hasGmailImport: boolean;
+  /** `metadata.gmail_import.gmail_label_ids` when known (after Gmail modify or future import). */
+  gmailLabelIds: string[] | null;
 };
 
 export type ActiveWedding = {
@@ -41,121 +64,182 @@ export type ActiveWedding = {
   couple_names: string;
 };
 
+export type InboxLatestProjectionQueryData = {
+  threads: UnfiledThread[];
+  providerMessageIdColumnUnavailable: boolean;
+};
+
+/**
+ * When `listSearchQuery` is non-empty after sanitize, the fetch uses DB `ilike` OR on title / sender / body.
+ * Empty string → same key as legacy (no third segment) for cache continuity.
+ */
+export function inboxLatestProjectionQueryKey(photographerId: string, listSearchQuery?: string) {
+  const q = sanitizeInboxSearchForIlike(listSearchQuery ?? "");
+  if (!q) return ["inbox", "latest-projection", photographerId] as const;
+  return ["inbox", "latest-projection", photographerId, { q }] as const;
+}
+
+export function inboxActiveWeddingsQueryKey(photographerId: string) {
+  return ["inbox", "active-weddings", photographerId] as const;
+}
+
+function inboxLatestProjectionBaseQuery(
+  photographerId: string,
+  selectColumns: string,
+  sanitizedQ: string,
+) {
+  let q = supabase
+    .from("v_threads_inbox_latest_message")
+    .select(selectColumns)
+    .eq("photographer_id", photographerId)
+    .neq("kind", "other");
+  if (sanitizedQ) {
+    const pat = `%${sanitizedQ}%`;
+    q = q.or(`title.ilike.${pat},latest_sender.ilike.${pat},latest_body.ilike.${pat}`);
+  }
+  return q.order("last_activity_at", { ascending: false }).limit(200);
+}
+
+async function fetchInboxLatestProjection(
+  photographerId: string,
+  listSearchQuery?: string,
+): Promise<InboxLatestProjectionQueryData> {
+  const sanitizedQ = sanitizeInboxSearchForIlike(listSearchQuery ?? "");
+  let providerMessageIdColumnUnavailable = false;
+  let r1 = await inboxLatestProjectionBaseQuery(
+    photographerId,
+    INBOX_LATEST_MESSAGE_SELECT_FULL,
+    sanitizedQ,
+  );
+
+  if (r1.error && isMissingLatestProviderMessageIdPostgresError(r1.error)) {
+    if (import.meta.env.DEV) {
+      console.debug(
+        "[Inbox] v_threads_inbox_latest_message missing latest_provider_message_id — retrying without column (apply migration 20260415120100_v_threads_inbox_latest_provider_message_id.sql)",
+      );
+    }
+    providerMessageIdColumnUnavailable = true;
+    r1 = await inboxLatestProjectionBaseQuery(photographerId, INBOX_LATEST_MESSAGE_SELECT_LEGACY, sanitizedQ);
+  }
+
+  if (r1.error) {
+    console.error("useUnfiledInbox v_threads_inbox_latest_message:", r1.error.message, r1.error);
+    throw new Error(
+      `Inbox view (v_threads_inbox_latest_message): ${r1.error.message}${r1.error.code ? ` [${r1.error.code}]` : ""}`,
+    );
+  }
+
+  const threads: UnfiledThread[] = (r1.data ?? []).map((row: Record<string, unknown>) =>
+    mapInboxLatestProjectionRow(row),
+  );
+
+  return { threads, providerMessageIdColumnUnavailable };
+}
+
+async function fetchInboxActiveWeddings(photographerId: string): Promise<ActiveWedding[]> {
+  const r2 = await supabase
+    .from("weddings")
+    .select("id, couple_names")
+    .eq("photographer_id", photographerId)
+    .neq("stage", "archived")
+    .order("couple_names", { ascending: true })
+    .limit(400);
+
+  if (r2.error) {
+    console.error("useUnfiledInbox weddings:", r2.error.message, r2.error);
+    throw new Error(`Weddings: ${r2.error.message}${r2.error.code ? ` [${r2.error.code}]` : ""}`);
+  }
+
+  return (r2.data ?? []).map((w: Record<string, unknown>) => ({
+    id: w.id as string,
+    couple_names: w.couple_names as string,
+  }));
+}
+
 export function useUnfiledInbox() {
   const { photographerId } = useAuth();
-  const [inboxThreads, setInboxThreads] = useState<UnfiledThread[]>([]);
-  const [unfiledThreads, setUnfiledThreads] = useState<UnfiledThread[]>([]);
-  const [activeWeddings, setActiveWeddings] = useState<ActiveWedding[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  /** Set when `v_threads_inbox_latest_message` or `weddings` read fails (migration missing, RLS, wrong project, etc.). */
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [fetchKey, setFetchKey] = useState(0);
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const listSearchQueryFromUrl = searchParams.get(INBOX_SEARCH_QUERY_PARAM) ?? "";
 
-  const refetch = useCallback(() => setFetchKey((k) => k + 1), []);
+  const inboxQuery = useQuery({
+    queryKey: photographerId
+      ? inboxLatestProjectionQueryKey(photographerId, listSearchQueryFromUrl)
+      : ["inbox", "latest-projection", "none"],
+    queryFn: () => fetchInboxLatestProjection(photographerId!, listSearchQueryFromUrl),
+    enabled: Boolean(photographerId),
+  });
 
-  useEffect(() => {
-    if (!photographerId) {
-      setInboxThreads([]);
-      setUnfiledThreads([]);
-      setActiveWeddings([]);
-      setLoadError(null);
-      setIsLoading(false);
-      return;
-    }
+  const activeWeddingsQuery = useQuery({
+    queryKey: photographerId ? inboxActiveWeddingsQueryKey(photographerId) : ["inbox", "active-weddings", "none"],
+    queryFn: () => fetchInboxActiveWeddings(photographerId!),
+    enabled: Boolean(photographerId),
+  });
 
-    let cancelled = false;
-    setIsLoading(true);
-    setLoadError(null);
+  const inboxThreads = useMemo(
+    () => inboxQuery.data?.threads ?? [],
+    [inboxQuery.data?.threads],
+  );
 
-    const q1 = supabase
-      .from("v_threads_inbox_latest_message")
-      .select(
-        "id, wedding_id, title, last_activity_at, ai_routing_metadata, latest_message_id, latest_sender, latest_body, latest_message_metadata, latest_attachments_json",
-      )
-      .eq("photographer_id", photographerId)
-      .neq("kind", "other")
-      .order("last_activity_at", { ascending: false })
-      .limit(200);
+  const unfiledThreads = useMemo(() => inboxThreads.filter((t) => t.weddingId === null), [inboxThreads]);
 
-    const q2 = supabase
-      .from("weddings")
-      .select("id, couple_names")
-      .eq("photographer_id", photographerId)
-      .neq("stage", "archived")
-      .order("couple_names", { ascending: true })
-      .limit(400);
+  const activeWeddings = useMemo(
+    () => activeWeddingsQuery.data ?? [],
+    [activeWeddingsQuery.data],
+  );
 
-    Promise.all([q1, q2]).then(([r1, r2]) => {
-      if (cancelled) return;
+  const isLoading = Boolean(
+    photographerId && (inboxQuery.isLoading || activeWeddingsQuery.isLoading),
+  );
 
-      const parts: string[] = [];
-      if (r1.error) {
-        console.error("useUnfiledInbox v_threads_inbox_latest_message:", r1.error.message, r1.error);
-        parts.push(
-          `Inbox view (v_threads_inbox_latest_message): ${r1.error.message}${r1.error.code ? ` [${r1.error.code}]` : ""}`,
-        );
+  const loadError = useMemo(() => {
+    const parts: string[] = [];
+    if (inboxQuery.error) parts.push(inboxQuery.error.message);
+    if (activeWeddingsQuery.error) parts.push(activeWeddingsQuery.error.message);
+    return parts.length > 0 ? parts.join(" · ") : null;
+  }, [inboxQuery.error, activeWeddingsQuery.error]);
+
+  const providerMessageIdColumnUnavailable = inboxQuery.data?.providerMessageIdColumnUnavailable ?? false;
+
+  const refetch = useCallback(async () => {
+    if (!photographerId) return;
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["inbox", "latest-projection", photographerId] }),
+      queryClient.refetchQueries({ queryKey: inboxActiveWeddingsQueryKey(photographerId) }),
+    ]);
+  }, [photographerId, queryClient]);
+
+  const gmailInboxModify = useCallback(
+    async (
+      threadId: string,
+      action: GmailInboxModifyAction,
+      connectedAccountId: string | null,
+      providerMessageId: string | null,
+    ): Promise<GmailInboxModifyResult> => {
+      if (!photographerId || !connectedAccountId || !providerMessageId?.trim()) {
+        return { ok: false, error: "Gmail sync is not available for this thread." };
       }
-      if (r2.error) {
-        console.error("useUnfiledInbox weddings:", r2.error.message, r2.error);
-        parts.push(
-          `Weddings: ${r2.error.message}${r2.error.code ? ` [${r2.error.code}]` : ""}`,
-        );
-      }
-      setLoadError(parts.length > 0 ? parts.join(" · ") : null);
-
-      const threads: UnfiledThread[] = (r1.data ?? []).map((row: Record<string, unknown>) =>
-        mapInboxLatestProjectionRow(row),
-      );
-
-      const weddings: ActiveWedding[] = (r2.data ?? []).map((w: Record<string, unknown>) => ({
-        id: w.id as string,
-        couple_names: w.couple_names as string,
-      }));
-
-      setInboxThreads(threads);
-      setUnfiledThreads(threads.filter((t) => t.weddingId === null));
-      setActiveWeddings(weddings);
-      setIsLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [photographerId, fetchKey]);
-
-  useEffect(() => onDataChanged(refetch, { scopes: ["inbox", "weddings", "all"] }), [refetch]);
+      return optimisticGmailInboxModify(queryClient, {
+        photographerId,
+        threadId,
+        connectedAccountId,
+        providerMessageId: providerMessageId.trim(),
+        action,
+      });
+    },
+    [photographerId, queryClient],
+  );
 
   async function linkThread(threadId: string, weddingId: string) {
-    setInboxThreads((prev) =>
-      prev.map((t) =>
-        t.id === threadId
-          ? {
-              ...t,
-              weddingId,
-              ai_routing_metadata: null,
-            }
-          : t,
-      ),
-    );
-    setUnfiledThreads((prev) =>
-      prev
-        .map((t) =>
-          t.id === threadId
-            ? {
-                ...t,
-                weddingId,
-                ai_routing_metadata: null,
-              }
-            : t,
-        )
-        .filter((t) => t.weddingId === null),
-    );
-
-    const result = await linkInboxThreadToWedding({ threadId, weddingId });
+    if (!photographerId) return;
+    const result = await optimisticLinkThreadToWedding(queryClient, {
+      photographerId,
+      threadId,
+      weddingId,
+    });
 
     if (!result.ok) {
       console.error("linkThread error:", result.error);
-      refetch();
       return;
     }
 
@@ -164,19 +248,38 @@ export function useUnfiledInbox() {
   }
 
   async function deleteThread(threadId: string) {
-    setInboxThreads((prev) => prev.filter((t) => t.id !== threadId));
-    setUnfiledThreads((prev) => prev.filter((t) => t.id !== threadId));
-
-    const result = await deleteInboxThread(threadId);
+    if (!photographerId) return;
+    const result = await optimisticDeleteInboxThread(queryClient, { photographerId, threadId });
 
     if (!result.ok) {
       console.error("deleteThread error:", result.error);
-      refetch();
       return;
     }
 
     fireDataChanged("inbox");
   }
+
+  const convertThreadToInquiry = useCallback(
+    async (
+      threadId: string,
+      names?: { coupleNames: string; leadClientName: string },
+    ): Promise<ConvertUnfiledThreadToInquiryResult> => {
+      if (!photographerId) {
+        return { ok: false, error: "Not signed in" };
+      }
+      const result = await optimisticConvertUnfiledThreadToInquiry(queryClient, {
+        photographerId,
+        threadId,
+        coupleNames: names?.coupleNames,
+        leadClientName: names?.leadClientName,
+      });
+      if (!result.ok) return result;
+      fireDataChanged("inbox");
+      fireDataChanged("weddings");
+      return result;
+    },
+    [photographerId, queryClient],
+  );
 
   return {
     inboxThreads,
@@ -184,8 +287,11 @@ export function useUnfiledInbox() {
     activeWeddings,
     isLoading,
     loadError,
+    providerMessageIdColumnUnavailable,
     linkThread,
     deleteThread,
+    gmailInboxModify,
+    convertThreadToInquiry,
     refetch,
   };
 }

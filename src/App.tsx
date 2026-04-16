@@ -5,6 +5,7 @@ import { FourPaneLayout } from "./layouts/FourPaneLayout";
 import { LoginPage } from "./pages/LoginPage";
 
 import { SettingsHubPage } from "./pages/settings/SettingsHubPage";
+import { OnboardingBriefingPage } from "./pages/settings/OnboardingBriefingPage";
 import { PricingCalculatorPage } from "./pages/settings/PricingCalculatorPage";
 
 const OfferBuilderHubPage = lazy(() =>
@@ -49,6 +50,19 @@ export default function App() {
         }
       />
       <Route path="login" element={<LoginPage />} />
+
+      {/* Canonical studio briefing shell (first-run and deep-link; same page as Settings revisit) */}
+      <Route
+        path="onboarding"
+        element={
+          <ProtectedRoute>
+            {/* Full-route stage: shell paints cinematic field + briefing desk (see OnboardingBriefingShell) */}
+            <div className="font-dashboard min-h-[100dvh] bg-black">
+              <OnboardingBriefingPage />
+            </div>
+          </ProtectedRoute>
+        }
+      />
 
       {/* 4-Pane shell wraps all dashboard routes */}
       <Route
@@ -104,6 +118,7 @@ export default function App() {
         <Route path="directory" element={null} />
 
         {/* Settings mode */}
+        <Route path="settings/onboarding" element={<Navigate to="/onboarding" replace />} />
         <Route path="settings" element={<SettingsHubPage />} />
         <Route path="settings/ai" element={<Navigate to="/settings" replace />} />
       </Route>

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { WeddingDetailSkeleton } from "../components/DashboardSkeleton";
@@ -5,6 +6,7 @@ import { WEDDING_THREAD_DRAFT_DEFAULT } from "../data/weddingThreads";
 import { MotionTabContent } from "../components/motion-primitives";
 import { getTravelForWedding } from "../data/weddingTravel";
 import { InlineReplyFooter } from "../components/wedding-detail/InlineReplyFooter";
+import { GmailThreadInlineReplyDock } from "../components/modes/inbox/GmailThreadInlineReplyDock";
 import { OtherWeddingsCard } from "../components/wedding-detail/OtherWeddingsCard";
 import { StoryNotesCard } from "../components/wedding-detail/StoryNotesCard";
 import { TimelineTab } from "../components/wedding-detail/TimelineTab";
@@ -22,17 +24,13 @@ import { useWeddingComposer } from "../hooks/useWeddingComposer";
 import { useWeddingDetailState } from "../hooks/useWeddingDetailState";
 import { useWeddingTabState } from "../hooks/useWeddingTabState";
 import { useWeddingThreads } from "../hooks/useWeddingThreads";
+import { fireDataChanged } from "../lib/events";
 import type { WeddingEntry } from "../data/weddingCatalog";
 import type { Tables } from "../types/database.types";
+import { formatWeddingDetailWhen } from "../lib/weddingDateDisplay";
 
 export function mapRowToEntry(row: Tables<"weddings">): WeddingEntry {
-  const d = new Date(row.wedding_date);
-  const when = d.toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const when = formatWeddingDetailWhen(row);
 
   const fmt = (v: number | null) =>
     v == null
@@ -102,6 +100,19 @@ export function WeddingDetailInner({
     onAfterMessageSent: threadState.refreshActiveThreadMessages,
   });
 
+  const gmailDock =
+    threadState.replyComposerMode === "gmail" && threadState.activeThread ? (
+      <GmailThreadInlineReplyDock
+        threadId={threadState.activeThread.id}
+        threadTitle={threadState.activeThread.title}
+        hasGmailImport
+        afterSuccessfulSend={async () => {
+          fireDataChanged("inbox");
+          threadState.refreshActiveThreadMessages();
+        }}
+      />
+    ) : null;
+
   return (
     <div className="relative grid min-h-0 gap-6 xl:grid-cols-[280px_minmax(0,1fr)_300px] xl:items-start">
       {toast ? (
@@ -154,6 +165,8 @@ export function WeddingDetailInner({
                 isApprovingDraft={threadState.approvingDraftId !== null}
                 editDraftInComposer={composerState.editDraftInComposer}
                 draftDefault={threadState.draftDefault ?? DRAFT_DEFAULT}
+                gmailInlineReplyDock={gmailDock}
+                replyComposerMode={threadState.replyComposerMode}
               />
             </MotionTabContent>
           ) : (
@@ -172,19 +185,29 @@ export function WeddingDetailInner({
           )}
         </AnimatePresence>
 
-        <InlineReplyFooter
-          replyMeta={composerState.replyMeta}
-          replyScope={composerState.replyScope}
-          applyReplyScope={composerState.applyReplyScope}
-          replyAreaRef={composerState.replyAreaRef}
-          replyBody={composerState.replyBody}
-          setReplyBody={composerState.setReplyBody}
-          submitInlineForApproval={composerState.submitInlineForApproval}
-          isInternalNote={composerState.isInternalNote}
-          toggleInternalNote={composerState.toggleInternalNote}
-          generateInlineResponse={composerState.generateInlineResponse}
-          showToast={showToast}
-        />
+        {threadState.replyComposerMode === "legacy" ? (
+          <InlineReplyFooter
+            replyMeta={composerState.replyMeta}
+            replyScope={composerState.replyScope}
+            applyReplyScope={composerState.applyReplyScope}
+            replyAreaRef={composerState.replyAreaRef}
+            replyBody={composerState.replyBody}
+            setReplyBody={composerState.setReplyBody}
+            submitInlineForApproval={composerState.submitInlineForApproval}
+            isInternalNote={composerState.isInternalNote}
+            toggleInternalNote={composerState.toggleInternalNote}
+            generateInlineResponse={composerState.generateInlineResponse}
+            showToast={showToast}
+          />
+        ) : threadState.replyComposerMode === "pending" ? (
+          <div
+            className="shrink-0 border-t border-border bg-background px-4 py-2.5"
+            aria-busy
+            aria-label="Loading reply composer"
+          >
+            <div className="mx-auto h-11 w-full max-w-3xl animate-pulse rounded-lg bg-muted/50" />
+          </div>
+        ) : null}
       </section>
 
       <aside className="space-y-4">
@@ -225,13 +248,9 @@ export function WeddingDetailInner({
 
 export function WeddingDetailPage() {
   const { weddingId } = useParams();
-  const { project, timeline, tasks, isLoading, error, timelineFetchEpoch } = useWeddingProject(weddingId);
+  const { project, timeline, tasks, isRefreshing, error, timelineFetchEpoch } = useWeddingProject(weddingId);
 
-  if (isLoading) {
-    return <WeddingDetailSkeleton />;
-  }
-
-  if (!weddingId || error || !project) {
+  if (!weddingId || error) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4">
         <p className="type-body font-semibold text-ink">Wedding not found</p>
@@ -243,15 +262,32 @@ export function WeddingDetailPage() {
     );
   }
 
+  /** Full skeleton only until first successful project load — never on background `fireDataChanged` refetch (keeps Pipeline optimistic state mounted). */
+  if (!project) {
+    return <WeddingDetailSkeleton />;
+  }
+
+  const entry = useMemo(() => mapRowToEntry(project), [project]);
+
   return (
-    <WeddingDetailInner
-      weddingId={weddingId}
-      entry={mapRowToEntry(project)}
-      photographerId={project.photographer_id}
-      clients={project.clients}
-      liveThreads={timeline}
-      liveTasks={tasks}
-      timelineFetchEpoch={timelineFetchEpoch}
-    />
+    <div className="relative min-h-0">
+      {isRefreshing ? (
+        <span
+          className="pointer-events-none absolute right-4 top-2 z-50 rounded-full bg-muted/90 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm"
+          aria-live="polite"
+        >
+          Updating…
+        </span>
+      ) : null}
+      <WeddingDetailInner
+        weddingId={weddingId}
+        entry={entry}
+        photographerId={project.photographer_id}
+        clients={project.clients}
+        liveThreads={timeline}
+        liveTasks={tasks}
+        timelineFetchEpoch={timelineFetchEpoch}
+      />
+    </div>
   );
 }

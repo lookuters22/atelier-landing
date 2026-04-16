@@ -25,6 +25,13 @@ import {
 } from "./onboardingBusinessScopeDeterministic.ts";
 
 export type { BusinessScopeDeterministicV1 } from "./onboardingBusinessScopeDeterministic.ts";
+import {
+  businessScopeExtensionsToJson,
+  resolveBusinessScopeExtensions,
+  type BusinessScopeExtensionsV1,
+} from "./onboardingBusinessScopeExtensions.ts";
+
+export type { BusinessScopeExtensionsV1 } from "./onboardingBusinessScopeExtensions.ts";
 import { buildKnowledgeBaseSeedInsertsFromOnboarding } from "./onboardingKnowledgeBaseStructured.ts";
 
 export type {
@@ -104,6 +111,11 @@ export type OnboardingPayloadV4 = {
    * lead acceptance/deliverables with deterministic structures (see helper module).
    */
   business_scope_deterministic?: BusinessScopeDeterministicV1;
+  /**
+   * Custom labels / notes beyond fixed enums — maps to `studio_business_profiles.extensions`.
+   * Does not add new canonical runtime branches; see `onboardingBusinessScopeExtensions.ts`.
+   */
+  business_scope_extensions?: BusinessScopeExtensionsV1;
   knowledge_seeds?: OnboardingKnowledgeSeed[];
 };
 
@@ -126,6 +138,8 @@ export type StudioBusinessProfileInsert = {
   lead_acceptance_rules: Json;
   language_support: Json;
   team_structure: Json;
+  /** `BusinessScopeExtensionsV1` JSON — UI/review/hydration; not deterministic scope branching. */
+  extensions: Json;
   source_type: string;
 };
 
@@ -228,6 +242,9 @@ export function mapOnboardingPayloadToStorage(
       jsonOr(sc.lead_acceptance_rules, EMPTY_OBJECT),
     language_support: jsonOr(sc.language_support, EMPTY_ARRAY),
     team_structure: jsonOr(sc.team_structure, EMPTY_OBJECT),
+    extensions: businessScopeExtensionsToJson(
+      resolveBusinessScopeExtensions(payload.business_scope_extensions),
+    ),
     source_type: "onboarding",
   };
 

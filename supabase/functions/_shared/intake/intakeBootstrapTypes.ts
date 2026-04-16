@@ -8,7 +8,12 @@
 /** Normalized output of the intake extraction + calendar-research step. */
 export type IntakeStructuredExtraction = {
   couple_names: string;
+  /** Canonical primary ceremony / workflow anchor day. */
   wedding_date: string | null;
+  /** Inclusive first day when the inquiry is multi-day (optional). */
+  event_start_date: string | null;
+  /** Inclusive last day when the inquiry is multi-day (optional). */
+  event_end_date: string | null;
   location: string | null;
   budget: string | null;
   story_notes: string;

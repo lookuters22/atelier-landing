@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   CalendarClock,
+  ChevronsLeft,
+  ChevronsRight,
   ExternalLink,
   Link2,
   MapPin,
@@ -20,8 +22,10 @@ import {
   updateThreadAutomationMode,
 } from "../../../lib/threadAutomationModeClient";
 import { useInboxMode } from "./InboxModeContext";
+import { useInboxLayout } from "./InboxLayoutContext";
 import { getPipelineMoneyLine } from "../../../data/weddingFinancials";
 import { ProjectStoryAndNotes } from "../../shared/ProjectStoryAndNotes";
+import { extractCoupleNamesForNewInquiry } from "../../../lib/inquiryCoupleNameExtract";
 
 function formatStageLabel(stage: string): string {
   return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -37,6 +41,47 @@ function formatDate(iso: string): string {
 }
 
 export function InboxInspector() {
+  const layout = useInboxLayout();
+
+  if (layout?.inspectorCollapsed) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center border-l border-border bg-background px-0.5">
+        <button
+          type="button"
+          onClick={layout.expandInspector}
+          className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          title="Expand Ana panel"
+          aria-label="Expand Ana panel"
+        >
+          <ChevronsLeft className="h-5 w-5" strokeWidth={2} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border-l border-border bg-background">
+      {layout ? (
+        <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1.5">
+          <button
+            type="button"
+            onClick={layout.collapseInspector}
+            className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            title="Collapse Ana panel"
+            aria-label="Collapse Ana panel"
+          >
+            <ChevronsRight className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <InboxInspectorBody />
+      </div>
+    </div>
+  );
+}
+
+function InboxInspectorBody() {
   const { selection } = useInboxMode();
 
   if (selection.kind === "none") return <IdleState />;
@@ -46,7 +91,7 @@ export function InboxInspector() {
 
 function IdleState() {
   return (
-    <div className="flex h-full flex-col items-center justify-center border-l border-border bg-background px-8 text-center">
+    <div className="flex h-full min-h-[200px] flex-col items-center justify-center px-8 text-center">
       <MessageSquare className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />
       <p className="mt-3 max-w-[220px] text-[12px] leading-relaxed text-muted-foreground">
         Select a thread or project to view details.
@@ -58,25 +103,28 @@ function IdleState() {
 function LinkerState() {
   const { selection } = useInboxMode();
   const { photographerId } = useAuth();
-  const { activeWeddings, linkThread } = useUnfiledInbox();
+  const { activeWeddings, linkThread, convertThreadToInquiry } = useUnfiledInbox();
   const { data: weddings } = useWeddings(photographerId ?? "");
   const [showLinker, setShowLinker] = useState(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
   const [automationMode, setAutomationMode] = useState<ThreadAutomationMode | null>(null);
-  const [automationLoading, setAutomationLoading] = useState(true);
+  const [automationLoading, setAutomationLoading] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
 
   const threadId = selection.kind === "thread" ? selection.thread.id : "";
   const thread = selection.kind === "thread" ? selection.thread : null;
 
   useEffect(() => {
-    if (!threadId) {
-      setAutomationLoading(false);
-      return;
-    }
+    if (!threadId) return;
     let cancelled = false;
-    setAutomationLoading(true);
-    setAutomationError(null);
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        setAutomationLoading(true);
+        setAutomationError(null);
+      }
+    });
     void supabase
       .from("threads")
       .select("automation_mode")
@@ -126,8 +174,28 @@ function LinkerState() {
     setShowLinker(false);
   }
 
+  async function handleConvertToInquiry() {
+    setConvertError(null);
+    setConverting(true);
+    const extracted = extractCoupleNamesForNewInquiry({
+      threadTitle: selectedThread.title,
+      latestInboundBody: selectedThread.latestMessageBody,
+      snippet: selectedThread.snippet,
+      sender: selectedThread.sender,
+    });
+    const result = await convertThreadToInquiry(selectedThread.id, {
+      coupleNames: extracted.coupleNames,
+      leadClientName: extracted.leadClientName,
+    });
+    setConverting(false);
+    if (!result.ok) {
+      setConvertError(result.error);
+      return;
+    }
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
+    <div className="flex h-full min-h-0 flex-col text-[13px] text-foreground">
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         {/* Unassigned warning */}
         {assignedWedding ? (
@@ -169,14 +237,20 @@ function LinkerState() {
         {/* Action buttons */}
         <div className="space-y-2">
           {!assignedWedding ? (
-            <button
-              type="button"
-              onClick={() => alert("Convert to inquiry (demo)")}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-[12px] font-semibold text-white transition hover:bg-[#2563eb]/90"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              Convert to New Inquiry
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => void handleConvertToInquiry()}
+                disabled={converting}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-[12px] font-semibold text-white transition hover:bg-[#2563eb]/90 disabled:opacity-50"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                {converting ? "Creating…" : "Convert to New Inquiry"}
+              </button>
+              {convertError ? (
+                <p className="text-[11px] text-destructive">{convertError}</p>
+              ) : null}
+            </>
           ) : null}
           <button
             type="button"
@@ -302,7 +376,7 @@ function CrmState() {
 
   if (!wedding) {
     return (
-      <div className="flex h-full flex-col items-center justify-center border-l border-border bg-background px-8 text-center">
+      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
         <p className="text-[12px] text-muted-foreground">Project not found.</p>
       </div>
     );
@@ -311,8 +385,8 @@ function CrmState() {
   const moneyLine = getPipelineMoneyLine(wedding.id);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+    <div className="flex h-full min-h-0 flex-col text-[13px] text-foreground">
+      <div className="min-h-0 flex-1 space-y-5 p-4">
         {/* Project header */}
         <div>
           <h2 className="text-[15px] font-semibold text-foreground">{wedding.couple_names}</h2>

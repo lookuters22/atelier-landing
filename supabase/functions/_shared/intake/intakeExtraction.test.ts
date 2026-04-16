@@ -4,6 +4,8 @@ import { runIntakeExtractionAndResearch } from "./intakeExtraction.ts";
 const emptyExtraction = {
   couple_names: "Unknown",
   wedding_date: null,
+  event_start_date: null,
+  event_end_date: null,
   location: null,
   budget: null,
   story_notes: "",

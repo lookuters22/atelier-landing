@@ -22,6 +22,7 @@ import {
   inngest,
 } from "../../_shared/inngest.ts";
 import { ensurePendingGmailLabelImportGroup } from "../../_shared/gmail/ensurePendingGmailLabelImportGroup.ts";
+import { gmailImportCandidateMaterializationLaneDisabled } from "../../_shared/gmail/gmailMaterializationLanePause.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 
 export const GMAIL_LABEL_SYNC_MAX_THREADS = 200;
@@ -247,6 +248,7 @@ export const syncGmailLabelImportCandidates = inngest.createFunction(
           }
         }
 
+        /** Each entry here is one `threads.get?format=metadata` (see `shouldSkipThreadMetadataFetch` for list-only skips). */
         const threadsGetCalls = needMetadata.length;
 
         console.log(
@@ -299,7 +301,7 @@ export const syncGmailLabelImportCandidates = inngest.createFunction(
           const ids = (upserted ?? [])
             .map((r) => (typeof r.id === "string" ? r.id : null))
             .filter((x): x is string => Boolean(x));
-          if (ids.length > 0) {
+          if (ids.length > 0 && !gmailImportCandidateMaterializationLaneDisabled()) {
             try {
               await inngest.send(
                 ids.map((importCandidateId) => ({
@@ -317,6 +319,11 @@ export const syncGmailLabelImportCandidates = inngest.createFunction(
                 e instanceof Error ? e.message : String(e),
               );
             }
+          } else if (ids.length > 0 && gmailImportCandidateMaterializationLaneDisabled()) {
+            console.log(
+              "[syncGmailLabelImportCandidates] prepare_materialization skipped (GMAIL_IMPORT_CANDIDATE_MATERIALIZATION_LANE_DISABLED)",
+              { count: ids.length },
+            );
           }
         }
 

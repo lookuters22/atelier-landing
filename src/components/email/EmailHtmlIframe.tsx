@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const SANDBOX = "allow-popups allow-popups-to-escape-sandbox allow-same-origin";
+/** No allow-popups* — email HTML must not open new windows from the iframe. `allow-same-origin` kept for content measurement. */
+const SANDBOX = "allow-same-origin";
 const READER_STYLE_ID = "atelier-email-reader-reset";
 /** ~max-h-[5.5rem] — clipped preview height when foldable + collapsed */
 const COLLAPSED_PREVIEW_PX = 88;

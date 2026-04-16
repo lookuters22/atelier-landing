@@ -5,7 +5,7 @@ import { onDataChanged } from "../lib/events";
 export type UpcomingWedding = {
   id: string;
   couple_names: string;
-  wedding_date: string;
+  wedding_date: string | null;
   location: string;
   stage: string;
 };
@@ -35,6 +35,7 @@ export function useUpcomingWeddings(photographerId: string, limit = 4) {
       .from("weddings")
       .select("id, couple_names, wedding_date, location, stage")
       .eq("photographer_id", photographerId)
+      .not("wedding_date", "is", null)
       .gte("wedding_date", today)
       .order("wedding_date", { ascending: true })
       .limit(limit)

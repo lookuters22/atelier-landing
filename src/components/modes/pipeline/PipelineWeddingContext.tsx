@@ -25,8 +25,9 @@ import { useWeddingDetailState } from "../../../hooks/useWeddingDetailState";
 import { useWeddingThreads } from "../../../hooks/useWeddingThreads";
 import { mapRowToEntry } from "../../../pages/WeddingDetailPage";
 import type { WeddingEntry } from "../../../data/weddingCatalog";
-import type { Tables } from "../../../types/database.types";
 import { EscalationResolutionPanel } from "../../escalations/EscalationResolutionPanel";
+import { fireDataChanged } from "../../../lib/events";
+import { GmailThreadInlineReplyDock } from "../inbox/GmailThreadInlineReplyDock";
 import { usePipelineMode } from "./PipelineModeContext";
 import { PipelineUrlHydrator } from "./PipelineUrlHydrator";
 
@@ -94,13 +95,14 @@ function PipelineWeddingLoader({
   preferredTimelineThreadId?: string | null;
   children: ReactNode;
 }) {
-  const { project, timeline, tasks, isLoading, error, timelineFetchEpoch } = useWeddingProject(weddingId);
+  const { project, timeline, tasks, error, timelineFetchEpoch } = useWeddingProject(weddingId);
   const { toast, showToast } = useTimedToast();
   const { sendMessage } = useSendMessage();
   const [tab, setTab] = useState("timeline");
   const setTabAndUrl = useCallback((next: string) => setTab(next), []);
 
-  if (isLoading) {
+  /** First load only — background refetch keeps `project` so context stays mounted (matches `WeddingDetailPage`). */
+  if (!project && !error) {
     return (
       <Ctx.Provider value={null}>
         {children}
@@ -212,7 +214,31 @@ export function PipelineTimelinePane() {
   const escalationId = searchParams.get("escalationId");
   if (!state) return null;
 
-  const { weddingId, liveTasks, toast, showToast, tab, setTabAndUrl, threadState, composerState, travelPlan, detailState } = state;
+  const {
+    weddingId,
+    liveTasks,
+    toast,
+    showToast,
+    tab,
+    setTabAndUrl,
+    threadState,
+    composerState,
+    travelPlan,
+    detailState,
+  } = state;
+
+  const gmailDock =
+    threadState.replyComposerMode === "gmail" && threadState.activeThread ? (
+      <GmailThreadInlineReplyDock
+        threadId={threadState.activeThread.id}
+        threadTitle={threadState.activeThread.title}
+        hasGmailImport
+        afterSuccessfulSend={async () => {
+          fireDataChanged("inbox");
+          threadState.refreshActiveThreadMessages();
+        }}
+      />
+    ) : null;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -262,6 +288,8 @@ export function PipelineTimelinePane() {
                 isApprovingDraft={threadState.approvingDraftId !== null}
                 editDraftInComposer={composerState.editDraftInComposer}
                 draftDefault={threadState.draftDefault ?? DRAFT_DEFAULT}
+                gmailInlineReplyDock={gmailDock}
+                replyComposerMode={threadState.replyComposerMode}
               />
             </MotionTabContent>
           ) : (
@@ -281,19 +309,29 @@ export function PipelineTimelinePane() {
         </AnimatePresence>
       </div>
 
-      <InlineReplyFooter
-        replyMeta={composerState.replyMeta}
-        replyScope={composerState.replyScope}
-        applyReplyScope={composerState.applyReplyScope}
-        replyAreaRef={composerState.replyAreaRef}
-        replyBody={composerState.replyBody}
-        setReplyBody={composerState.setReplyBody}
-        submitInlineForApproval={composerState.submitInlineForApproval}
-        isInternalNote={composerState.isInternalNote}
-        toggleInternalNote={composerState.toggleInternalNote}
-        generateInlineResponse={composerState.generateInlineResponse}
-        showToast={showToast}
-      />
+      {threadState.replyComposerMode === "legacy" ? (
+        <InlineReplyFooter
+          replyMeta={composerState.replyMeta}
+          replyScope={composerState.replyScope}
+          applyReplyScope={composerState.applyReplyScope}
+          replyAreaRef={composerState.replyAreaRef}
+          replyBody={composerState.replyBody}
+          setReplyBody={composerState.setReplyBody}
+          submitInlineForApproval={composerState.submitInlineForApproval}
+          isInternalNote={composerState.isInternalNote}
+          toggleInternalNote={composerState.toggleInternalNote}
+          generateInlineResponse={composerState.generateInlineResponse}
+          showToast={showToast}
+        />
+      ) : threadState.replyComposerMode === "pending" ? (
+        <div
+          className="shrink-0 border-t border-border bg-background px-4 py-2.5"
+          aria-busy
+          aria-label="Loading reply composer"
+        >
+          <div className="h-11 w-full max-w-3xl animate-pulse rounded-lg bg-muted/50" />
+        </div>
+      ) : null}
 
       {composerState.composerOpen ? (
         <WeddingComposerModal

@@ -243,6 +243,8 @@ The initial business-profile category set should cover at least:
 - language support
 - team structure
 
+**Extensions (`studio_business_profiles.extensions`):** one versioned JSON object (`BusinessScopeExtensionsV1`) for **additional** photographer-defined labels (e.g. custom service or deliverable names) with optional `behaves_like_*` hints pointing at existing canonical enums. It does **not** extend the finite runtime vocabulary: deterministic branching stays on the core JSONB columns and playbook rules; extensions are for display, review, and retrieval only.
+
 Examples:
 
 - a photographer may shoot weddings and family sessions but not video
@@ -799,6 +801,26 @@ It should populate:
 - business-profile storage
 - `playbook_rules`
 - selected `knowledge_base` entries if needed
+
+The onboarding UI may also keep a versioned **editable briefing snapshot** inside
+`photographers.settings` so the photographer can return later from Settings and edit the same
+briefing flow.
+
+That snapshot is **editor state / audit source only**.
+
+Runtime must **not** read the editable snapshot as the source of truth for:
+
+- service scope
+- approval rules
+- action permissions
+- escalation policy
+
+Those must still come from the canonical split layers:
+
+- `photographers.settings` for identity + metadata
+- `studio_business_profiles` for studio scope
+- `playbook_rules` for reusable behavior policy
+- optional `knowledge_base` for reusable standard knowledge
 
 In simple terms:
 

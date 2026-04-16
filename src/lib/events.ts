@@ -1,3 +1,5 @@
+import { invalidateQueriesForDataChange } from "./queryInvalidationBridge";
+
 const DATA_CHANGED = "atelier:data-changed";
 
 /**
@@ -18,8 +20,10 @@ type DataChangedDetail = { scope: DataChangeScope };
 
 /**
  * Fire a single scope. For multi-entity updates, call multiple times (e.g. inbox + weddings).
+ * Invalidates TanStack Query caches for known scopes (see `queryInvalidationBridge.ts`), then notifies legacy subscribers.
  */
 export function fireDataChanged(scope: DataChangeScope = "all") {
+  void invalidateQueriesForDataChange(scope);
   window.dispatchEvent(new CustomEvent(DATA_CHANGED, { detail: { scope } satisfies DataChangedDetail }));
 }
 

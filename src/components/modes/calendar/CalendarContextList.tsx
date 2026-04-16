@@ -96,7 +96,7 @@ export function CalendarContextList() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-border bg-sidebar text-[13px] text-foreground">
+    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
       {/* Mini calendar */}
       <div className="shrink-0 px-1 py-2 mb-4">
         <DotMapCtx.Provider value={dotMap}>

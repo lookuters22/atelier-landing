@@ -258,12 +258,19 @@ Target keys to add and standardize:
 - `playbook_version`
 - `business_profile_version`
 
+Optional editor-only settings keys allowed in `settings` JSONB:
+
+- `onboarding_briefing_v1`
+- `onboarding_briefing_updated_at`
+
 ### Rules
 
 - Keep `whatsapp_number` during migration so the current UI does not break.
 - Add `admin_mobile_number` as the canonical operator phone identity key.
 - Use `settings` for studio identity and onboarding metadata, not as a dumping ground for service scope or runtime policy.
 - Do not scatter onboarding state into multiple unrelated tables if it can live here, in business-profile storage, or in `playbook_rules`.
+- It is acceptable to store a versioned **editable onboarding snapshot** in `settings` for the UI, as long as runtime policy and studio-scope reads continue to come from canonical storage.
+- Runtime must not query `settings.onboarding_briefing_v1` to decide service scope, approval authority, or reusable policy.
 
 ## 5.1A studio_business_profiles
 
@@ -296,6 +303,7 @@ This table answers:
 - `lead_acceptance_rules` JSONB NOT NULL DEFAULT '{}'::jsonb
 - `language_support` JSONB NOT NULL DEFAULT '[]'::jsonb
 - `team_structure` JSONB NOT NULL DEFAULT '{}'::jsonb
+- `extensions` JSONB NOT NULL DEFAULT '{}'::jsonb
 - `source_type` TEXT NOT NULL DEFAULT 'onboarding'
 - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now()
 - `updated_at` TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -312,6 +320,19 @@ This table answers:
   - `geographic_scope`: local only, domestic, Europe, worldwide, blocked regions
   - `travel_policy`: travels freely, selective travel, no travel, destination minimums
   - `lead_acceptance_rules`: what Ana may politely decline without escalation
+
+### extensions (JSONB)
+
+Additive contract **`BusinessScopeExtensionsV1`** (`schema_version: 1`), stored in `extensions`. Used for **custom labels and notes** beyond the fixed enum columns — for UI, review, retrieval, and hydration — **not** for deterministic allow/deny branching (that remains on `service_types`, `geographic_scope`, `travel_policy`, `deliverable_types`, `lead_acceptance_rules`, and playbook `decision_mode` / `action_key` only).
+
+Shape (see `src/lib/onboardingBusinessScopeExtensions.ts`):
+
+- `custom_services[]`: `{ label, behaves_like_service_type? }` — optional `behaves_like_*` references an existing offered service enum value as a hint; if absent or null, runtime must not guess scope.
+- `custom_geography_labels[]`: `{ label, kind: "included" | "excluded" }`
+- `travel_constraints[]`: free-text strings (normalized/deduped in code)
+- `custom_deliverables[]`: `{ label, behaves_like_deliverable? }` — same “hint” pattern as services
+
+Do not introduce per-user action keys or new canonical enum values through this column.
 
 ## 5.2 weddings
 

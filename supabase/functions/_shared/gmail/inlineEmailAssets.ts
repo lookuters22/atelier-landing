@@ -3,6 +3,7 @@
  * as data: URIs or merged <style> so Inbox refresh does not re-hit third-party hosts.
  */
 import { load } from "npm:cheerio@1.0.0-rc.12";
+import { fetchWithTimeout } from "../http/fetchWithTimeout.ts";
 
 export { scanRemainingRemoteAssetRefs } from "./gmailEmailRemoteAssetScan.ts";
 
@@ -106,16 +107,14 @@ function normalizeMimeFromResponse(url: string, ctRaw: string): string | null {
 }
 
 async function fetchRemoteAssetAsDataUri(url: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_MS);
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
+    const res = await fetchWithTimeout(url, {
       redirect: "follow",
       headers: {
         Accept: "text/css,*/*;q=0.9,image/avif,image/webp,image/apng,image/*,font/*",
         "User-Agent": "Mozilla/5.0 (compatible; AtelierEmailAssetInline/1.0)",
       },
+      timeoutMs: FETCH_MS,
     });
     if (!res.ok) return null;
     const ctHeader = res.headers.get("content-type") ?? "";
@@ -130,23 +129,19 @@ async function fetchRemoteAssetAsDataUri(url: string): Promise<string | null> {
     return `data:${mime};base64,${b64}`;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
 /** Fetch external stylesheet as UTF-8 text (preferred for <link> merge). */
 async function fetchRemoteStylesheetText(url: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_MS);
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
+    const res = await fetchWithTimeout(url, {
       redirect: "follow",
       headers: {
         Accept: "text/css,*/*;q=0.8",
         "User-Agent": "Mozilla/5.0 (compatible; AtelierEmailAssetInline/1.0)",
       },
+      timeoutMs: FETCH_MS,
     });
     if (!res.ok) return null;
     const ct = (res.headers.get("content-type") ?? "").toLowerCase();
@@ -156,8 +151,6 @@ async function fetchRemoteStylesheetText(url: string): Promise<string | null> {
     return text.length > 0 && text.length <= MAX_PER_ASSET_BYTES ? text : null;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

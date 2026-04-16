@@ -14,6 +14,7 @@ import { InboxContextList } from "../components/modes/inbox/InboxContextList";
 import { InboxWorkspace } from "../components/modes/inbox/InboxWorkspace";
 import { InboxInspector } from "../components/modes/inbox/InboxInspector";
 import { InboxUrlHydrator } from "../components/modes/inbox/InboxUrlHydrator";
+import { InboxThreePaneShell } from "../components/modes/inbox/InboxThreePaneShell";
 
 import { PipelineModeProvider } from "../components/modes/pipeline/PipelineModeContext";
 import { PipelineWeddingProvider } from "../components/modes/pipeline/PipelineWeddingContext";
@@ -110,7 +111,7 @@ function ThreePaneShell({
       onLayoutChanged={handleChanged}
     >
       <Panel id="ctx" defaultSize="22%" minSize="16%" maxSize="32%">
-        <div className="flex h-full flex-col overflow-y-auto bg-sidebar">{pane2}</div>
+        <div className="dashboard-context-pane flex h-full flex-col overflow-y-auto">{pane2}</div>
       </Panel>
       <Separator className={SEP_CLS} />
       <Panel id="main" defaultSize="50%" minSize="30%">
@@ -118,7 +119,7 @@ function ThreePaneShell({
       </Panel>
       <Separator className={SEP_CLS} />
       <Panel id="insp" defaultSize="28%" minSize="18%" maxSize="38%">
-        <div className="flex h-full flex-col overflow-y-auto bg-background">{pane4}</div>
+        <div className="dashboard-inspector-pane flex h-full flex-col overflow-y-auto">{pane4}</div>
       </Panel>
     </Group>
   );
@@ -138,7 +139,7 @@ function TwoPaneShell({ pane2, pane3 }: { pane2: ReactNode; pane3: ReactNode }) 
       onLayoutChanged={handleChanged}
     >
       <Panel id="ctx-2p" defaultSize="22%" minSize="16%" maxSize="32%">
-        <div className="flex h-full flex-col overflow-y-auto bg-sidebar">{pane2}</div>
+        <div className="dashboard-context-pane flex h-full flex-col overflow-y-auto">{pane2}</div>
       </Panel>
       <Separator className={SEP_CLS} />
       <Panel id="main-2p" defaultSize="78%" minSize="50%">
@@ -161,7 +162,7 @@ function InboxMode() {
   return (
     <InboxModeProvider>
       <InboxUrlHydrator />
-      <ThreePaneShell
+      <InboxThreePaneShell
         pane2={<InboxContextList />}
         pane3={<InboxWorkspace />}
         pane4={<InboxInspector />}
@@ -262,6 +263,17 @@ function DirectoryMode() {
 }
 
 function SettingsMode() {
+  const { pathname } = useLocation();
+  const isOnboardingBriefing = pathname.startsWith("/settings/onboarding");
+
+  if (isOnboardingBriefing) {
+    return (
+      <div className="relative h-full min-h-0 flex-1 overflow-hidden bg-background">
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-2xl px-8 py-8">

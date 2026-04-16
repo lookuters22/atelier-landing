@@ -12,6 +12,7 @@
  * 3. Record the sent message in the messages table.
  */
 import { captureDraftLearningInput } from "../../_shared/captureDraftLearningInput.ts";
+import { sendGmailReplyForApprovedDraft } from "../../_shared/gmail/gmailOperatorSend.ts";
 import { inngest } from "../../_shared/inngest.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 
@@ -92,30 +93,50 @@ export const outboundFunction = inngest.createFunction(
       });
     }
 
-    await step.run("execute-send", async () => {
-      console.log(
-        `[MOCK SEND] Executing outbound delivery for thread ${draft.thread_id} (draft ${draft.id})...`,
-      );
-    });
-
-    await step.run("record-message", async () => {
-      const { error } = await supabaseAdmin.from("messages").insert({
-        thread_id: draft.thread_id,
-        photographer_id,
-        direction: "out",
-        sender: "photographer",
+    const gmailResult = await step.run("execute-send-gmail-or-fallback", async () => {
+      const gmail = await sendGmailReplyForApprovedDraft(supabaseAdmin, {
+        photographerId: photographer_id,
+        threadId: draft.thread_id,
         body: draft.body,
       });
-
-      if (error) {
-        throw new Error(`Failed to record outbound message: ${error.message}`);
+      if (gmail.ok) {
+        /**
+         * `sendGmailReplyForApprovedDraft` already persists an outbound `messages` row via
+         * `sendGmailReplyAndInsertMessage` (provider_message_id + idempotency_key = Gmail id).
+         * Do not insert again here — avoids duplicate rows when sync backfills the same send.
+         */
+        return { kind: "gmail" as const, gmailMessageId: gmail.gmailMessageId };
       }
+      if (!gmail.skip) {
+        throw new Error(gmail.error);
+      }
+      console.log(
+        `[MOCK SEND] Non-Gmail or unsupported path for thread ${draft.thread_id} (draft ${draft.id}) — ${gmail.error}`,
+      );
+      return { kind: "mock" as const };
     });
 
+    if (gmailResult.kind === "mock") {
+      await step.run("record-message-mock", async () => {
+        const { error } = await supabaseAdmin.from("messages").insert({
+          thread_id: draft.thread_id,
+          photographer_id,
+          direction: "out",
+          sender: "photographer",
+          body: draft.body,
+        });
+
+        if (error) {
+          throw new Error(`Failed to record outbound message: ${error.message}`);
+        }
+      });
+    }
+
     return {
-      status: "sent_and_recorded",
+      status: gmailResult.kind === "gmail" ? "sent_gmail" : "sent_and_recorded",
       draft_id: draft.id,
       thread_id: draft.thread_id,
+      ...(gmailResult.kind === "gmail" ? { gmail_message_id: gmailResult.gmailMessageId } : {}),
     };
   },
 );

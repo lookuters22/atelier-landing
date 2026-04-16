@@ -5,21 +5,33 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { normalizeEmail } from "../utils/normalizeEmail.ts";
 
-/** Ensures `weddings.wedding_date` never receives the string `"null"` or other invalid timestamptz input. */
-function coerceWeddingDateForInsert(value: string | null | undefined): string {
-  if (value == null) return new Date().toISOString();
+/**
+ * Canonical ceremony/sort date only when we have a real calendar anchor.
+ * Does **not** fall back to "today" — unknown dates stay null.
+ */
+function coerceCanonicalWeddingDate(value: string | null | undefined): string | null {
+  if (value == null) return null;
   const t = String(value).trim();
-  if (!t || t.toLowerCase() === "null" || t.toLowerCase() === "undefined") {
-    return new Date().toISOString();
-  }
+  if (!t || t.toLowerCase() === "null" || t.toLowerCase() === "undefined") return null;
   const ms = Date.parse(t);
-  if (Number.isNaN(ms)) return new Date().toISOString();
+  if (Number.isNaN(ms)) return null;
+  return new Date(ms).toISOString();
+}
+
+function coerceOptionalEventTimestamptz(value: string | null | undefined): string | null {
+  if (value == null || !String(value).trim()) return null;
+  const t = String(value).trim();
+  if (t.toLowerCase() === "null" || t.toLowerCase() === "undefined") return null;
+  const ms = Date.parse(t);
+  if (Number.isNaN(ms)) return null;
   return new Date(ms).toISOString();
 }
 
 export type IntakeLeadExtraction = {
   couple_names: string;
   wedding_date: string | null;
+  event_start_date?: string | null;
+  event_end_date?: string | null;
   location: string | null;
   story_notes: string | null;
 };
@@ -35,12 +47,27 @@ export async function createIntakeLeadRecords(
 ): Promise<{ weddingId: string; threadId: string }> {
   const { photographer_id, extraction, sender_email, raw_message } = input;
 
+  const eventStart = coerceOptionalEventTimestamptz(extraction.event_start_date);
+  const eventEnd = coerceOptionalEventTimestamptz(extraction.event_end_date);
+  const hasRange =
+    Boolean(eventStart) &&
+    Boolean(eventEnd) &&
+    new Date(eventStart!).getTime() !== new Date(eventEnd!).getTime();
+
+  let weddingDate = coerceCanonicalWeddingDate(extraction.wedding_date);
+  if (weddingDate == null && eventStart) {
+    /** Structured event window/anchor from extraction — first day is a real calendar anchor. */
+    weddingDate = eventStart;
+  }
+
   const { data: wedding, error: weddingErr } = await supabase
     .from("weddings")
     .insert({
       photographer_id,
       couple_names: extraction.couple_names,
-      wedding_date: coerceWeddingDateForInsert(extraction.wedding_date),
+      wedding_date: weddingDate,
+      event_start_date: hasRange ? eventStart : null,
+      event_end_date: hasRange ? eventEnd : null,
       location: extraction.location ?? "TBD",
       stage: "inquiry",
       story_notes: extraction.story_notes || null,

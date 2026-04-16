@@ -1,7 +1,7 @@
 /**
- * Auxiliary mirror of inbox deep-link params while the live URL still holds them.
- * Prefer `resolveInboxDeepLinkPayload` (URL first, then session) so refresh and canonical
- * `/inbox?threadId=…&draftId=…&action=review_draft` stay the source of truth after success.
+ * Session mirror helpers (clear on failed/stale hydration). Deep-link **selection** is driven
+ * only by live URL params — `/inbox` with no `threadId` must not reopen a prior thread/project.
+ * Explicit links stay: `resolveInboxDeepLinkPayload` reads **search params only**.
  */
 export const INBOX_DEEP_LINK_STORAGE_KEY = "atelier:inboxDeepLink:v1";
 
@@ -57,13 +57,9 @@ export function clearPersistedInboxDeepLink(): void {
   }
 }
 
-/**
- * Prefer live URL params; fall back to session mirror (StrictMode remount after URL clear).
- */
+/** Inbox deep-link payload from the current location only (no session restore on bare `/inbox`). */
 export function resolveInboxDeepLinkPayload(
   searchParams: URLSearchParams,
 ): InboxDeepLinkPayload | null {
-  const fromUrl = payloadFromSearchParams(searchParams);
-  if (fromUrl) return fromUrl;
-  return readPersistedInboxDeepLink();
+  return payloadFromSearchParams(searchParams);
 }

@@ -8,7 +8,7 @@ const ITEMS = [
 
 export function SettingsContextList() {
   return (
-    <nav className="flex h-full min-h-0 flex-col border-r border-border bg-sidebar text-[13px] text-foreground">
+    <nav className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
       <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2">
         {ITEMS.map(({ label, to }) => (
           <li key={to}>

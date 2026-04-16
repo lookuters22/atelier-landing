@@ -29,6 +29,10 @@ export type OrchestratorStubDraftAudienceOptions = Pick<
 
 type OrchestratorRuntimeOutcome = "auto" | "draft" | "ask" | "block";
 
+/** `attemptOrchestratorDraft` skipReason when no `send_message` proposal is draftable (all blocked or absent). */
+export const ORCHESTRATOR_DRAFT_SKIP_NO_DRAFTABLE_CANDIDATE =
+  "no_draftable_send_message_candidate" as const;
+
 /** Only `send_message` + non-block proposals are draftable for the existing approval → outbound message path. */
 function selectSendMessageDraftableCandidate(
   proposals: OrchestratorProposalCandidate[],
@@ -181,7 +185,7 @@ export async function attemptOrchestratorDraft(
       draftCreated: false,
       draftId: null,
       chosenCandidate: null,
-      skipReason: "no_draftable_send_message_candidate",
+      skipReason: ORCHESTRATOR_DRAFT_SKIP_NO_DRAFTABLE_CANDIDATE,
     };
   }
 

@@ -8,9 +8,11 @@ import {
 import {
   deleteStagingPrefixForImportCandidate,
   stageImportCandidateAttachments,
+  type StagedImportAttachmentRef,
 } from "./gmailStageImportCandidateAttachments.ts";
 import { supabaseAdmin } from "../supabase.ts";
 import { classifyGmailHtmlRenderPath, logGmailPrepareCompleteV1 } from "./gmailImportObservability.ts";
+import type { GmailMaterializationArtifactV1 } from "./gmailMaterializationArtifactV1.ts";
 
 const PREPARE_STUCK_AFTER_MS = 25 * 60 * 1000;
 
@@ -81,18 +83,36 @@ export async function runPrepareImportCandidateMaterialization(
       },
     );
 
-    let staged: Awaited<ReturnType<typeof stageImportCandidateAttachments>> = [];
+    let staged: StagedImportAttachmentRef[] = [];
+    let stagingUploadFailures: { candidate_index: number; error: string }[] = [];
     if (bundle.gmailImport && bundle.gmailImport.candidates.length > 0) {
-      staged = await stageImportCandidateAttachments(supabaseAdmin, {
+      const stageResult = await stageImportCandidateAttachments(supabaseAdmin, {
         accessToken: bundle.gmailImport.accessToken,
         gmailMessageId: bundle.gmailImport.gmailMessageId,
         photographerId: row.photographer_id as string,
         importCandidateId,
         candidates: bundle.gmailImport.candidates,
       });
+      staged = stageResult.staged;
+      stagingUploadFailures = stageResult.upload_failures;
     }
 
-    const artifact = bundleToArtifactV1(bundle, staged);
+    let artifact: GmailMaterializationArtifactV1 = bundleToArtifactV1(bundle, staged);
+    if (stagingUploadFailures.length > 0) {
+      const m = artifact.metadata as Record<string, unknown>;
+      const giRaw = m.gmail_import;
+      const gi =
+        giRaw && typeof giRaw === "object"
+          ? { ...(giRaw as Record<string, unknown>) }
+          : {};
+      artifact = {
+        ...artifact,
+        metadata: {
+          ...m,
+          gmail_import: { ...gi, staging_upload_failures: stagingUploadFailures },
+        },
+      };
+    }
 
     const done = new Date().toISOString();
     const { error: upErr } = await supabaseAdmin

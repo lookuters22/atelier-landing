@@ -31,6 +31,7 @@ import { buildOrchestratorSupportingContextInjection } from "./buildOrchestrator
 import { buildV3ClientOrchestratorDecisionExplanation } from "./buildV3ClientOrchestratorDecisionExplanation.ts";
 import { proposeClientOrchestratorCandidateActions } from "./proposeClientOrchestratorCandidateActions.ts";
 import { recordStrategicTrustRepairEscalation } from "./recordStrategicTrustRepairEscalation.ts";
+import { maybeRecordOrchestratorNoDraftableEscalation } from "./recordOrchestratorNoDraftableEscalation.ts";
 import {
   fetchV3ThreadWorkflowState,
   upsertV3ThreadWorkflowFromInboundMessage,
@@ -885,6 +886,18 @@ export async function executeClientOrchestratorV1Core(
     proposedActions,
     threadId,
     weddingId,
+  });
+
+  await maybeRecordOrchestratorNoDraftableEscalation(supabase, {
+    photographerId,
+    threadId,
+    weddingId,
+    verifierSuccess: verifierResult.success === true,
+    orchestratorOutcome,
+    draftSkipReason: draftAttempt.skipReason ?? null,
+    draftCreated: draftAttempt.draftCreated,
+    proposedActions,
+    rawMessage,
   });
 
   const calculatorResult = await runCalculatorPlaceholderForClientOrchestratorV1(

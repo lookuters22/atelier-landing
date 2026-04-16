@@ -1,66 +1,55 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
-import { fireDataChanged, onDataChanged } from "../lib/events";
+import { fireDataChanged } from "../lib/events";
 import type { Tables } from "../types/database.types";
 
 type Wedding = Tables<"weddings">;
 
+export function weddingsByPhotographerQueryKey(photographerId: string) {
+  return ["weddings", "by-photographer", photographerId] as const;
+}
+
+async function fetchWeddingsForPhotographer(photographerId: string): Promise<Wedding[]> {
+  const { data: rows, error: err } = await supabase
+    .from("weddings")
+    .select("*")
+    .eq("photographer_id", photographerId)
+    .order("wedding_date", { ascending: false })
+    .limit(500);
+
+  if (err) {
+    throw new Error(err.message);
+  }
+  return rows ?? [];
+}
+
 export function useWeddings(photographerId: string) {
-  const [data, setData] = useState<Wedding[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [fetchKey, setFetchKey] = useState(0);
+  const queryClient = useQueryClient();
 
-  const refetch = useCallback(() => setFetchKey((k) => k + 1), []);
+  const q = useQuery({
+    queryKey: photographerId ? weddingsByPhotographerQueryKey(photographerId) : ["weddings", "by-photographer", "none"],
+    queryFn: () => fetchWeddingsForPhotographer(photographerId),
+    enabled: Boolean(photographerId),
+  });
 
-  useEffect(() => {
-    if (!photographerId) {
-      setData([]);
-      setIsLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-
-    supabase
-      .from("weddings")
-      .select("*")
-      .eq("photographer_id", photographerId)
-      .order("wedding_date", { ascending: false })
-      .limit(500)
-      .then(({ data: rows, error: err }) => {
-        if (cancelled) return;
-        if (err) {
-          setError(err.message);
-          setData([]);
-        } else {
-          setData(rows ?? []);
-        }
-        setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [photographerId, fetchKey]);
-
-  /** Keep Inbox / Pipeline project rails in sync after Settings (e.g. G5 grouped Gmail approve) or other writes that call `fireDataChanged`. */
-  useEffect(() => onDataChanged(refetch, { scopes: ["weddings", "all"] }), [refetch]);
+  const data = q.data ?? [];
+  const isLoading = Boolean(photographerId && q.isLoading);
+  const error = q.error ? q.error.message : null;
 
   async function deleteWedding(weddingId: string) {
-    setData((prev) => prev.filter((w) => w.id !== weddingId));
+    queryClient.setQueryData<Wedding[] | undefined>(weddingsByPhotographerQueryKey(photographerId), (prev) =>
+      prev ? prev.filter((w) => w.id !== weddingId) : prev,
+    );
 
     const { error: delErr } = await supabase.from("weddings").delete().eq("id", weddingId);
 
     if (delErr) {
       console.error("deleteWedding error:", delErr.message);
-      refetch();
+      await q.refetch();
     } else {
       fireDataChanged("weddings");
     }
   }
 
-  return { data, isLoading, error, deleteWedding, refetch };
+  return { data, isLoading, error, deleteWedding, refetch: q.refetch };
 }

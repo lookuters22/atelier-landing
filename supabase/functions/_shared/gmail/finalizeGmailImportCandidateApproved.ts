@@ -1,6 +1,6 @@
 /**
- * Shared finalize step after `materializeGmailImportCandidate` — updates import_candidates to approved.
- * Used by import-candidate-review and async grouped-approval worker.
+ * Shared finalize step after `materializeGmailImportCandidate` (reuse-thread path) — RPC in one transaction.
+ * New-thread path finalizes inside `complete_gmail_import_materialize_new_thread`.
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -15,6 +15,8 @@ export async function finalizeApprovedImportCandidate(
     extraProvenance?: Record<string, unknown>;
     /** Clears grouped-approval error on success when present. */
     clearImportApprovalError?: boolean;
+    /** Grouped reuse: set threads.wedding_id atomically with candidate finalize. */
+    threadWeddingId?: string | null;
   },
 ): Promise<string | null> {
   const {
@@ -25,6 +27,7 @@ export async function finalizeApprovedImportCandidate(
     now,
     extraProvenance,
     clearImportApprovalError = false,
+    threadWeddingId = null,
   } = params;
 
   const baseProv = {
@@ -34,17 +37,14 @@ export async function finalizeApprovedImportCandidate(
     ...(extraProvenance ?? {}),
   };
 
-  const { error: finErr } = await supabaseAdmin
-    .from("import_candidates")
-    .update({
-      status: "approved",
-      materialized_thread_id: threadId,
-      import_provenance: baseProv,
-      updated_at: now,
-      ...(clearImportApprovalError ? { import_approval_error: null } : {}),
-    })
-    .eq("id", importCandidateId)
-    .eq("photographer_id", photographerId);
+  const { error: finErr } = await supabaseAdmin.rpc("finalize_gmail_import_link_existing_thread", {
+    p_photographer_id: photographerId,
+    p_import_candidate_id: importCandidateId,
+    p_thread_id: threadId,
+    p_thread_wedding_id: threadWeddingId,
+    p_import_provenance: baseProv,
+    p_clear_import_approval_error: clearImportApprovalError,
+  });
 
   if (finErr) {
     console.error("[finalizeGmailImportCandidateApproved] candidate finalize", finErr.message);

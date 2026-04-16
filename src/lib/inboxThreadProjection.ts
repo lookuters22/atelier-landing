@@ -4,6 +4,7 @@ import {
   parseGmailImportBodyHtmlSanitized,
   parseGmailImportRenderHtmlRef,
 } from "./gmailImportMessageMetadata";
+import { isGmailImportedLatestMessage, parseGmailLabelIdsFromLatestMetadata } from "./gmailInboxLabels";
 
 /** Maps a row from `v_threads_inbox_latest_message` to `UnfiledThread` (G4 server-side latest message). */
 export function mapInboxLatestProjectionRow(row: Record<string, unknown>): UnfiledThread {
@@ -41,5 +42,9 @@ export function mapInboxLatestProjectionRow(row: Record<string, unknown>): Unfil
     latestMessageId: row.latest_message_id != null ? String(row.latest_message_id) : null,
     latestMessageAttachments: attachmentRows,
     sender: row.latest_sender != null ? String(row.latest_sender) : "",
+    latestProviderMessageId:
+      row.latest_provider_message_id != null ? String(row.latest_provider_message_id) : null,
+    hasGmailImport: isGmailImportedLatestMessage(latestMeta),
+    gmailLabelIds: parseGmailLabelIdsFromLatestMetadata(latestMeta),
   };
 }

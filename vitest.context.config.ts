@@ -12,6 +12,8 @@ export default defineConfig({
       "npm:zod@4": path.resolve("node_modules/zod"),
       /** Deno `npm:inngest@3` in `supabase/functions/_shared/inngest.ts` */
       "npm:inngest@3": path.resolve("node_modules/inngest"),
+      /** Deno `npm:sanitize-html@2.13.0` in `supabase/functions/_shared/gmail/gmailHtmlSanitize.ts` */
+      "npm:sanitize-html@2.13.0": path.resolve("node_modules/sanitize-html"),
     },
   },
   test: {

@@ -9,12 +9,14 @@ import {
 } from "@/lib/photographerSettings";
 import { fireDataChanged, onDataChanged } from "@/lib/events";
 import { maskGoogleOAuthClientId } from "@/lib/oauthDebug";
+import { parseGmailLabelsFromJson, sortGmailLabelsForDisplay } from "@/lib/gmailLabels";
 import type { Database } from "@/types/database.types";
 import type { GmailImportTriggerStatus, GmailLabelOption } from "@/types/gmailImport.types";
 import { GMAIL_GROUP_APPROVE_MAX_ROWS_PER_RUN } from "@/lib/gmailGroupImportLimits";
 import { scrollPipelineWeddingRowIntoView } from "@/lib/pipelineWeddingListNavigation";
 import { isEditableKeyboardTarget } from "@/lib/timelineThreadNavigation";
 import { GmailRepairOpsPanel } from "./GmailRepairOpsPanel";
+import { StudioBriefingEntryCard } from "@/components/settings/StudioBriefingEntryCard";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../context/AuthContext";
 
@@ -51,25 +53,6 @@ function formatGmailSyncLabel(syncStatus: string): string {
     default:
       return syncStatus;
   }
-}
-
-function sortGmailLabelsForDisplay(labels: GmailLabelOption[]): GmailLabelOption[] {
-  return [...labels].sort((a, b) => {
-    if (a.type !== b.type) return a.type === "user" ? -1 : 1;
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-  });
-}
-
-function parseGmailLabelsFromJson(raw: unknown): GmailLabelOption[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(
-    (x): x is GmailLabelOption =>
-      x !== null &&
-      typeof x === "object" &&
-      typeof (x as GmailLabelOption).id === "string" &&
-      typeof (x as GmailLabelOption).name === "string" &&
-      ((x as GmailLabelOption).type === "system" || (x as GmailLabelOption).type === "user"),
-  );
 }
 
 function formatGmailLabelsRefreshedAt(iso: string | null): string {
@@ -546,7 +529,8 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
     if (gmail === "connected") {
       setGmailOAuthFlash({
         type: "success",
-        message: "Gmail connected. Your account appears below.",
+        message:
+          "Gmail connected. Your account appears below. If you reconnected, Google may have asked for additional Gmail permissions — those allow star and read/unread sync in Inbox.",
       });
       setGmailIntegrationRefresh((n) => n + 1);
     } else if (gmailErr) {
@@ -1024,6 +1008,7 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
         <p className="mt-1 max-w-lg text-[13px] text-muted-foreground">
           Studio profile, integrations, notifications, and tools.
         </p>
+        <StudioBriefingEntryCard />
         {showManagerPreviewLink ? (
           <p className="mt-2 text-[13px] text-muted-foreground">
             <Link to="/manager/today" className="font-semibold text-foreground hover:underline">
@@ -1217,7 +1202,9 @@ export function SettingsHubPage({ showManagerPreviewLink = true }: SettingsHubPa
             <p className="mt-1 text-[13px] text-muted-foreground">
               Connect Gmail to stage historical threads for review. Imports stay in a staging buffer until you approve
               them — they are intended to land in the existing <span className="font-medium text-foreground">Inbox</span>{" "}
-              as canonical threads, not a separate imports area.
+              as canonical threads, not a separate imports area. Inbox star and mark read/unread require the same
+              connection; if those fail, use <span className="font-medium text-foreground">Reconnect Gmail</span> below to
+              re-approve Google access.
             </p>
             {gmailOAuthFlash ? (
               <div

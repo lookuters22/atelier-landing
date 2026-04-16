@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -12,66 +12,33 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
-      calendar_events: {
-        Row: {
-          client_id: string | null
-          end_time: string
-          event_type: Database["public"]["Enums"]["event_type"]
-          id: string
-          meeting_link: string | null
-          photographer_id: string
-          start_time: string
-          title: string
-          wedding_id: string | null
-        }
-        Insert: {
-          client_id?: string | null
-          end_time: string
-          event_type: Database["public"]["Enums"]["event_type"]
-          id?: string
-          meeting_link?: string | null
-          photographer_id: string
-          start_time: string
-          title: string
-          wedding_id?: string | null
-        }
-        Update: {
-          client_id?: string | null
-          end_time?: string
-          event_type?: Database["public"]["Enums"]["event_type"]
-          id?: string
-          meeting_link?: string | null
-          photographer_id?: string
-          start_time?: string
-          title?: string
-          wedding_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calendar_events_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calendar_events_photographer_id_fkey"
-            columns: ["photographer_id"]
-            isOneToOne: false
-            referencedRelation: "photographers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calendar_events_wedding_id_fkey"
-            columns: ["wedding_id"]
-            isOneToOne: false
-            referencedRelation: "weddings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       authorized_case_exceptions: {
         Row: {
           approved_by: string | null
@@ -161,7 +128,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "authorized_case_exceptions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "authorized_case_exceptions_wedding_id_fkey"
+            columns: ["wedding_id"]
+            isOneToOne: false
+            referencedRelation: "weddings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_events: {
+        Row: {
+          client_id: string | null
+          end_time: string
+          event_type: Database["public"]["Enums"]["event_type"]
+          id: string
+          meeting_link: string | null
+          photographer_id: string
+          start_time: string
+          title: string
+          wedding_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          end_time: string
+          event_type: Database["public"]["Enums"]["event_type"]
+          id?: string
+          meeting_link?: string | null
+          photographer_id: string
+          start_time: string
+          title: string
+          wedding_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          end_time?: string
+          event_type?: Database["public"]["Enums"]["event_type"]
+          id?: string
+          meeting_link?: string | null
+          photographer_id?: string
+          start_time?: string
+          title?: string
+          wedding_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_wedding_id_fkey"
             columns: ["wedding_id"]
             isOneToOne: false
             referencedRelation: "weddings"
@@ -280,6 +312,12 @@ export type Database = {
           created_at: string
           display_name: string | null
           email: string
+          gmail_delta_sync_last_error: string | null
+          gmail_delta_sync_last_error_at: string | null
+          gmail_last_history_id: string | null
+          gmail_sync_degraded: boolean
+          gmail_watch_expiration: string | null
+          gmail_watch_last_renewed_at: string | null
           id: string
           photographer_id: string
           provider: string
@@ -293,6 +331,12 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email: string
+          gmail_delta_sync_last_error?: string | null
+          gmail_delta_sync_last_error_at?: string | null
+          gmail_last_history_id?: string | null
+          gmail_sync_degraded?: boolean
+          gmail_watch_expiration?: string | null
+          gmail_watch_last_renewed_at?: string | null
           id?: string
           photographer_id: string
           provider: string
@@ -306,6 +350,12 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string
+          gmail_delta_sync_last_error?: string | null
+          gmail_delta_sync_last_error_at?: string | null
+          gmail_last_history_id?: string | null
+          gmail_sync_degraded?: boolean
+          gmail_watch_expiration?: string | null
+          gmail_watch_last_renewed_at?: string | null
           id?: string
           photographer_id?: string
           provider?: string
@@ -476,6 +526,61 @@ export type Database = {
             referencedRelation: "threads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "drafts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalation_operator_turns: {
+        Row: {
+          body: string
+          created_at: string
+          direction: string
+          escalation_id: string
+          id: string
+          metadata: Json | null
+          photographer_id: string
+          raw_channel: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          direction: string
+          escalation_id: string
+          id?: string
+          metadata?: Json | null
+          photographer_id: string
+          raw_channel?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          direction?: string
+          escalation_id?: string
+          id?: string
+          metadata?: Json | null
+          photographer_id?: string
+          raw_channel?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_operator_turns_escalation_id_fkey"
+            columns: ["escalation_id"]
+            isOneToOne: false
+            referencedRelation: "escalation_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalation_operator_turns_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
         ]
       }
       escalation_requests: {
@@ -577,6 +682,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "escalation_requests_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "escalation_requests_wedding_id_fkey"
             columns: ["wedding_id"]
             isOneToOne: false
@@ -636,50 +748,84 @@ export type Database = {
           },
         ]
       }
-      escalation_operator_turns: {
+      gmail_import_secondary_pending: {
         Row: {
-          body: string
           created_at: string
-          direction: string
-          escalation_id: string
+          detail: Json
           id: string
-          metadata: Json | null
+          import_candidate_id: string
+          message_id: string
+          pending_kind: string
           photographer_id: string
-          raw_channel: string
+          status: string
+          thread_id: string | null
+          updated_at: string
         }
         Insert: {
-          body: string
           created_at?: string
-          direction: string
-          escalation_id: string
+          detail?: Json
           id?: string
-          metadata?: Json | null
+          import_candidate_id: string
+          message_id: string
+          pending_kind: string
           photographer_id: string
-          raw_channel?: string
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
         }
         Update: {
-          body?: string
           created_at?: string
-          direction?: string
-          escalation_id?: string
+          detail?: Json
           id?: string
-          metadata?: Json | null
+          import_candidate_id?: string
+          message_id?: string
+          pending_kind?: string
           photographer_id?: string
-          raw_channel?: string
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "escalation_operator_turns_escalation_id_fkey"
-            columns: ["escalation_id"]
+            foreignKeyName: "gmail_import_secondary_pending_import_candidate_id_fkey"
+            columns: ["import_candidate_id"]
             isOneToOne: false
-            referencedRelation: "escalation_requests"
+            referencedRelation: "import_candidates"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "escalation_operator_turns_photographer_id_fkey"
+            foreignKeyName: "gmail_import_secondary_pending_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_import_secondary_pending_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["latest_message_id"]
+          },
+          {
+            foreignKeyName: "gmail_import_secondary_pending_photographer_id_fkey"
             columns: ["photographer_id"]
             isOneToOne: false
             referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_import_secondary_pending_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_import_secondary_pending_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
             referencedColumns: ["id"]
           },
         ]
@@ -810,6 +956,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "gmail_render_artifacts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["latest_message_id"]
+          },
+          {
             foreignKeyName: "gmail_render_artifacts_photographer_id_fkey"
             columns: ["photographer_id"]
             isOneToOne: false
@@ -889,6 +1042,7 @@ export type Database = {
           materialization_prepare_status: string
           materialization_prepared_at: string | null
           materialization_render_artifact_id: string | null
+          materialization_secondary_status: string | null
           materialized_thread_id: string | null
           message_count: number
           photographer_id: string
@@ -917,6 +1071,7 @@ export type Database = {
           materialization_prepare_status?: string
           materialization_prepared_at?: string | null
           materialization_render_artifact_id?: string | null
+          materialization_secondary_status?: string | null
           materialized_thread_id?: string | null
           message_count?: number
           photographer_id: string
@@ -945,6 +1100,7 @@ export type Database = {
           materialization_prepare_status?: string
           materialization_prepared_at?: string | null
           materialization_render_artifact_id?: string | null
+          materialization_secondary_status?: string | null
           materialized_thread_id?: string | null
           message_count?: number
           photographer_id?: string
@@ -973,6 +1129,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "import_candidates_materialization_render_artifact_id_fkey"
+            columns: ["materialization_render_artifact_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_render_artifacts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "import_candidates_materialized_thread_id_fkey"
             columns: ["materialized_thread_id"]
             isOneToOne: false
@@ -980,10 +1143,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "import_candidates_materialization_render_artifact_id_fkey"
-            columns: ["materialization_render_artifact_id"]
+            foreignKeyName: "import_candidates_materialized_thread_id_fkey"
+            columns: ["materialized_thread_id"]
             isOneToOne: false
-            referencedRelation: "gmail_render_artifacts"
+            referencedRelation: "v_threads_inbox_latest_message"
             referencedColumns: ["id"]
           },
           {
@@ -1134,6 +1297,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["latest_message_id"]
+          },
+          {
             foreignKeyName: "message_attachments_photographer_id_fkey"
             columns: ["photographer_id"]
             isOneToOne: false
@@ -1205,6 +1375,13 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
             referencedColumns: ["id"]
           },
         ]
@@ -1284,6 +1461,8 @@ export type Database = {
           proposed_instruction: string
           proposed_scope: Database["public"]["Enums"]["rule_scope"]
           review_status: string
+          reviewed_at: string | null
+          reviewed_by_photographer_id: string | null
           source_classification: Json
           source_escalation_id: string | null
           superseded_by_id: string | null
@@ -1302,7 +1481,9 @@ export type Database = {
           photographer_id: string
           promoted_to_playbook_rule_id?: string | null
           proposed_action_key: string
-          proposed_channel?: Database["public"]["Enums"]["thread_channel"] | null
+          proposed_channel?:
+            | Database["public"]["Enums"]["thread_channel"]
+            | null
           proposed_decision_mode?: Database["public"]["Enums"]["decision_mode"]
           proposed_instruction: string
           proposed_scope?: Database["public"]["Enums"]["rule_scope"]
@@ -1327,7 +1508,9 @@ export type Database = {
           photographer_id?: string
           promoted_to_playbook_rule_id?: string | null
           proposed_action_key?: string
-          proposed_channel?: Database["public"]["Enums"]["thread_channel"] | null
+          proposed_channel?:
+            | Database["public"]["Enums"]["thread_channel"]
+            | null
           proposed_decision_mode?: Database["public"]["Enums"]["decision_mode"]
           proposed_instruction?: string
           proposed_scope?: Database["public"]["Enums"]["rule_scope"]
@@ -1351,17 +1534,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "playbook_rule_candidates_wedding_id_fkey"
-            columns: ["wedding_id"]
+            foreignKeyName: "playbook_rule_candidates_promoted_to_playbook_rule_id_fkey"
+            columns: ["promoted_to_playbook_rule_id"]
             isOneToOne: false
-            referencedRelation: "weddings"
+            referencedRelation: "playbook_rules"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "playbook_rule_candidates_thread_id_fkey"
-            columns: ["thread_id"]
+            foreignKeyName: "playbook_rule_candidates_reviewed_by_photographer_id_fkey"
+            columns: ["reviewed_by_photographer_id"]
             isOneToOne: false
-            referencedRelation: "threads"
+            referencedRelation: "photographers"
             referencedColumns: ["id"]
           },
           {
@@ -1379,17 +1562,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "playbook_rule_candidates_promoted_to_playbook_rule_id_fkey"
-            columns: ["promoted_to_playbook_rule_id"]
+            foreignKeyName: "playbook_rule_candidates_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "playbook_rules"
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "playbook_rule_candidates_reviewed_by_photographer_id_fkey"
-            columns: ["reviewed_by_photographer_id"]
+            foreignKeyName: "playbook_rule_candidates_thread_id_fkey"
+            columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "photographers"
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "playbook_rule_candidates_wedding_id_fkey"
+            columns: ["wedding_id"]
+            isOneToOne: false
+            referencedRelation: "weddings"
             referencedColumns: ["id"]
           },
         ]
@@ -1450,6 +1640,71 @@ export type Database = {
           },
         ]
       }
+      studio_business_profiles: {
+        Row: {
+          booking_scope: Json
+          client_types: Json
+          created_at: string
+          deliverable_types: Json
+          extensions: Json
+          geographic_scope: Json
+          id: string
+          language_support: Json
+          lead_acceptance_rules: Json
+          photographer_id: string
+          service_availability: Json
+          service_types: Json
+          source_type: string
+          team_structure: Json
+          travel_policy: Json
+          updated_at: string
+        }
+        Insert: {
+          booking_scope?: Json
+          client_types?: Json
+          created_at?: string
+          deliverable_types?: Json
+          extensions?: Json
+          geographic_scope?: Json
+          id?: string
+          language_support?: Json
+          lead_acceptance_rules?: Json
+          photographer_id: string
+          service_availability?: Json
+          service_types?: Json
+          source_type?: string
+          team_structure?: Json
+          travel_policy?: Json
+          updated_at?: string
+        }
+        Update: {
+          booking_scope?: Json
+          client_types?: Json
+          created_at?: string
+          deliverable_types?: Json
+          extensions?: Json
+          geographic_scope?: Json
+          id?: string
+          language_support?: Json
+          lead_acceptance_rules?: Json
+          photographer_id?: string
+          service_availability?: Json
+          service_types?: Json
+          source_type?: string
+          team_structure?: Json
+          travel_policy?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_business_profiles_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: true
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           due_date: string
@@ -1494,56 +1749,14 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "tasks_wedding_id_fkey"
-            columns: ["wedding_id"]
-            isOneToOne: false
-            referencedRelation: "weddings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v3_thread_workflow_state: {
-        Row: {
-          next_due_at: string | null
-          photographer_id: string
-          thread_id: string
-          updated_at: string
-          wedding_id: string | null
-          workflow: Json
-        }
-        Insert: {
-          next_due_at?: string | null
-          photographer_id: string
-          thread_id: string
-          updated_at?: string
-          wedding_id?: string | null
-          workflow?: Json
-        }
-        Update: {
-          next_due_at?: string | null
-          photographer_id?: string
-          thread_id?: string
-          updated_at?: string
-          wedding_id?: string | null
-          workflow?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "v3_thread_workflow_state_photographer_id_fkey"
-            columns: ["photographer_id"]
-            isOneToOne: false
-            referencedRelation: "photographers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "v3_thread_workflow_state_thread_id_fkey"
+            foreignKeyName: "tasks_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
-            referencedRelation: "threads"
+            referencedRelation: "v_threads_inbox_latest_message"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "v3_thread_workflow_state_wedding_id_fkey"
+            foreignKeyName: "tasks_wedding_id_fkey"
             columns: ["wedding_id"]
             isOneToOne: false
             referencedRelation: "weddings"
@@ -1607,6 +1820,13 @@ export type Database = {
             referencedRelation: "threads"
             referencedColumns: ["photographer_id", "id"]
           },
+          {
+            foreignKeyName: "thread_participants_tenant_thread_fkey"
+            columns: ["photographer_id", "thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["photographer_id", "id"]
+          },
         ]
       }
       thread_summaries: {
@@ -1637,6 +1857,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "thread_summaries_last_message_id_fkey"
+            columns: ["last_message_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["latest_message_id"]
+          },
+          {
             foreignKeyName: "thread_summaries_photographer_id_fkey"
             columns: ["photographer_id"]
             isOneToOne: false
@@ -1648,6 +1875,13 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: true
             referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_summaries_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: true
+            referencedRelation: "v_threads_inbox_latest_message"
             referencedColumns: ["id"]
           },
         ]
@@ -1696,6 +1930,13 @@ export type Database = {
             columns: ["photographer_id", "thread_id"]
             isOneToOne: false
             referencedRelation: "threads"
+            referencedColumns: ["photographer_id", "id"]
+          },
+          {
+            foreignKeyName: "thread_weddings_tenant_thread_fkey"
+            columns: ["photographer_id", "thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
             referencedColumns: ["photographer_id", "id"]
           },
           {
@@ -1779,6 +2020,62 @@ export type Database = {
           },
           {
             foreignKeyName: "threads_wedding_id_fkey"
+            columns: ["wedding_id"]
+            isOneToOne: false
+            referencedRelation: "weddings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v3_thread_workflow_state: {
+        Row: {
+          next_due_at: string | null
+          photographer_id: string
+          thread_id: string
+          updated_at: string
+          wedding_id: string | null
+          workflow: Json
+        }
+        Insert: {
+          next_due_at?: string | null
+          photographer_id: string
+          thread_id: string
+          updated_at?: string
+          wedding_id?: string | null
+          workflow?: Json
+        }
+        Update: {
+          next_due_at?: string | null
+          photographer_id?: string
+          thread_id?: string
+          updated_at?: string
+          wedding_id?: string | null
+          workflow?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "v3_thread_workflow_state_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "v3_thread_workflow_state_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "v3_thread_workflow_state_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "v3_thread_workflow_state_wedding_id_fkey"
             columns: ["wedding_id"]
             isOneToOne: false
             referencedRelation: "weddings"
@@ -1911,6 +2208,8 @@ export type Database = {
           compassion_pause: boolean
           contract_value: number | null
           couple_names: string
+          event_end_date: string | null
+          event_start_date: string | null
           id: string
           location: string
           package_inclusions: string[]
@@ -1919,7 +2218,7 @@ export type Database = {
           stage: Database["public"]["Enums"]["project_stage"]
           story_notes: string | null
           strategic_pause: boolean
-          wedding_date: string
+          wedding_date: string | null
         }
         Insert: {
           agency_cc_lock?: boolean
@@ -1927,6 +2226,8 @@ export type Database = {
           compassion_pause?: boolean
           contract_value?: number | null
           couple_names: string
+          event_end_date?: string | null
+          event_start_date?: string | null
           id?: string
           location: string
           package_inclusions?: string[]
@@ -1935,7 +2236,7 @@ export type Database = {
           stage?: Database["public"]["Enums"]["project_stage"]
           story_notes?: string | null
           strategic_pause?: boolean
-          wedding_date: string
+          wedding_date?: string | null
         }
         Update: {
           agency_cc_lock?: boolean
@@ -1943,6 +2244,8 @@ export type Database = {
           compassion_pause?: boolean
           contract_value?: number | null
           couple_names?: string
+          event_end_date?: string | null
+          event_start_date?: string | null
           id?: string
           location?: string
           package_inclusions?: string[]
@@ -1951,7 +2254,7 @@ export type Database = {
           stage?: Database["public"]["Enums"]["project_stage"]
           story_notes?: string | null
           strategic_pause?: boolean
-          wedding_date?: string
+          wedding_date?: string | null
         }
         Relationships: [
           {
@@ -1968,156 +2271,95 @@ export type Database = {
       v_open_tasks_with_wedding: {
         Row: {
           couple_names: string | null
-          due_date: string
-          id: string
-          photographer_id: string
-          status: Database["public"]["Enums"]["task_status"]
-          title: string
+          due_date: string | null
+          id: string | null
+          photographer_id: string | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          title: string | null
           wedding_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tasks_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_wedding_id_fkey"
+            columns: ["wedding_id"]
+            isOneToOne: false
+            referencedRelation: "weddings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_pending_approval_drafts: {
         Row: {
-          body: string
-          couple_names: string
-          created_at: string
-          id: string
-          photographer_id: string
-          thread_id: string
-          thread_title: string
+          body: string | null
+          couple_names: string | null
+          created_at: string | null
+          id: string | null
+          photographer_id: string | null
+          thread_id: string | null
+          thread_title: string | null
           wedding_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "drafts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drafts_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "v_threads_inbox_latest_message"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       v_threads_inbox_latest_message: {
         Row: {
           ai_routing_metadata: Json | null
-          id: string
-          kind: Database["public"]["Enums"]["thread_kind"]
-          latest_attachments_json: Json
-          latest_body: string
+          id: string | null
+          kind: Database["public"]["Enums"]["thread_kind"] | null
+          last_activity_at: string | null
+          latest_attachments_json: Json | null
+          latest_body: string | null
           latest_message_id: string | null
           latest_message_metadata: Json | null
+          /** Gmail `messages.get` id on latest message; migration `20260415120100_v_threads_inbox_latest_provider_message_id.sql`. */
+          latest_provider_message_id: string | null
           latest_sender: string | null
           latest_sent_at: string | null
-          last_activity_at: string
-          photographer_id: string
-          title: string
+          photographer_id: string | null
+          title: string | null
           wedding_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "threads_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "threads_wedding_id_fkey"
+            columns: ["wedding_id"]
+            isOneToOne: false
+            referencedRelation: "weddings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
-      complete_task: {
-        Args: {
-          p_task_id: string
-        }
-        Returns: Json
-      },
-      delete_inbox_thread: {
-        Args: {
-          p_thread_id: string
-        }
-        Returns: Json
-      },
-      link_thread_to_wedding: {
-        Args: {
-          p_thread_id: string
-          p_wedding_id: string
-        }
-        Returns: Json
-      },
-      replace_authorized_case_exception_for_escalation: {
-        Args: {
-          p_effective_from: string
-          p_effective_until: string | null
-          p_escalation_id: string
-          p_notes: string | null
-          p_override_payload: Json
-          p_overrides_action_key: string
-          p_photographer_id: string
-          p_target_playbook_rule_id: string | null
-          p_thread_id: string | null
-          p_wedding_id: string
-        }
-        Returns: string
-      }
-      complete_learning_loop_operator_resolution: {
-        Args: {
-          p_artifacts: Json
-          p_escalation_id: string
-          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
-          p_photographer_id: string
-          p_thread_id: string | null
-          p_wedding_id: string | null
-        }
-        Returns: Json
-      }
-      complete_escalation_resolution_authorized_case_exception: {
-        Args: {
-          p_effective_from: string
-          p_effective_until: string | null
-          p_escalation_id: string
-          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
-          p_notes: string | null
-          p_override_payload: Json
-          p_overrides_action_key: string
-          p_photographer_id: string
-          p_target_playbook_rule_id: string | null
-          p_thread_id: string | null
-          p_wedding_id: string
-        }
-        Returns: string
-      }
-      complete_escalation_resolution_document: {
-        Args: {
-          p_escalation_id: string
-          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
-          p_metadata: Json
-          p_photographer_id: string
-          p_title: string
-          p_wedding_id: string | null
-        }
-        Returns: string
-      }
-      complete_escalation_resolution_memory: {
-        Args: {
-          p_escalation_id: string
-          p_full_content: string
-          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
-          p_photographer_id: string
-          p_summary: string
-          p_title: string
-          p_wedding_id: string | null
-        }
-        Returns: string
-      }
-      complete_escalation_resolution_playbook: {
-        Args: {
-          p_action_key: string
-          p_escalation_id: string
-          p_instruction: string
-          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
-          p_photographer_id: string
-          p_topic: string
-        }
-        Returns: string
-      }
-      review_playbook_rule_candidate: {
-        Args: {
-          p_action: string
-          p_candidate_id: string
-          p_override_action_key?: string | null
-          p_override_decision_mode?: Database["public"]["Enums"]["decision_mode"] | null
-          p_override_instruction?: string | null
-          p_override_topic?: string | null
-          p_photographer_id: string
-          p_superseded_by_candidate_id?: string | null
-        }
-        Returns: Json
-      }
       check_user_exists: { Args: { lookup_email: string }; Returns: boolean }
       claim_draft_for_outbound: {
         Args: {
@@ -2132,35 +2374,156 @@ export type Database = {
           thread_id: string
         }[]
       }
-      gmail_messages_inline_html_repair_candidates_v1: {
+      complete_escalation_resolution_authorized_case_exception: {
         Args: {
-          p_after?: string | null
-          p_limit?: number
+          p_effective_from: string
+          p_effective_until: string
+          p_escalation_id: string
+          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
+          p_notes: string
+          p_override_payload: Json
+          p_overrides_action_key: string
+          p_photographer_id: string
+          p_target_playbook_rule_id: string
+          p_thread_id: string
+          p_wedding_id: string
+        }
+        Returns: string
+      }
+      complete_escalation_resolution_document: {
+        Args: {
+          p_escalation_id: string
+          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
+          p_metadata: Json
+          p_photographer_id: string
+          p_title: string
+          p_wedding_id: string
+        }
+        Returns: string
+      }
+      complete_escalation_resolution_memory: {
+        Args: {
+          p_escalation_id: string
+          p_full_content: string
+          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
+          p_photographer_id: string
+          p_summary: string
+          p_title: string
+          p_wedding_id: string
+        }
+        Returns: string
+      }
+      complete_escalation_resolution_playbook: {
+        Args: {
+          p_action_key: string
+          p_escalation_id: string
+          p_instruction: string
+          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
+          p_photographer_id: string
+          p_topic: string
+        }
+        Returns: string
+      }
+      complete_gmail_import_materialize_new_thread: {
+        Args: {
+          p_ai_routing_metadata: Json
+          p_clear_import_approval_error: boolean
+          p_connected_account_id: string
+          p_external_thread_key: string
+          p_import_candidate_id: string
+          p_import_provenance: Json
+          p_last_activity_at: string
+          p_message_body: string
+          p_message_metadata: Json
+          p_message_raw_payload: Json
+          p_message_sender: string
+          p_message_sent_at: string
+          p_photographer_id: string
+          p_render_artifact_id: string
+          p_thread_title: string
+          p_thread_wedding_id: string
         }
         Returns: {
-          id: string
-          metadata: Json
-          photographer_id: string
+          out_message_id: string
+          out_thread_id: string
         }[]
       }
-      gmail_import_candidate_artifact_inline_html_repair_candidates_v1: {
+      complete_google_oauth_connection: {
         Args: {
-          p_after?: string | null
-          p_limit?: number
+          p_access_token: string
+          p_display_name: string
+          p_email: string
+          p_photographer_id: string
+          p_provider: string
+          p_provider_account_id: string
+          p_refresh_token: string
+          p_token_expires_at: string
         }
+        Returns: string
+      }
+      complete_learning_loop_operator_resolution: {
+        Args: {
+          p_artifacts: Json
+          p_escalation_id: string
+          p_learning_outcome: Database["public"]["Enums"]["escalation_learning_outcome"]
+          p_photographer_id: string
+          p_thread_id: string
+          p_wedding_id: string
+        }
+        Returns: Json
+      }
+      complete_task: { Args: { p_task_id: string }; Returns: Json }
+      delete_inbox_thread: { Args: { p_thread_id: string }; Returns: Json }
+      finalize_gmail_import_link_existing_thread: {
+        Args: {
+          p_clear_import_approval_error: boolean
+          p_import_candidate_id: string
+          p_import_provenance: Json
+          p_photographer_id: string
+          p_thread_id: string
+          p_thread_wedding_id: string
+        }
+        Returns: undefined
+      }
+      gmail_import_candidate_artifact_inline_html_repair_backlog_coun: {
+        Args: never
+        Returns: number
+      }
+      gmail_import_candidate_artifact_inline_html_repair_candidates_v: {
+        Args: { p_after?: string; p_limit?: number }
         Returns: {
           id: string
           materialization_artifact: Json
           photographer_id: string
         }[]
       }
-      gmail_import_candidate_artifact_inline_html_repair_backlog_count_v1: {
-        Args: Record<PropertyKey, never>
+      gmail_import_secondary_pending_open_count_for_photographer_v1: {
+        Args: { p_photographer_id: string }
         Returns: number
       }
       gmail_messages_inline_html_repair_backlog_count_v1: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: number
+      }
+      gmail_messages_inline_html_repair_candidates_v1: {
+        Args: { p_after?: string; p_limit?: number }
+        Returns: {
+          id: string
+          metadata: Json
+          photographer_id: string
+        }[]
+      }
+      link_thread_to_wedding: {
+        Args: { p_thread_id: string; p_wedding_id: string }
+        Returns: Json
+      }
+      convert_unfiled_thread_to_inquiry: {
+        Args: {
+          p_thread_id: string
+          p_couple_names?: string | null
+          p_lead_client_name?: string | null
+        }
+        Returns: Json
       }
       match_knowledge: {
         Args: {
@@ -2172,12 +2535,40 @@ export type Database = {
         }
         Returns: {
           content: string
-          created_at: string | null
+          created_at: string
           document_type: string
           id: string
           metadata: Json
           similarity: number
         }[]
+      }
+      replace_authorized_case_exception_for_escalation: {
+        Args: {
+          p_effective_from: string
+          p_effective_until: string
+          p_escalation_id: string
+          p_notes: string
+          p_override_payload: Json
+          p_overrides_action_key: string
+          p_photographer_id: string
+          p_target_playbook_rule_id: string
+          p_thread_id: string
+          p_wedding_id: string
+        }
+        Returns: string
+      }
+      review_playbook_rule_candidate: {
+        Args: {
+          p_action: string
+          p_candidate_id: string
+          p_override_action_key?: string
+          p_override_decision_mode?: Database["public"]["Enums"]["decision_mode"]
+          p_override_instruction?: string
+          p_override_topic?: string
+          p_photographer_id: string
+          p_superseded_by_candidate_id?: string
+        }
+        Returns: Json
       }
     }
     Enums: {
@@ -2196,7 +2587,10 @@ export type Database = {
         | "other"
       draft_status: "pending_approval" | "approved" | "rejected"
       escalation_learning_outcome: "one_off_case" | "reusable_playbook"
-      escalation_operator_delivery: "urgent_now" | "batch_later" | "dashboard_only"
+      escalation_operator_delivery:
+        | "urgent_now"
+        | "batch_later"
+        | "dashboard_only"
       escalation_status: "open" | "answered" | "dismissed" | "promoted"
       event_type: "about_call" | "timeline_call" | "gallery_reveal" | "other"
       message_direction: "in" | "out" | "internal"
@@ -2346,6 +2740,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       automation_mode: ["auto", "draft_only", "human_only"],
@@ -2364,7 +2761,11 @@ export const Constants = {
       ],
       draft_status: ["pending_approval", "approved", "rejected"],
       escalation_learning_outcome: ["one_off_case", "reusable_playbook"],
-      escalation_operator_delivery: ["urgent_now", "batch_later", "dashboard_only"],
+      escalation_operator_delivery: [
+        "urgent_now",
+        "batch_later",
+        "dashboard_only",
+      ],
       escalation_status: ["open", "answered", "dismissed", "promoted"],
       event_type: ["about_call", "timeline_call", "gallery_reveal", "other"],
       message_direction: ["in", "out", "internal"],

@@ -383,12 +383,12 @@ export async function computeGmailMaterializationBundle(
           ...baseCor,
           stage: "render_persist",
           duration_ms: Date.now() - tRender,
-          ok: Boolean(persisted),
+          ok: persisted.ok,
           gmail_message_id: latest.id,
-          outcome: persisted ? "persisted" : "persist_null",
+          outcome: persisted.ok ? "persisted" : "persist_failed",
         });
       }
-      if (persisted) {
+      if (persisted.ok) {
         gmailRenderArtifactId = persisted.artifactId;
         metadata = applyGmailRenderRefToMetadata(
           { gmail_import: gmailImportBlock },
@@ -398,7 +398,7 @@ export async function computeGmailMaterializationBundle(
         logGmailPreparePersistHtmlFailedV1({
           import_candidate_id: persist.importCandidateId ?? "unknown",
           photographer_id: persist.photographerId,
-          reason: "persist_gmail_render_html_returned_null",
+          reason: persisted.error.slice(0, 500),
         });
       }
     } else if (substepTel) {

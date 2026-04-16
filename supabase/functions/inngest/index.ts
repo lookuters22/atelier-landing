@@ -6,6 +6,8 @@
  * - `INNGEST_SIGNING_KEY` — Inngest Cloud → signing key for this environment (validates sync + invokes).
  * - `INNGEST_EVENT_KEY` — Event API key (used by `gmail-enqueue-label-sync` and other emitters; must match app `atelier-os`).
  * - `INNGEST_ALLOW_IN_BAND_SYNC=1` — strongly recommended so Cloud sync registers the full function bundle (see #1929 below).
+ * - **Gmail validation (temporary):** `GMAIL_IMPORT_CANDIDATE_MATERIALIZATION_LANE_DISABLED=1` — skips G2 prepare handler + backfill cron + label-sync prepare enqueue (`gmailMaterializationLanePause.ts`). Does not disable delta sync.
+ * - **Gmail repair crons (A2):** `GMAIL_INLINE_HTML_REPAIR_DISABLED=1`, `GMAIL_IMPORT_CANDIDATE_ARTIFACT_HTML_REPAIR_DISABLED=1`, or set `gmail_repair_worker_state.paused=true` per worker (`gmailRepairWorkerOps.ts`).
  * - Optional: `INNGEST_SERVE_HOST` — set to `https://<project-ref>.supabase.co` if the sync URL is rewritten (edge-runtime) and functions are missing.
  *
  * ## Post-deploy verification (Inngest Cloud)
@@ -17,8 +19,14 @@
  * full `serve()` function list (avoids “event accepted, no functions triggered” for triggers like
  * `ai/orchestrator.client.v1`). See https://github.com/inngest/inngest/issues/1929#issuecomment-2474770494
  *
- * Phase 0 Step 0D (`docs/v3/execute_v3.md`): do not remove or unregister workers here
- * in small slices—keep every import and `functions` entry until a dedicated cutover phase.
+ * Temporary ops stabilization (2026-04-15): Gmail import-candidate materialization and legacy HTML repair workers
+ * are intentionally unregistered from the live bundle so cron/sweeper runs stop consuming resources while the
+ * visibility-first inbound path is validated. Re-register only after the old lane is no longer used for live mail.
+ *
+ * **Inngest Cloud UI vs deployed bundle:** The Edge `serve()` list is the source of truth. After deploy, run
+ * `npm run inngest:verify-serve` — `function_count` must match the `functions` array length (see script constant).
+ * If Inngest Cloud still shows removed workers, verify Dashboard **Sync URL** = this project's
+ * `https://<ref>.supabase.co/functions/v1/inngest`, app **atelier-os**, **Production** env, and `INNGEST_ALLOW_IN_BAND_SYNC=1`.
  *
  * `clientOrchestratorV1Function` (`ai/orchestrator.client.v1`): QA/replay; optional **shadow** from `triage`; optional
  * **CUT2** live for web-widget known-wedding only (`TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1`, draft_only);
@@ -79,14 +87,16 @@ import { operatorOrchestratorFunction } from "./functions/operatorOrchestrator.t
 import { operatorEscalationDeliveryFunction } from "./functions/operatorEscalationDelivery.ts";
 import { v3ThreadWorkflowSweepFunction } from "./functions/v3ThreadWorkflowSweep.ts";
 import { syncGmailLabelImportCandidates } from "./functions/syncGmailLabelImportCandidates.ts";
-import { prepareGmailImportCandidateMaterialization } from "./functions/prepareGmailImportCandidateMaterialization.ts";
-import { backfillGmailImportCandidateMaterialization } from "./functions/backfillGmailImportCandidateMaterialization.ts";
 import { processGmailLabelGroupApproval } from "./functions/processGmailLabelGroupApproval.ts";
 import { processGmailSingleImportCandidateApprove } from "./functions/processGmailSingleImportCandidateApprove.ts";
 import { processEscalationResolutionQueued } from "./functions/processEscalationResolutionQueued.ts";
 import { processGmailLabelsRefresh } from "./functions/processGmailLabelsRefresh.ts";
-import { repairGmailMessagesInlineHtmlArtifacts } from "./functions/repairGmailMessagesInlineHtmlArtifacts.ts";
-import { repairGmailImportCandidateArtifactInlineHtml } from "./functions/repairGmailImportCandidateArtifactInlineHtml.ts";
+import { processGmailDeltaSync } from "./functions/processGmailDeltaSync.ts";
+import { processInboxThreadRequiresTriage } from "./functions/processInboxThreadRequiresTriage.ts";
+import { intakeExistingThreadFunction } from "./functions/processIntakeExistingThread.ts";
+import { renewGmailWatch } from "./functions/renewGmailWatch.ts";
+import { gmailDeltaSanitySweep } from "./functions/gmailDeltaSanitySweep.ts";
+import { renewGmailWatchSweep } from "./functions/renewGmailWatchSweep.ts";
 
 /** Step 12D anchor: retain legacy registration until cutover; referenced so the gate module stays linked. */
 void LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA;
@@ -104,6 +114,7 @@ const handler = serve({
   functions: [
     triageFunction,
     intakeFunction,
+    intakeExistingThreadFunction,
     outboundFunction,
     rewriteFunction,
     conciergeFunction,
@@ -123,14 +134,15 @@ const handler = serve({
     operatorEscalationDeliveryFunction,
     v3ThreadWorkflowSweepFunction,
     syncGmailLabelImportCandidates,
-    prepareGmailImportCandidateMaterialization,
-    backfillGmailImportCandidateMaterialization,
     processGmailLabelGroupApproval,
     processGmailSingleImportCandidateApprove,
     processEscalationResolutionQueued,
     processGmailLabelsRefresh,
-    repairGmailMessagesInlineHtmlArtifacts,
-    repairGmailImportCandidateArtifactInlineHtml,
+    processGmailDeltaSync,
+    processInboxThreadRequiresTriage,
+    renewGmailWatch,
+    gmailDeltaSanitySweep,
+    renewGmailWatchSweep,
   ],
 });
 

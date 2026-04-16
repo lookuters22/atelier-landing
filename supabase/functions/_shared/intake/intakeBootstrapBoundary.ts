@@ -38,6 +38,8 @@ export async function applyIntakeLeadCreation(
     extraction: {
       couple_names: extraction.couple_names,
       wedding_date: extraction.wedding_date,
+      event_start_date: extraction.event_start_date,
+      event_end_date: extraction.event_end_date,
       location: extraction.location,
       story_notes: extraction.story_notes || null,
     },

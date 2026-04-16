@@ -105,11 +105,11 @@ export async function repairImportCandidateMaterializationArtifactInlineHtml(
     importCandidateId,
   });
 
-  if (!persisted) {
+  if (!persisted.ok) {
     return {
       outcome: "failed",
       import_candidate_id: importCandidateId,
-      reason: "persist_gmail_render_html_returned_null",
+      reason: persisted.error,
     };
   }
 

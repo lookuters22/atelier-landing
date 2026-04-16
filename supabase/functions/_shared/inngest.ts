@@ -108,6 +108,26 @@ export const GMAIL_SINGLE_IMPORT_CANDIDATE_APPROVE_V1_SCHEMA_VERSION = 1 as cons
 export const GMAIL_LABELS_REFRESH_V1_EVENT = "import/gmail.labels_refresh.v1" as const;
 export const GMAIL_LABELS_REFRESH_V1_SCHEMA_VERSION = 1 as const;
 
+/** Gmail Pub/Sub → `users.history.list` delta (known threads insert inbound; unknown → import_candidates). */
+export const GMAIL_DELTA_SYNC_V1_EVENT = "import/gmail.delta_sync.v1" as const;
+/** Current emitter version (optional `traceId`). `processGmailDeltaSync` accepts `1` and `2` (same payload shape). */
+export const GMAIL_DELTA_SYNC_V1_SCHEMA_VERSION = 2 as const;
+
+/** Classifier for threads created by Gmail delta (no `comms/email.received`). */
+export const INBOX_THREAD_REQUIRES_TRIAGE_V1_EVENT = "inbox/thread.requires_triage.v1" as const;
+export const INBOX_THREAD_REQUIRES_TRIAGE_V1_SCHEMA_VERSION = 1 as const;
+
+/**
+ * Intake workflow on an already-canonical thread after inquiry bootstrap (wedding + client created;
+ * no duplicate thread/message). Handled by `processIntakeExistingThread` — not legacy `ai/intent.intake`.
+ */
+export const AI_INTENT_INTAKE_EXISTING_THREAD_V1_EVENT = "ai/intent.intake.existing_thread.v1" as const;
+export const AI_INTENT_INTAKE_EXISTING_THREAD_V1_SCHEMA_VERSION = 1 as const;
+
+/** Renew `users.watch` before expiration (cron + optional manual). */
+export const GMAIL_WATCH_RENEW_V1_EVENT = "import/gmail.watch_renew.v1" as const;
+export const GMAIL_WATCH_RENEW_V1_SCHEMA_VERSION = 1 as const;
+
 /** A3: dashboard operator escalation resolution — classifier + RPC off the Edge click path. */
 export const OPS_ESCALATION_RESOLUTION_V1_EVENT = "ops/escalation.resolution.v1" as const;
 export const OPS_ESCALATION_RESOLUTION_V1_SCHEMA_VERSION = 1 as const;
@@ -387,6 +407,48 @@ export type AtelierEvents = {
   [GMAIL_LABELS_REFRESH_V1_EVENT]: {
     data: {
       schemaVersion: typeof GMAIL_LABELS_REFRESH_V1_SCHEMA_VERSION;
+      photographerId: string;
+      connectedAccountId: string;
+    };
+  };
+  [GMAIL_DELTA_SYNC_V1_EVENT]: {
+    data: {
+      schemaVersion: typeof GMAIL_DELTA_SYNC_V1_SCHEMA_VERSION;
+      photographerId: string;
+      connectedAccountId: string;
+      /** When set (404 recovery), run bounded catch-up then re-baseline to profile `historyId`. */
+      catchupAfterHistory404?: boolean;
+      /** Correlates webhook receive → enqueue → Inngest worker → history.list → DB. */
+      traceId?: string;
+      /** Gmail Pub/Sub `historyId` after the mailbox change — used to skip redundant work when already synced. */
+      notificationHistoryId?: string;
+    };
+  };
+  [INBOX_THREAD_REQUIRES_TRIAGE_V1_EVENT]: {
+    data: {
+      schemaVersion: typeof INBOX_THREAD_REQUIRES_TRIAGE_V1_SCHEMA_VERSION;
+      photographerId: string;
+      threadId: string;
+      /** Canonical `messages.id` UUID for the inserted inbound row. */
+      triggerMessageId: string;
+      source: "gmail_delta" | "manual";
+      traceId?: string;
+    };
+  };
+  [AI_INTENT_INTAKE_EXISTING_THREAD_V1_EVENT]: {
+    data: {
+      schemaVersion: typeof AI_INTENT_INTAKE_EXISTING_THREAD_V1_SCHEMA_VERSION;
+      photographerId: string;
+      weddingId: string;
+      threadId: string;
+      raw_message: string;
+      sender_email: string;
+      reply_channel?: string;
+    };
+  };
+  [GMAIL_WATCH_RENEW_V1_EVENT]: {
+    data: {
+      schemaVersion: typeof GMAIL_WATCH_RENEW_V1_SCHEMA_VERSION;
       photographerId: string;
       connectedAccountId: string;
     };

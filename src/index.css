@@ -1084,6 +1084,26 @@ html, body {
   padding-top: 26px;
 }
 
+.font-dashboard .dashboard-context-pane {
+  background: #f6f8fc;
+  color: #1c1c1e;
+}
+
+.font-dashboard .dashboard-inspector-pane {
+  background: #ffffff;
+  color: #1c1c1e;
+}
+
+.dark .font-dashboard .dashboard-context-pane {
+  background: hsl(var(--sidebar-background));
+  color: hsl(var(--foreground));
+}
+
+.dark .font-dashboard .dashboard-inspector-pane {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
 /* Compact sidebar content */
 .font-dashboard [data-sidebar="menu-button"] {
   height: 28px !important;

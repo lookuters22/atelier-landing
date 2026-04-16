@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { scrollPipelineWeddingRowIntoView } from "../../lib/pipelineWeddingListNavigation";
 import {
   adjacentThreadId,
@@ -41,6 +41,9 @@ export function TimelineTab({
   isApprovingDraft,
   editDraftInComposer,
   draftDefault,
+  gmailInlineReplyDock,
+  /** Drives bottom-of-feed hint/skeleton so Gmail and legacy paths never flash the wrong UI. */
+  replyComposerMode = "legacy",
 }: {
   activeThread: WeddingThread | undefined;
   threads: WeddingThread[];
@@ -57,12 +60,18 @@ export function TimelineTab({
   isApprovingDraft: boolean;
   editDraftInComposer: () => void;
   draftDefault: string;
+  /** Inbox-style Gmail reply (replaces chat footer for Gmail-imported threads). */
+  gmailInlineReplyDock?: ReactNode;
+  replyComposerMode?: "gmail" | "legacy" | "pending";
 }) {
   const earlier = useMemo(() => earlierMessages.map(mapToChatMessage), [earlierMessages]);
   const today = useMemo(() => todayMessages.map(mapToChatMessage), [todayMessages]);
 
   const threadId = activeThread?.id ?? "";
-  const todayIds = useMemo(() => new Set(todayMessages.map((m) => m.id)), [todayMessages]);
+  const allTimelineMessages = useMemo(
+    () => [...earlierMessages, ...todayMessages],
+    [earlierMessages, todayMessages],
+  );
 
   const threadChipsWrapRef = useRef<HTMLDivElement>(null);
 
@@ -95,58 +104,71 @@ export function TimelineTab({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [threads, activeThread?.id, setSelectedThreadId]);
 
-  const draftSlot = showDraft ? (
-    <div className="flex justify-end gap-2.5">
-      <div className="flex max-w-[75%] flex-col items-end">
-        <button
-          type="button"
-          onClick={toggleDraftExpanded}
-          className="rounded-2xl rounded-br-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-left text-[13px] leading-relaxed text-foreground transition"
-        >
-          <span className="mb-1 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-600">
-            Pending approval
-          </span>
+  const showLegacyNoDraftHint =
+    !showDraft && replyComposerMode === "legacy" && !gmailInlineReplyDock;
+
+  const draftSlot = (
+    <>
+      {showDraft ? (
+        <article className="w-full min-w-0 overflow-hidden rounded-lg border border-amber-200/90 bg-amber-50/40 shadow-sm">
+          <button
+            type="button"
+            onClick={toggleDraftExpanded}
+            className="flex w-full min-w-0 items-start gap-2 px-3 py-2.5 text-left transition hover:bg-amber-100/40"
+            aria-expanded={draftExpanded}
+          >
+            <span className="mt-0.5 shrink-0 text-amber-800/80" aria-hidden>
+              {draftExpanded ? <ChevronDown className="h-4 w-4" strokeWidth={2} /> : <ChevronRight className="h-4 w-4" strokeWidth={2} />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[13px] font-semibold text-foreground">Drafted by Ana</span>
+                <span className="shrink-0 rounded-sm bg-amber-200/90 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
+                  Pending approval
+                </span>
+              </div>
+              {!draftExpanded ? (
+                <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-muted-foreground">{draftDefault}</p>
+              ) : null}
+            </div>
+          </button>
           {draftExpanded ? (
-            <span className="block whitespace-pre-wrap">{draftDefault}</span>
-          ) : (
-            <span className="line-clamp-3 block">{draftDefault}</span>
-          )}
-        </button>
-        {draftExpanded && (
-          <div className="mt-1.5 flex gap-1.5">
-            <button
-              type="button"
-              disabled={isApprovingDraft}
-              className="rounded-full bg-foreground px-3 py-1 text-[11px] font-semibold text-background transition hover:bg-foreground/90 disabled:opacity-60"
-              onClick={(e) => {
-                e.stopPropagation();
-                approveDraft();
-              }}
-            >
-              {isApprovingDraft ? "Sending\u2026" : "Approve & send"}
-            </button>
-            <button
-              type="button"
-              disabled={isApprovingDraft}
-              className="rounded-full border border-border bg-background px-3 py-1 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground disabled:opacity-50"
-              onClick={(e) => {
-                e.stopPropagation();
-                editDraftInComposer();
-              }}
-            >
-              Edit
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-bold text-background">
-        ED
-      </div>
-    </div>
-  ) : (
-    <p className="text-center text-[11px] text-muted-foreground">
-      No pending drafts. Use the message box below.
-    </p>
+            <div className="border-t border-amber-200/80 bg-background/50 px-3 pb-3 pt-2">
+              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">{draftDefault}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isApprovingDraft}
+                  className="rounded-full bg-foreground px-3 py-1.5 text-[11px] font-semibold text-background transition hover:bg-foreground/90 disabled:opacity-60"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    approveDraft();
+                  }}
+                >
+                  {isApprovingDraft ? "Sending…" : "Approve & send"}
+                </button>
+                <button
+                  type="button"
+                  disabled={isApprovingDraft}
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    editDraftInComposer();
+                  }}
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </article>
+      ) : showLegacyNoDraftHint ? (
+        <p className="text-center text-[11px] text-muted-foreground">
+          No pending drafts. Use the message box below.
+        </p>
+      ) : null}
+      {gmailInlineReplyDock}
+    </>
   );
 
   return (
@@ -226,7 +248,10 @@ export function TimelineTab({
         todayMessages={today}
         foldable
         expandedMap={messageExpanded}
-        defaultExpanded={(msg) => todayIds.has(msg.id)}
+        defaultExpanded={(msg) => {
+          const raw = allTimelineMessages.find((m) => m.id === msg.id);
+          return raw ? defaultExpandedForMessage(raw) : false;
+        }}
         onToggle={toggleMessage}
         getFoldKey={(msg) => messageFoldKey(threadId, msg.id)}
         bottomSlot={draftSlot}

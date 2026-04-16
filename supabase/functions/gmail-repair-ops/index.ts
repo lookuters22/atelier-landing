@@ -1,5 +1,6 @@
 /**
- * A4: Operator visibility + control for Gmail inline-HTML repair workers (backlog, last run, pause, run-once).
+ * A4: Operator visibility + control for Gmail inline-HTML repair workers (backlog, last run, pause, run-once)
+ * and `gmail_import_secondary_pending` batch repair (`run_secondary_pending_batch`).
  *
  * Secrets:
  * - `GMAIL_REPAIR_OPS_ALLOWED_PHOTOGRAPHER_IDS` — comma-separated photographer UUIDs, or `*` (dangerous; dev only).
@@ -26,9 +27,11 @@ import {
   setGmailRepairWorkerPaused,
 } from "../_shared/gmail/gmailRepairWorkerOps.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
+import { runGmailImportSecondaryPendingBatch } from "../_shared/gmail/gmailImportSecondaryPendingRepair.ts";
 
 const EDGE = "gmail-repair-ops";
 const BATCH_LIMIT = 25;
+const SECONDARY_PENDING_LIMIT = 15;
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -57,12 +60,16 @@ function parseWorkerId(s: unknown): GmailRepairWorkerId | null {
   return null;
 }
 
-async function buildStatusPayload() {
+async function buildStatusPayload(photographerId: string) {
   const { data: mCount, error: mErr } = await supabaseAdmin.rpc(
     "gmail_messages_inline_html_repair_backlog_count_v1",
   );
   const { data: cCount, error: cErr } = await supabaseAdmin.rpc(
     "gmail_import_candidate_artifact_inline_html_repair_backlog_count_v1",
+  );
+  const { data: secCount, error: secErr } = await supabaseAdmin.rpc(
+    "gmail_import_secondary_pending_open_count_for_photographer_v1",
+    { p_photographer_id: photographerId },
   );
 
   const msgRow = await fetchGmailRepairWorkerState(supabaseAdmin, GMAIL_REPAIR_WORKER_MESSAGES_INLINE_HTML);
@@ -141,6 +148,10 @@ async function buildStatusPayload() {
       messages_inline_html: messages,
       import_candidate_artifact: candidates,
     },
+    gmail_import_secondary_pending: {
+      backlog_estimate: secErr ? null : Number(secCount ?? 0),
+      backlog_rpc_error: secErr?.message ?? null,
+    },
   };
 }
 
@@ -194,7 +205,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "status") {
-      const payload = await buildStatusPayload();
+      const payload = await buildStatusPayload(photographerId);
       logA4EdgeOpLatencyV1({
         edge: EDGE,
         action: "status",
@@ -224,7 +235,7 @@ Deno.serve(async (req) => {
         });
         return json({ error }, 500);
       }
-      const payload = await buildStatusPayload();
+      const payload = await buildStatusPayload(photographerId);
       logA4EdgeOpLatencyV1({
         edge: EDGE,
         action: "set_paused",
@@ -275,7 +286,7 @@ Deno.serve(async (req) => {
 
       await persistGmailRepairWorkerRunResult(supabaseAdmin, worker, batchResult);
 
-      const payload = await buildStatusPayload();
+      const payload = await buildStatusPayload(photographerId);
       logA4EdgeOpLatencyV1({
         edge: EDGE,
         action: "run_once",
@@ -287,6 +298,32 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         batch: batchResult,
+        ...payload,
+      });
+    }
+
+    if (action === "run_secondary_pending_batch") {
+      const rawLimit = body.limit;
+      const limit =
+        typeof rawLimit === "number" && Number.isFinite(rawLimit)
+          ? Math.min(Math.max(Math.floor(rawLimit), 1), 50)
+          : SECONDARY_PENDING_LIMIT;
+      const batchResult = await runGmailImportSecondaryPendingBatch(supabaseAdmin, {
+        photographerId,
+        limit,
+      });
+      const payload = await buildStatusPayload(photographerId);
+      logA4EdgeOpLatencyV1({
+        edge: EDGE,
+        action: "run_secondary_pending_batch",
+        ok: true,
+        duration_ms: Date.now() - startedAt,
+        photographer_id: photographerId,
+        http_status: 200,
+      });
+      return json({
+        ok: true,
+        secondary_pending_batch: batchResult,
         ...payload,
       });
     }

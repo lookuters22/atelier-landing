@@ -1,5 +1,6 @@
 /**
- * V3 — persist operator escalation when deterministic commercial output auditor rejects a persona draft.
+ * V3 — persist operator escalation when the commercial output auditor rejects a persona draft, or when
+ * structured persona output fails before a safe client reply exists.
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { formatOperatorEscalationQuestion } from "../formatOperatorEscalation.ts";
@@ -25,27 +26,34 @@ export async function recordV3OutputAuditorEscalation(
     weddingId: string | null;
     violations: string[];
     draftId: string;
-    /** Default: commercial grounding. `planner_private_leak` = audience-safe prose backstop. */
-    variant?: "commercial" | "planner_private_leak";
+    /** Default: commercial grounding. `planner_private_leak` = audience-safe prose backstop. `persona_structured_output` = JSON/model failure before safe client prose. */
+    variant?: "commercial" | "planner_private_leak" | "persona_structured_output";
   },
 ): Promise<{ id: string } | null> {
   const variant = params.variant ?? "commercial";
   const isLeak = variant === "planner_private_leak";
+  const isPersonaStructured = variant === "persona_structured_output";
 
   const cappedViolations = params.violations.map((v) => capViolationDetail(v));
   const question_body = formatOperatorEscalationQuestion(
-    isLeak
-      ? `V3 output auditor: planner-private leak in client-visible draft (${params.draftId.slice(0, 8)}…). ${cappedViolations.join(" | ")}`
-      : `V3 output auditor: ungrounded commercial draft (${params.draftId.slice(0, 8)}…). ${cappedViolations.join(" | ")}`,
+    isPersonaStructured
+      ? `V3 persona writer: structured output failed — no safe client draft (${params.draftId.slice(0, 8)}…). ${cappedViolations.join(" | ")}`
+      : isLeak
+        ? `V3 output auditor: planner-private leak in client-visible draft (${params.draftId.slice(0, 8)}…). ${cappedViolations.join(" | ")}`
+        : `V3 output auditor: ungrounded commercial draft (${params.draftId.slice(0, 8)}…). ${cappedViolations.join(" | ")}`,
   );
   if (!question_body) return null;
 
-  const action_key = isLeak
-    ? "orchestrator.client.v1.output_auditor.planner_private.v1"
-    : "orchestrator.client.v1.output_auditor.v1";
-  const reason_code = isLeak
-    ? "v3_output_auditor_planner_private_leak"
-    : "v3_output_auditor_ungrounded_commercial";
+  const action_key = isPersonaStructured
+    ? "orchestrator.client.v1.persona_structured_output.v1"
+    : isLeak
+      ? "orchestrator.client.v1.output_auditor.planner_private.v1"
+      : "orchestrator.client.v1.output_auditor.v1";
+  const reason_code = isPersonaStructured
+    ? "persona_structured_output_failed"
+    : isLeak
+      ? "v3_output_auditor_planner_private_leak"
+      : "v3_output_auditor_ungrounded_commercial";
 
   const { data, error } = await supabase
     .from("escalation_requests")
@@ -57,16 +65,25 @@ export async function recordV3OutputAuditorEscalation(
       reason_code,
       question_body,
       decision_justification: {
-        why_blocked: isLeak
-          ? "V3 planner-private leakage auditor rejected the persona draft: commission/agency fee/markup or internal deal language in a client-visible audience."
-          : "V3 deterministic output auditor rejected the persona draft: committed commercial terms or email prose not grounded in CRM/playbook/case memory.",
+        why_blocked: isPersonaStructured
+          ? "V3 persona writer could not produce structured output (JSON parse or model path): automated client-facing rewrite did not complete; the draft is not sendable as final copy."
+          : isLeak
+            ? "V3 planner-private leakage auditor rejected the persona draft: commission/agency fee/markup or internal deal language in a client-visible audience."
+            : "V3 deterministic output auditor rejected the persona draft: committed commercial terms or email prose not grounded in CRM/playbook/case memory.",
         missing_capability_or_fact: cappedViolations.join("; ").slice(0, 2000),
-        risk_class: isLeak ? "audience_rbac_planner_private" : "commercial_policy_integrity",
-        evidence_refs: isLeak
-          ? [`draft:${params.draftId}`, "auditor:v3_planner_private_leakage"]
-          : [`draft:${params.draftId}`, "auditor:v3_commercial_terms"],
-        recommended_next_step:
-          "Draft was reverted to orchestrator stub; compose a verified reply from contract/playbook or edit before approval.",
+        risk_class: isPersonaStructured
+          ? "persona_structured_output_integrity"
+          : isLeak
+            ? "audience_rbac_planner_private"
+            : "commercial_policy_integrity",
+        evidence_refs: isPersonaStructured
+          ? [`draft:${params.draftId}`, "persona:draftPersonaStructuredResponse"]
+          : isLeak
+            ? [`draft:${params.draftId}`, "auditor:v3_planner_private_leakage"]
+            : [`draft:${params.draftId}`, "auditor:v3_commercial_terms"],
+        recommended_next_step: isPersonaStructured
+          ? "Draft shows orchestrator stub plus operator failure marker; compose verified client reply from playbook/contract or fix persona output — do not send automated text as final."
+          : "Draft was reverted to orchestrator stub; compose a verified reply from contract/playbook or edit before approval.",
       },
       status: "open",
       operator_delivery: "urgent_now",

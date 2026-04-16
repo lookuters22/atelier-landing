@@ -7,6 +7,7 @@ import {
   type CalendarToolParams,
 } from "../tools/calendar.ts";
 import type { IntakeStructuredExtraction } from "./intakeBootstrapTypes.ts";
+import { enrichIntakeStructuredExtraction } from "./intakeEventDateRange.ts";
 import {
   truncateIntakeExtractionAssistantContent,
   truncateIntakeExtractionToolOutput,
@@ -18,11 +19,14 @@ const SYSTEM_PROMPT = `You are the Intake Agent. A new inquiry has arrived.
 Your job is to extract facts and check availability. Follow these steps strictly:
 
 1. Extract the Couple Names, Date, Location, and Budget from the message.
-2. Use your check_calendar_availability tool to check the date.
+2. Use your check_calendar_availability tool to check the date (use the primary ceremony day, or the first day if only a multi-day range is given).
 3. Output a JSON object with these exact keys:
    {
      "couple_names": "string",
-     "wedding_date": "ISO date string or null",
+     "wedding_date": "ISO date string or null — primary ceremony day when stated; for a multi-day destination wedding use the ceremony day if explicit, otherwise the first calendar day of the event",
+     "ceremony_date": "ISO date string or null — only if the message clearly states which single day is the ceremony (vs welcome dinner or farewell)",
+     "event_start_date": "ISO date string or null — first day of the wedding event if the inquiry spans multiple days",
+     "event_end_date": "ISO date string or null — last day of the wedding event if multi-day",
      "location": "string or null",
      "budget": "string or null",
      "story_notes": "brief summary of the inquiry",
@@ -104,6 +108,8 @@ export async function runIntakeExtractionAndResearch(
     return {
       couple_names: "Unknown",
       wedding_date: null,
+      event_start_date: null,
+      event_end_date: null,
       location: null,
       budget: null,
       story_notes: "",
@@ -167,33 +173,17 @@ export async function runIntakeExtractionAndResearch(
     .replace(/```\s*$/, "")
     .trim();
 
-  const parsed = JSON.parse(cleaned) as Partial<IntakeStructuredExtraction>;
+  const parsed = JSON.parse(cleaned) as Record<string, unknown>;
 
-  return {
-    couple_names: parsed.couple_names ?? "Unknown",
-    wedding_date: normalizeNullableIsoDateString(parsed.wedding_date),
-    location: normalizeNullableString(parsed.location),
-    budget: normalizeNullableString(parsed.budget),
-    story_notes: parsed.story_notes ?? "",
-    raw_facts: parsed.raw_facts ?? "",
-  };
-}
-
-/** Rejects JSON literal `"null"`, empty strings, and invalid dates (models sometimes emit `"null"` as a string). */
-function normalizeNullableIsoDateString(value: unknown): string | null {
-  if (value == null || value === "") return null;
-  if (typeof value !== "string") return null;
-  const t = value.trim();
-  if (!t || t.toLowerCase() === "null" || t.toLowerCase() === "undefined") return null;
-  const ms = Date.parse(t);
-  if (Number.isNaN(ms)) return null;
-  return new Date(ms).toISOString();
-}
-
-function normalizeNullableString(value: unknown): string | null {
-  if (value == null || value === "") return null;
-  if (typeof value !== "string") return null;
-  const t = value.trim();
-  if (!t || t.toLowerCase() === "null" || t.toLowerCase() === "undefined") return null;
-  return t;
+  return enrichIntakeStructuredExtraction(userForModel, {
+    couple_names: parsed.couple_names as string | undefined,
+    wedding_date: parsed.wedding_date,
+    ceremony_date: parsed.ceremony_date,
+    event_start_date: parsed.event_start_date,
+    event_end_date: parsed.event_end_date,
+    location: parsed.location,
+    budget: parsed.budget,
+    story_notes: parsed.story_notes as string | undefined,
+    raw_facts: parsed.raw_facts as string | undefined,
+  });
 }

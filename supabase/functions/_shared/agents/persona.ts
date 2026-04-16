@@ -27,7 +27,11 @@ export async function runPersonaAgent(
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("Missing ANTHROPIC_API_KEY");
 
-  const anthropic = new Anthropic({ apiKey });
+  const anthropic = new Anthropic({
+    apiKey,
+    /** Bounded HTTP for long-form persona writes (SDK manages request lifecycle). */
+    timeout: 120_000,
+  });
 
   const ctx = boundPersonaRewriteContext(contextData);
   const bulletsForModel = factualBullets.map((b) => truncatePersonaRewriteFactualBullet(String(b)));

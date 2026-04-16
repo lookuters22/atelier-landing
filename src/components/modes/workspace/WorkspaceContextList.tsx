@@ -48,7 +48,7 @@ export function WorkspaceContextList() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-border bg-sidebar text-[13px] text-foreground">
+    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         <Section label="Financials" items={FINANCIAL_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
         <Section label="Sales" items={SALES_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />

@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, FileText, Paperclip } from "lucide-react";
 import { trySanitizeEmailHtmlForIframe } from "../../lib/sanitizeEmailHtml";
+import { snippetForThreadRow } from "../../lib/threadMessageSnippet";
+import { partitionThreadForOmission, THREAD_OMISSION_THRESHOLD } from "../../lib/threadMessageOmission";
 import { EmailHtmlIframe } from "../email/EmailHtmlIframe";
 import { MessageAttachmentChips, type ChatAttachmentRow } from "./MessageAttachmentChips";
 
@@ -18,135 +21,208 @@ export interface ChatMessage {
   attachments?: ChatAttachmentRow[];
 }
 
+type SegmentedRow = { msg: ChatMessage; seg: "earlier" | "today" };
+
 interface ConversationFeedProps {
   earlierMessages: ChatMessage[];
   todayMessages: ChatMessage[];
   foldable?: boolean;
   expandedMap?: Record<string, boolean>;
   defaultExpanded?: (msg: ChatMessage) => boolean;
-  onToggle?: (key: string) => void;
+  onToggle?: (foldKey: string) => void;
   getFoldKey?: (msg: ChatMessage) => string;
   bottomSlot?: ReactNode;
   emptyText?: string;
+  /** Min messages before first + omission + last {@link THREAD_OMISSION_TAIL_SIZE} layout. */
+  omissionThreshold?: number;
 }
 
-function senderInitials(sender: string): string {
-  const parts = sender.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return (parts[0]?.slice(0, 2) ?? "?").toUpperCase();
+function effectiveExpanded(
+  foldKey: string,
+  msg: ChatMessage,
+  foldable: boolean,
+  expandedMap: Record<string, boolean> | undefined,
+  defaultExpanded: ((msg: ChatMessage) => boolean) | undefined,
+): boolean {
+  if (!foldable) return true;
+  if (Object.prototype.hasOwnProperty.call(expandedMap ?? {}, foldKey)) {
+    return Boolean(expandedMap?.[foldKey]);
+  }
+  return defaultExpanded?.(msg) ?? true;
 }
 
-function MessageBubble({
+function ThreadMessageRow({
   msg,
+  foldKey,
   expanded,
   onToggle,
+  foldable,
 }: {
   msg: ChatMessage;
+  foldKey: string;
   expanded: boolean;
   onToggle?: () => void;
+  foldable: boolean;
 }) {
-  const incoming = msg.direction === "in";
-  const initials = senderInitials(msg.sender);
-
   const iframeSrcDoc = useMemo(
     () => trySanitizeEmailHtmlForIframe(msg.bodyHtmlSanitized),
     [msg.bodyHtmlSanitized],
   );
   const hasHtml = Boolean(iframeSrcDoc);
+  const snippet = useMemo(
+    () => snippetForThreadRow({ body: msg.body, bodyHtmlSanitized: msg.bodyHtmlSanitized }),
+    [msg],
+  );
 
-  const plainContent = expanded ? (
-    <span className="whitespace-pre-wrap">{msg.body}</span>
+  const hasAttachments = Boolean(msg.attachments && msg.attachments.length > 0);
+  const incoming = msg.direction === "in";
+  const toFromLine = incoming ? (
+    msg.meta ? (
+      <span className="text-[11px] text-muted-foreground">{msg.meta}</span>
+    ) : (
+      <span className="text-[11px] text-muted-foreground">To you</span>
+    )
   ) : (
-    <span className="line-clamp-4">{msg.body}</span>
+    <span className="text-[11px] text-muted-foreground">{msg.meta ?? "From studio"}</span>
+  );
+
+  const interactiveHeader = foldable && onToggle;
+
+  const headerInner = (
+    <>
+      {interactiveHeader ? (
+        <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden>
+          {expanded ? <ChevronDown className="h-4 w-4" strokeWidth={2} /> : <ChevronRight className="h-4 w-4" strokeWidth={2} />}
+        </span>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="truncate text-[13px] font-semibold text-foreground">{msg.sender}</span>
+            {interactiveHeader && !expanded ? (
+              <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">{toFromLine}</span>
+            ) : null}
+          </div>
+          <time className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{msg.time}</time>
+        </div>
+        {expanded || !interactiveHeader ? <div className="mt-0.5 text-[11px] text-muted-foreground">{toFromLine}</div> : null}
+
+        {interactiveHeader && !expanded ? (
+          <p className="mt-1 line-clamp-1 text-[13px] leading-snug text-muted-foreground">{snippet}</p>
+        ) : null}
+
+        {interactiveHeader && !expanded ? (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {hasAttachments ? (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
+                <Paperclip className="h-3 w-3" strokeWidth={2} aria-hidden />
+                {msg.attachments!.length}
+              </span>
+            ) : null}
+            {hasHtml ? (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground">
+                <FileText className="h-3 w-3" strokeWidth={2} aria-hidden />
+                HTML
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 
   const htmlContent =
     iframeSrcDoc ? <EmailHtmlIframe srcDoc={iframeSrcDoc} expanded={expanded} /> : null;
+  const plainContent = (
+    <span className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">{msg.body}</span>
+  );
 
-  const content = hasHtml ? htmlContent : plainContent;
-
-  const bubbleClasses =
-    "rounded-2xl px-3.5 py-2.5 text-left text-[13px] leading-relaxed transition " +
-    (incoming
-      ? "bg-accent text-foreground rounded-bl-md"
-      : "border border-border bg-background text-foreground rounded-br-md");
-
-  /** Imported email: full thread width, no “chat bubble” chrome — iframe blends into the pane. */
-  const htmlShellClasses =
-    "w-full min-w-0 max-w-full rounded-lg bg-transparent p-0 text-left " +
-    (onToggle ? "cursor-pointer" : "");
-
-  /** `button` must not wrap interactive HTML (e.g. `<a href>`); use a focusable div when foldable + HTML. */
-  const foldableHtmlShell =
-    onToggle && hasHtml ? (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggle();
-          }
-        }}
-        className={htmlShellClasses}
-      >
-        {content}
-      </div>
-    ) : null;
-
-  const columnClass =
-    "flex min-w-0 flex-col " +
-    (hasHtml
-      ? "min-w-0 flex-1 max-w-full items-stretch "
-      : "max-w-[75%] " + (incoming ? "items-start " : "items-end "));
+  const bodyBlock =
+    hasHtml && iframeSrcDoc ? (
+      <div className="min-w-0 border-t border-border/60 bg-muted/10 px-3 pb-3 pt-2">{htmlContent}</div>
+    ) : (
+      <div className="border-t border-border/60 bg-muted/10 px-3 pb-3 pt-2">{plainContent}</div>
+    );
 
   return (
-    <div className={"flex w-full min-w-0 gap-2.5 " + (incoming ? "justify-start" : "justify-end")}>
-      {incoming && (
-        <div
-          className="mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-muted-foreground"
-          title={msg.sender}
+    <article
+      className={
+        "w-full min-w-0 overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm " +
+        (incoming ? "ring-1 ring-border/40 " : "")
+      }
+    >
+      {interactiveHeader ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          className={
+            "flex w-full min-w-0 items-start gap-2 px-3 py-2.5 text-left transition " +
+            (expanded ? "bg-accent/25 " : "hover:bg-accent/40")
+          }
+          aria-expanded={expanded}
+          aria-controls={`thread-msg-${foldKey}`}
+          id={`thread-msg-hdr-${foldKey}`}
         >
-          {initials}
+          {headerInner}
+        </button>
+      ) : (
+        <div
+          className="flex w-full min-w-0 items-start gap-2 border-b border-border/60 bg-muted/15 px-3 py-2.5"
+          id={`thread-msg-hdr-${foldKey}`}
+        >
+          {headerInner}
         </div>
       )}
-      <div className={columnClass}>
-        {incoming && (
-          <span className="mb-0.5 px-1 text-[10px] font-medium text-muted-foreground">
-            {msg.sender}
-          </span>
-        )}
-        {foldableHtmlShell ? (
-          foldableHtmlShell
-        ) : onToggle ? (
-          <button type="button" onClick={onToggle} className={bubbleClasses}>
-            {content}
-          </button>
-        ) : hasHtml ? (
-          <div className={htmlShellClasses}>{content}</div>
-        ) : (
-          <div className={bubbleClasses}>{content}</div>
-        )}
-        {msg.attachments && msg.attachments.length > 0 ? (
-          <div className={hasHtml ? "w-full min-w-0 px-1" : "max-w-full px-1"}>
-            <MessageAttachmentChips attachments={msg.attachments} />
-          </div>
-        ) : null}
-        <time className="mt-0.5 px-1 text-[10px] tabular-nums text-muted-foreground">
-          {msg.time}
-        </time>
-      </div>
-      {!incoming && (
-        <div
-          className="mt-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background"
-          title="You"
-        >
-          {initials}
+
+      {expanded ? (
+        <div id={`thread-msg-${foldKey}`} role="region" aria-labelledby={`thread-msg-hdr-${foldKey}`}>
+          {bodyBlock}
+          {hasAttachments ? (
+            <div className="border-t border-border/60 px-3 py-2">
+              <MessageAttachmentChips attachments={msg.attachments!} />
+            </div>
+          ) : null}
         </div>
-      )}
+      ) : null}
+    </article>
+  );
+}
+
+function TodaySeparator() {
+  return (
+    <div className="flex justify-center py-2">
+      <span className="rounded-full bg-accent px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Today
+      </span>
     </div>
   );
+}
+
+function OmissionBar({ count, revealed, onToggle }: { count: number; revealed: boolean; onToggle: () => void }) {
+  const label = revealed
+    ? `Hide ${count} ${count === 1 ? "message" : "messages"}`
+    : `${count} more ${count === 1 ? "message" : "messages"}`;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/25 px-3 py-2.5 text-[12px] font-medium text-muted-foreground transition hover:bg-muted/45"
+    >
+      <ChevronRight
+        className={"h-4 w-4 shrink-0 transition-transform " + (revealed ? "rotate-90" : "")}
+        strokeWidth={2}
+        aria-hidden
+      />
+      {label}
+    </button>
+  );
+}
+
+function buildSegmentedRows(earlierMessages: ChatMessage[], todayMessages: ChatMessage[]): SegmentedRow[] {
+  return [
+    ...earlierMessages.map((msg) => ({ msg, seg: "earlier" as const })),
+    ...todayMessages.map((msg) => ({ msg, seg: "today" as const })),
+  ];
 }
 
 export function ConversationFeed({
@@ -156,14 +232,31 @@ export function ConversationFeed({
   expandedMap,
   defaultExpanded,
   onToggle,
-  getFoldKey,
+  getFoldKey = (msg) => msg.id,
   bottomSlot,
   emptyText = "No messages yet.",
+  omissionThreshold = THREAD_OMISSION_THRESHOLD,
 }: ConversationFeedProps) {
   const hasMessages = earlierMessages.length > 0 || todayMessages.length > 0;
   const endRef = useRef<HTMLDivElement>(null);
   const msgCount = earlierMessages.length + todayMessages.length;
   const prevCount = useRef(msgCount);
+
+  const [omissionRevealed, setOmissionRevealed] = useState(false);
+
+  const segmented = useMemo(
+    () => buildSegmentedRows(earlierMessages, todayMessages),
+    [earlierMessages, todayMessages],
+  );
+
+  const partition = useMemo(
+    () => partitionThreadForOmission(segmented, omissionThreshold),
+    [segmented, omissionThreshold],
+  );
+
+  useEffect(() => {
+    setOmissionRevealed(false);
+  }, [earlierMessages, todayMessages]);
 
   useEffect(() => {
     if (!endRef.current) return;
@@ -172,40 +265,98 @@ export function ConversationFeed({
     endRef.current.scrollIntoView({ behavior: isNewMessage ? "smooth" : "auto" });
   }, [msgCount, earlierMessages, todayMessages]);
 
-  function renderMessage(msg: ChatMessage) {
-    const key = getFoldKey ? getFoldKey(msg) : msg.id;
-    const isExpanded = foldable
-      ? (expandedMap?.[key] ?? defaultExpanded?.(msg) ?? true)
-      : true;
+  const foldableEff = foldable ?? false;
 
-    return (
-      <MessageBubble
-        key={msg.id}
-        msg={msg}
-        expanded={isExpanded}
-        onToggle={foldable && onToggle ? () => onToggle(key) : undefined}
-      />
-    );
+  const ctx = {
+    foldable: foldableEff,
+    expandedMap,
+    defaultExpanded,
+    getFoldKey,
+    onToggle,
+  };
+
+  function renderSegmentedList(
+    rows: SegmentedRow[],
+    /** Segment of the message rendered immediately before this block (for Today separator continuity across omission splits). */
+    initialLastSeg: "earlier" | "today" | null = null,
+  ): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    let lastSeg = initialLastSeg;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.seg === "today" && lastSeg === "earlier") {
+        nodes.push(<TodaySeparator key={`today-sep-${i}-${row.msg.id}`} />);
+      }
+      const foldKey = ctx.getFoldKey(row.msg);
+      const expanded = effectiveExpanded(
+        foldKey,
+        row.msg,
+        ctx.foldable,
+        ctx.expandedMap,
+        ctx.defaultExpanded,
+      );
+      nodes.push(
+        <ThreadMessageRow
+          key={row.msg.id}
+          msg={row.msg}
+          foldKey={foldKey}
+          expanded={expanded}
+          foldable={ctx.foldable}
+          onToggle={ctx.onToggle ? () => ctx.onToggle!(foldKey) : undefined}
+        />,
+      );
+      lastSeg = row.seg;
+    }
+    return nodes;
+  }
+
+  let messageNodes: ReactNode = null;
+
+  if (!hasMessages) {
+    messageNodes = null;
+  } else if (partition.mode === "flat") {
+    messageNodes = renderSegmentedList(partition.items);
+  } else {
+    const { head, middle, tail } = partition;
+    const parts: ReactNode[] = [];
+
+    if (!omissionRevealed) {
+      parts.push(...renderSegmentedList([head], null));
+      parts.push(
+        <OmissionBar
+          key="thread-omission"
+          count={middle.length}
+          revealed={false}
+          onToggle={() => setOmissionRevealed(true)}
+        />,
+      );
+      parts.push(...renderSegmentedList(tail, head.seg));
+    } else {
+      parts.push(...renderSegmentedList([head], null));
+      parts.push(
+        <OmissionBar
+          key="thread-omission-collapse"
+          count={middle.length}
+          revealed
+          onToggle={() => setOmissionRevealed(false)}
+        />,
+      );
+      const midNodes = renderSegmentedList(middle, head.seg);
+      const lastMiddle = middle.length > 0 ? middle[middle.length - 1].seg : head.seg;
+      parts.push(...midNodes);
+      parts.push(...renderSegmentedList(tail, lastMiddle));
+    }
+    messageNodes = parts;
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-      <div className="flex w-full flex-col gap-3">
-        {!hasMessages && !bottomSlot && (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex w-full max-w-full flex-col gap-2">
+        {!hasMessages && (
           <p className="py-8 text-center text-[12px] text-muted-foreground">{emptyText}</p>
         )}
 
-        {earlierMessages.map(renderMessage)}
-
-        {todayMessages.length > 0 && (
-          <div className="flex justify-center py-1">
-            <span className="rounded-full bg-accent px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Today
-            </span>
-          </div>
-        )}
-
-        {todayMessages.map(renderMessage)}
+        {messageNodes}
 
         {bottomSlot}
         <div ref={endRef} />
@@ -213,3 +364,5 @@ export function ConversationFeed({
     </div>
   );
 }
+
+export { THREAD_OMISSION_THRESHOLD, THREAD_OMISSION_TAIL_SIZE } from "../../lib/threadMessageOmission";

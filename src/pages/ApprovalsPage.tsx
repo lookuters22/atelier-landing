@@ -8,8 +8,10 @@ import type { ApprovalDraft } from "../data/approvalDrafts";
 import {
   enqueueDraftApprovedForOutbound,
   enqueueDraftsApprovedForOutboundBatch,
+  humanizeDraftApprovalInvokeError,
   requestDraftRewrite,
 } from "../lib/draftApprovalClient";
+import { useTimedToast } from "../hooks/useTimedToast";
 import { fireDraftsChanged } from "../lib/events";
 import { scrollPipelineWeddingRowIntoView } from "../lib/pipelineWeddingListNavigation";
 import { isEditableKeyboardTarget } from "../lib/timelineThreadNavigation";
@@ -29,6 +31,7 @@ function toApprovalDraft(d: PendingDraft): ApprovalDraft & { photographerId: str
 }
 
 export function ApprovalsPage() {
+  const { showToast } = useTimedToast();
   const { drafts: liveDrafts, isLoading } = usePendingApprovals();
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<ApprovalDraft | null>(null);
@@ -55,6 +58,7 @@ export function ApprovalsPage() {
       fireDraftsChanged();
     } catch (err) {
       console.error("Approve failed", err);
+      showToast(await humanizeDraftApprovalInvokeError(err));
     } finally {
       setProcessingId(null);
     }

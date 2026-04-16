@@ -60,6 +60,9 @@ export async function executeSingleImportCandidateApprove(
     if ("error" in mat) {
       return { ok: false, error: typeof mat.error === "string" ? mat.error : "materialize_failed" };
     }
+    if (mat.finalizedCore) {
+      return { ok: true, threadId: mat.threadId };
+    }
     threadId = mat.threadId;
   }
 
@@ -69,6 +72,7 @@ export async function executeSingleImportCandidateApprove(
     threadId,
     row,
     now,
+    threadWeddingId: null,
   });
   if (finErr) {
     return { ok: false, error: finErr };

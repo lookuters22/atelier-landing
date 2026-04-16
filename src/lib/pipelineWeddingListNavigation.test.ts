@@ -79,4 +79,17 @@ describe("scrollPipelineWeddingRowIntoView", () => {
       behavior: "smooth",
     });
   });
+
+  it("does not scroll when row is already fully visible inside the container", () => {
+    const scrollIntoView = vi.fn();
+    const el = {
+      scrollIntoView,
+      getBoundingClientRect: () => ({ top: 60, bottom: 90, left: 0, right: 100 }),
+    };
+    const root = {
+      getBoundingClientRect: () => ({ top: 50, bottom: 300, left: 0, right: 100 }),
+    };
+    scrollPipelineWeddingRowIntoView(el as unknown as HTMLElement, root as unknown as HTMLElement);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 });

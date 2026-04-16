@@ -72,7 +72,7 @@ type ActionItem = {
   createdAt?: string;
   /** Exact-resolution destination from `TodayAction.route_to` */
   routeTo: string;
-  /** Set for `draft_approval` rows — `webhook-approval` draft id (A7 batch). */
+  /** Set for `draft_approval` rows — draft id approved via `api-resolve-draft` (A7 batch). */
   draftSourceId?: string;
 };
 
@@ -754,6 +754,17 @@ export function ZenLobby() {
           0% { transform: translate(0, 0); }
           100% { transform: translate(-90px, -60px); }
         }
+        /* Priority Actions: scroll works; scrollbar fully hidden (no thumb, no arrows). */
+        .zen-priority-actions-scroll-native {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .zen-priority-actions-scroll-native::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+          background: transparent !important;
+        }
       `}</style>
 
       <AtmosphericMotes />
@@ -817,15 +828,16 @@ export function ZenLobby() {
           </div>
 
           {/* ── Right Column: Action Feed (baseline-aligned to KPI) ── */}
-          <div className="sf-card col-span-12 lg:col-span-7 lg:pt-[178px]">
+          <div className="sf-card col-span-12 min-h-0 lg:col-span-7 lg:pt-[178px]">
             <motion.div
+              className="flex min-h-0 flex-col"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.35, ease: "easeOut" }}
             >
               {actionItems.length > 0 ? (
                 <>
-                  <p className="mb-3 pl-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
+                  <p className="mb-3 shrink-0 pl-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
                     Priority Actions
                     <span className="ml-2 font-normal tabular-nums tracking-normal text-white/40">
                       {actionItems.length} {actionItems.length === 1 ? "item" : "items"}
@@ -838,7 +850,7 @@ export function ZenLobby() {
                     </span>
                   </p>
                   {draftRowCount > 0 ? (
-                    <div className="mb-2 flex flex-wrap items-center gap-2 pl-1 text-[11px] text-white/45">
+                    <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2 pl-1 text-[11px] text-white/45">
                       <span className="font-medium text-white/55">Drafts</span>
                       <button
                         type="button"
@@ -862,7 +874,7 @@ export function ZenLobby() {
                     </div>
                   ) : null}
                   {selectedDraftIdList.length >= 2 ? (
-                    <div className="mb-2 space-y-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] text-white/80">
+                    <div className="mb-2 shrink-0 space-y-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] text-white/80">
                       <p className="text-[11px] leading-snug text-white/50">
                         Approve multiple drafts you have already reviewed — same path as Approvals page batch.
                       </p>
@@ -884,7 +896,7 @@ export function ZenLobby() {
                   ) : null}
                   {draftBatchError ? (
                     <p
-                      className="mb-2 whitespace-pre-wrap rounded-md border border-red-400/30 bg-red-950/40 px-3 py-2 text-[11px] text-red-200"
+                      className="mb-2 shrink-0 whitespace-pre-wrap rounded-md border border-red-400/30 bg-red-950/40 px-3 py-2 text-[11px] text-red-200"
                       role="alert"
                     >
                       {draftBatchError}
@@ -893,8 +905,8 @@ export function ZenLobby() {
                   <div
                     ref={priorityListRef}
                     className={cn(
-                      `overflow-hidden rounded-xl ${OBSIDIAN_GLASS}`,
-                      "outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]",
+                      `zen-priority-actions-scroll-native min-h-0 max-h-[min(52vh,calc(100dvh-15.5rem))] overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-xl ${OBSIDIAN_GLASS}`,
+                      "outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-white/25",
                     )}
                     tabIndex={priorityRovingIndex === null ? 0 : -1}
                     role="listbox"
@@ -967,7 +979,7 @@ export function ZenLobby() {
                                   "relative flex min-w-0 flex-1 cursor-pointer items-center gap-4 py-3.5 pr-3 pl-2 text-left transition-colors duration-200",
                                   "outline-none focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
                                   isEscalation
-                                    ? "border-l-2 border-l-amber-400/75 bg-gradient-to-r from-amber-500/[0.09] via-amber-500/[0.03] to-transparent hover:from-amber-500/[0.12] hover:via-amber-500/[0.05]"
+                                    ? "bg-rose-950/25 hover:bg-rose-950/[0.38]"
                                     : "hover:bg-white/[0.06]",
                                   isLast ? "" : "border-b border-white/10",
                                 )}
@@ -976,7 +988,7 @@ export function ZenLobby() {
                                   className={cn(
                                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_3px_rgba(0,0,0,0.1)]",
                                     isEscalation
-                                      ? "border border-amber-400/45 bg-gradient-to-br from-amber-400/25 to-rose-950/40 text-amber-200"
+                                      ? "border border-white/20 bg-white/[0.92] text-rose-800"
                                       : "bg-white/95 text-[11px] font-semibold text-[#0a0a0a]",
                                   )}
                                 >
@@ -994,7 +1006,7 @@ export function ZenLobby() {
                                     </span>
                                   </p>
                                   {isEscalation ? (
-                                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-amber-300/90">
+                                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-rose-200/75">
                                       Needs your approval
                                     </p>
                                   ) : null}
@@ -1007,14 +1019,14 @@ export function ZenLobby() {
                                   className={cn(
                                     "shrink-0",
                                     isEscalation &&
-                                      "border border-amber-400/30 bg-[#1a0f08]/85 text-amber-50 shadow-[inset_0_1px_0_rgba(251,191,36,0.2)]",
+                                      "border border-rose-300/40 bg-white/[0.97] text-rose-950/85 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_2px_rgba(0,0,0,0.06)]",
                                   )}
                                   innerClassName="gap-1.5 font-normal"
                                 >
                                   <span
                                     className={cn(
                                       "h-1.5 w-1.5 shrink-0 rounded-full",
-                                      isEscalation ? "bg-amber-400" : "bg-orange-500",
+                                      isEscalation ? "bg-rose-400/90" : "bg-orange-500",
                                     )}
                                     style={
                                       isEscalation

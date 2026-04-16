@@ -21,6 +21,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** ~1h — auto-refresh when cache is older (no `last_error` spam). */
 const STALE_MS = 60 * 60 * 1000;
+/** If `refresh_in_progress` is stuck (worker never ran / crashed), allow a new enqueue after this. */
+const STUCK_REFRESH_MS = 15 * 60 * 1000;
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -34,6 +36,7 @@ type CacheRow = {
   refreshed_at: string | null;
   last_error: string | null;
   refresh_in_progress: boolean;
+  updated_at?: string | null;
 };
 
 function parseLabelsPayload(raw: unknown): unknown[] {
@@ -118,16 +121,38 @@ Deno.serve(async (req) => {
 
     const { data: cache } = await supabaseAdmin
       .from("connected_account_gmail_label_cache")
-      .select("labels_json, refreshed_at, last_error, refresh_in_progress")
+      .select("labels_json, refreshed_at, last_error, refresh_in_progress, updated_at")
       .eq("connected_account_id", connectedAccountId)
       .eq("photographer_id", photographerId)
       .maybeSingle();
 
-    const row = cache as CacheRow | null;
+    let row = cache as CacheRow | null;
     const now = Date.now();
     const stale =
       !row?.refreshed_at || now - new Date(row.refreshed_at).getTime() > STALE_MS;
-    /** Allow `force` to enqueue even when a refresh is marked in progress (stuck worker recovery). */
+
+    const stuckInProgress =
+      Boolean(row?.refresh_in_progress) &&
+      row?.updated_at != null &&
+      now - new Date(row.updated_at).getTime() > STUCK_REFRESH_MS;
+
+    if (stuckInProgress) {
+      const ts = new Date().toISOString();
+      await supabaseAdmin
+        .from("connected_account_gmail_label_cache")
+        .update({
+          refresh_in_progress: false,
+          last_error: "Previous label refresh did not finish — cleared stale in-progress flag. Retry refresh.",
+          updated_at: ts,
+        })
+        .eq("connected_account_id", connectedAccountId)
+        .eq("photographer_id", photographerId);
+      row = row
+        ? { ...row, refresh_in_progress: false, last_error: "Previous label refresh did not finish — retrying.", updated_at: ts }
+        : row;
+    }
+
+    /** Allow enqueue when not in progress, when `force`, or when a stale in-progress flag was cleared above. */
     const canEnqueue = !row?.refresh_in_progress || force;
 
     const shouldEnqueue =

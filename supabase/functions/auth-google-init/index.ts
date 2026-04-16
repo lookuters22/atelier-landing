@@ -13,6 +13,10 @@ const CORS_HEADERS: Record<string, string> = {
 };
 
 const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
+/** Required for `users.messages.send` — Google lists this among accepted scopes: https://developers.google.com/gmail/api/reference/rest/v1/users.messages/send#authorization-scopes */
+const GMAIL_SEND = "https://www.googleapis.com/auth/gmail.send";
+/** Required for `users.messages.modify` (labels, star, read/unread). https://developers.google.com/gmail/api/reference/rest/v1/users.messages/modify#authorization-scopes */
+const GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify";
 const USERINFO_EMAIL = "https://www.googleapis.com/auth/userinfo.email";
 const OPENID = "openid";
 
@@ -73,7 +77,7 @@ Deno.serve(async (req) => {
     };
     const state = await signGoogleOAuthState(payload, stateSecret);
 
-    const scope = [GMAIL_READONLY, USERINFO_EMAIL, OPENID].join(" ");
+    const scope = [GMAIL_READONLY, GMAIL_SEND, GMAIL_MODIFY, USERINFO_EMAIL, OPENID].join(" ");
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,

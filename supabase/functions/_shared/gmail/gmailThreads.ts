@@ -1,6 +1,9 @@
 /** Gmail REST helpers — fast lane uses labelIds on users.threads.list (no search `q:`). */
 
+import { fetchWithTimeout } from "../http/fetchWithTimeout.ts";
+
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
+const GMAIL_HTTP_TIMEOUT_MS = 45_000;
 
 export type GmailLabelItem = {
   id: string;
@@ -26,8 +29,9 @@ export function normalizeGmailLabelsResponse(json: unknown): GmailLabelItem[] {
 
 /** Gmail `users.labels.list` — for Settings label picker (server-side only in production). */
 export async function listGmailLabels(accessToken: string): Promise<GmailLabelItem[]> {
-  const res = await fetch(`${GMAIL_BASE}/labels`, {
+  const res = await fetchWithTimeout(`${GMAIL_BASE}/labels`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
   if (!res.ok) {
     const t = await res.text();
@@ -55,8 +59,9 @@ export async function listGmailThreadsForLabel(
   u.searchParams.set("maxResults", String(maxResults));
   if (pageToken) u.searchParams.set("pageToken", pageToken);
 
-  const res = await fetch(u.toString(), {
+  const res = await fetchWithTimeout(u.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
   if (!res.ok) {
     const t = await res.text();
@@ -77,10 +82,13 @@ function headerValue(headers: { name?: string; value?: string }[] | undefined, n
 
 export type GmailFullThreadMessage = {
   id: string;
+  threadId?: string;
+  labelIds?: string[];
   internalDate?: string;
   snippet?: string;
   payload?: {
     mimeType?: string;
+    headers?: { name?: string; value?: string }[];
     body?: { data?: string; size?: number };
     parts?: unknown[];
   };
@@ -94,8 +102,9 @@ export async function getGmailThreadFull(
   threadId: string,
 ): Promise<{ messages: GmailFullThreadMessage[] }> {
   const u = `${GMAIL_BASE}/threads/${encodeURIComponent(threadId)}?format=full`;
-  const res = await fetch(u, {
+  const res = await fetchWithTimeout(u, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
   if (!res.ok) {
     const t = await res.text();
@@ -151,14 +160,28 @@ export function parseGmailThreadMessageRefsFromMetadataJson(json: unknown): Gmai
 
 async function fetchGmailThreadMetadataJson(accessToken: string, threadId: string): Promise<unknown> {
   const u = `${GMAIL_BASE}/threads/${encodeURIComponent(threadId)}?format=metadata`;
-  const res = await fetch(u, {
+  const res = await fetchWithTimeout(u, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
   if (!res.ok) {
     const t = await res.text();
     throw new Error(`Gmail threads.get metadata failed: ${res.status} ${t.slice(0, 200)}`);
   }
   return (await res.json()) as unknown;
+}
+
+/**
+ * True when Gmail API returns 404 for a missing or expunged message (history ref can outlive the message).
+ */
+export function isGmailMessageNotFoundResponse(status: number, bodyText: string): boolean {
+  if (status !== 404) return false;
+  const t = bodyText.toLowerCase();
+  return (
+    t.includes("not found") ||
+    t.includes("requested entity was not found") ||
+    t.includes("\"reason\": \"notfound\"")
+  );
 }
 
 /**
@@ -169,14 +192,37 @@ export async function getGmailMessageFull(
   messageId: string,
 ): Promise<GmailFullThreadMessage> {
   const u = `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}?format=full`;
-  const res = await fetch(u, {
+  const res = await fetchWithTimeout(u, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
+  const t = await res.text();
   if (!res.ok) {
-    const t = await res.text();
     throw new Error(`Gmail messages.get full failed: ${res.status} ${t.slice(0, 200)}`);
   }
-  return (await res.json()) as GmailFullThreadMessage;
+  return JSON.parse(t) as GmailFullThreadMessage;
+}
+
+/**
+ * Delta sync: fetch full message, or `null` if Gmail returns 404 (stale history ref). Other errors still throw.
+ */
+export async function getGmailMessageFullAllowMissing(
+  accessToken: string,
+  messageId: string,
+): Promise<GmailFullThreadMessage | null> {
+  const u = `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}?format=full`;
+  const res = await fetchWithTimeout(u, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
+  });
+  const t = await res.text();
+  if (res.ok) {
+    return JSON.parse(t) as GmailFullThreadMessage;
+  }
+  if (isGmailMessageNotFoundResponse(res.status, t)) {
+    return null;
+  }
+  throw new Error(`Gmail messages.get full failed: ${res.status} ${t.slice(0, 200)}`);
 }
 
 export type GmailThreadFetchMode =
@@ -231,13 +277,51 @@ export async function getGmailThreadMessagesForMaterialization(
   }
 }
 
+/** True when Gmail returned 403 with insufficient OAuth scopes for `users.messages.modify`. */
+export function isGmailInsufficientScopeModifyError(message: string): boolean {
+  const t = message.toLowerCase();
+  return (
+    t.includes("403") &&
+    (t.includes("insufficient authentication scopes") || t.includes("insufficient authentication scope"))
+  );
+}
+
+/** Gmail `users.messages.modify` — add/remove system labels (e.g. STARRED, UNREAD). */
+export async function modifyGmailMessageLabels(
+  accessToken: string,
+  gmailMessageId: string,
+  addLabelIds: string[],
+  removeLabelIds: string[],
+): Promise<{ id: string; labelIds: string[] }> {
+  const url = `${GMAIL_BASE}/messages/${encodeURIComponent(gmailMessageId)}/modify`;
+  const res = await fetchWithTimeout(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      addLabelIds: addLabelIds.length > 0 ? addLabelIds : undefined,
+      removeLabelIds: removeLabelIds.length > 0 ? removeLabelIds : undefined,
+    }),
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Gmail messages.modify failed: ${res.status} ${t.slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { id?: string; labelIds?: string[] };
+  return { id: json.id ?? gmailMessageId, labelIds: Array.isArray(json.labelIds) ? json.labelIds : [] };
+}
+
 export async function getGmailThreadMetadata(
   accessToken: string,
   threadId: string,
 ): Promise<{ messageCount: number; snippet: string | null; subject: string | null }> {
   const u = `${GMAIL_BASE}/threads/${encodeURIComponent(threadId)}?format=metadata`;
-  const res = await fetch(u, {
+  const res = await fetchWithTimeout(u, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
   if (!res.ok) {
     const t = await res.text();

@@ -27,6 +27,7 @@ Prompt files:
 - `PHASE_11_PROMPTS.md`
 - `PHASE_115_PROMPTS.md`
 - `PHASE_12_PROMPTS.md`
+- `ONBOARDING_BRIEFING_PROMPTS.md`
 
 Golden rule:
 

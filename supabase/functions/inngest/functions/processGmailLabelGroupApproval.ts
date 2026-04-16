@@ -200,6 +200,7 @@ async function processChunk(params: {
       now,
       gmailAccountTokenCache,
       gmailThreadFetchCache,
+      clearImportApprovalError: true,
     });
 
     if ("error" in result) {
@@ -217,13 +218,9 @@ async function processChunk(params: {
 
     const threadId = result.threadId;
 
-    /** New threads are inserted with `wedding_id` in materialize — skip redundant UPDATE. */
-    if (result.needsThreadWeddingIdUpdate) {
-      await supabaseAdmin
-        .from("threads")
-        .update({ wedding_id: weddingId })
-        .eq("id", threadId)
-        .eq("photographer_id", photographerId);
+    if (result.finalizedCore) {
+      await persistChunkSuccessBump(groupId, counterState);
+      continue;
     }
 
     const finErr = await finalizeApprovedImportCandidate(supabaseAdmin, {
@@ -237,6 +234,7 @@ async function processChunk(params: {
         gmail_label_import_group_id: groupId,
       },
       clearImportApprovalError: true,
+      threadWeddingId: result.needsThreadWeddingIdUpdate ? weddingId : null,
     });
 
     if (finErr) {

@@ -23,6 +23,7 @@ describe("mapInboxLatestProjectionRow", () => {
           metadata: { original_filename: "x.png" },
         },
       ],
+      latest_provider_message_id: "gmail-msg-1",
     };
     const t = mapInboxLatestProjectionRow(row);
     expect(t.id).toBe("t1");
@@ -34,6 +35,9 @@ describe("mapInboxLatestProjectionRow", () => {
     expect(t.latestMessageAttachments).toHaveLength(1);
     expect(t.latestMessageAttachments[0].id).toBe("a1");
     expect(t.gmailRenderHtmlRef).toBeNull();
+    expect(t.latestProviderMessageId).toBe("gmail-msg-1");
+    expect(t.hasGmailImport).toBe(true);
+    expect(t.gmailLabelIds).toBeNull();
   });
 
   it("exposes G3 render_html_ref when body_html_sanitized is absent", () => {

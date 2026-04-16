@@ -11,6 +11,11 @@ describe("shouldSkipThreadMetadataFetch", () => {
     expect(shouldSkipThreadMetadataFetch({ snippet: "" })).toBe(false);
     expect(shouldSkipThreadMetadataFetch({ snippet: "   " })).toBe(false);
   });
+
+  it("does not skip on historyId alone (still need threads.get for subject / counts)", () => {
+    expect(shouldSkipThreadMetadataFetch({ historyId: "12345", snippet: "" })).toBe(false);
+    expect(shouldSkipThreadMetadataFetch({ historyId: "12345" })).toBe(false);
+  });
 });
 
 describe("runPoolWithConcurrency", () => {

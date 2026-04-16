@@ -1,6 +1,9 @@
 /**
  * Server-side HTML sanitization for Gmail `text/html` bodies before storage in `messages.metadata`.
  * Defense-in-depth: the client re-sanitizes before `dangerouslySetInnerHTML`.
+ *
+ * Hardening: no remote URL loads for media (tracking pixels / beacons); no video/audio/source/track;
+ * inline styles may only use `url(data:...)` for backgrounds, not remote http(s) CSS URLs.
  */
 import sanitizeHtml from "npm:sanitize-html@2.13.0";
 
@@ -8,13 +11,16 @@ import { GMAIL_HTML_MAX_STORAGE_CHARS } from "./gmailHtmlLimits.ts";
 
 export { GMAIL_HTML_MAX_STORAGE_CHARS } from "./gmailHtmlLimits.ts";
 
+/** Allows solid colors and `url(data:...)` only — blocks remote `url(https://...)` in styles. */
+const urlDataOnly = /^url\(\s*data:[^)]+\)$/i;
+
 const allowedStyles: Record<string, Record<string, RegExp[]>> = {
   "*": {
     color: [/^#[0-9a-f]{3,8}$/i, /^rgb\(/i, /^rgba\(/i],
     "background-color": [/^#[0-9a-f]{3,8}$/i, /^rgb\(/i, /^rgba\(/i, /^transparent$/i],
-    /** After asset inlining, `url(data:...)` must survive sanitization. */
-    background: [/^url\([^)]+\)$/i, /^none$/i, /^transparent$/i, /^#[0-9a-f]{3,8}$/i, /^rgb\(/i, /^rgba\(/i],
-    "background-image": [/^url\([^)]+\)$/i, /^none$/i],
+    /** After asset inlining, `url(data:...)` must survive sanitization; remote URLs are stripped. */
+    background: [urlDataOnly, /^none$/i, /^transparent$/i, /^#[0-9a-f]{3,8}$/i, /^rgb\(/i, /^rgba\(/i],
+    "background-image": [urlDataOnly, /^none$/i],
     "background-size": [/^[\w\s,.%\-]+$/i],
     "background-repeat": [/^[\w\s-]+$/i],
     "background-position": [/^[\w\s,.%\-]+$/i],
@@ -83,10 +89,6 @@ export function sanitizeGmailHtmlForStorage(raw: string): string {
       "a",
       "img",
       "font",
-      "video",
-      "audio",
-      "source",
-      "track",
     ],
     allowedAttributes: {
       html: ["lang", "xmlns", "dir"],
@@ -97,10 +99,6 @@ export function sanitizeGmailHtmlForStorage(raw: string): string {
       meta: ["charset", "name", "content", "http-equiv"],
       a: ["href", "name", "title", "target", "rel"],
       img: ["src", "alt", "width", "height", "title"],
-      video: ["src", "poster", "controls", "width", "height", "preload", "muted", "playsinline"],
-      audio: ["src", "controls", "preload"],
-      source: ["src", "type", "media"],
-      track: ["src", "kind", "srclang", "label"],
       td: ["colspan", "rowspan", "align", "valign", "width", "height"],
       th: ["colspan", "rowspan", "align", "valign", "width", "height"],
       table: ["border", "cellpadding", "cellspacing", "width", "align", "role"],
@@ -121,11 +119,8 @@ export function sanitizeGmailHtmlForStorage(raw: string): string {
     allowedStyles,
     allowedSchemes: ["http", "https", "mailto", "tel", "cid"],
     allowedSchemesByTag: {
-      img: ["http", "https", "cid", "data"],
-      video: ["http", "https", "data"],
-      audio: ["http", "https", "data"],
-      source: ["http", "https", "data"],
-      track: ["http", "https", "data"],
+      /** Remote http(s) images are tracking vectors; only cid/data after inline pipeline. */
+      img: ["cid", "data"],
     },
     transformTags: {
       a: (tagName, attribs) => ({

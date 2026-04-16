@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -24,22 +22,13 @@ import {
   isEditableKeyboardTarget,
   pipelineWeddingAltVerticalDelta,
   scrollPipelineWeddingRowIntoView,
-  weddingQueuePosition,
 } from "@/lib/pipelineWeddingListNavigation";
+import { formatWeddingPipelineShortDate } from "@/lib/weddingDateDisplay";
 import { usePipelineMode } from "./PipelineModeContext";
 
 const INQUIRY_STAGES = new Set(["inquiry", "consultation", "proposal_sent", "contract_out"]);
 const ACTIVE_STAGES = new Set(["booked", "prep"]);
 const DELIVERABLE_STAGES = new Set(["delivered", "final_balance"]);
-
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function formatStageLabel(stage: string): string {
   return stage.replace(/_/g, " ");
@@ -105,7 +94,7 @@ export function PipelineContextList() {
     return out;
   }, [filtered]);
 
-  /** Same order as sidebar sections: inquiries → active → deliverables → archived. */
+  // Same order as sidebar sections: inquiries -> active -> deliverables -> archived.
   const orderedWeddingIds = useMemo(() => {
     const ids: string[] = [];
     for (const b of BUCKET_ORDER) {
@@ -115,16 +104,6 @@ export function PipelineContextList() {
     }
     return ids;
   }, [buckets]);
-
-  const goPrevWedding = useCallback(() => {
-    const id = adjacentWeddingIdInOrderedList(orderedWeddingIds, weddingId, -1);
-    if (id && id !== weddingId) selectWedding(id);
-  }, [orderedWeddingIds, weddingId, selectWedding]);
-
-  const goNextWedding = useCallback(() => {
-    const id = adjacentWeddingIdInOrderedList(orderedWeddingIds, weddingId, 1);
-    if (id && id !== weddingId) selectWedding(id);
-  }, [orderedWeddingIds, weddingId, selectWedding]);
 
   useEffect(() => {
     if (orderedWeddingIds.length < 2) return;
@@ -148,13 +127,8 @@ export function PipelineContextList() {
     if (!root) return;
     const el = root.querySelector(`[data-pipeline-wedding-row="${CSS.escape(weddingId)}"]`);
     if (!(el instanceof HTMLElement)) return;
-    scrollPipelineWeddingRowIntoView(el);
-  }, [weddingId, orderedWeddingIds]);
-
-  const queuePosition = useMemo(
-    () => weddingQueuePosition(orderedWeddingIds, weddingId),
-    [orderedWeddingIds, weddingId],
-  );
+    scrollPipelineWeddingRowIntoView(el, root);
+  }, [weddingId]);
 
   const sections: { id: Bucket; title: string }[] = [
     { id: "inquiries", title: "Inquiries" },
@@ -164,62 +138,28 @@ export function PipelineContextList() {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-border bg-sidebar text-[13px]">
+    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
       <div className="shrink-0 space-y-2 p-3 pb-4">
-        <Input
+        <input
           type="search"
-          placeholder="Search couples…"
+          placeholder="Search couples..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-8 border-border bg-background text-[13px] placeholder:text-[12px]"
+          className="h-10 w-full rounded-xl border border-border bg-background px-3 text-[13px] text-foreground placeholder:text-muted-foreground shadow-sm outline-none transition focus:ring-1 focus:ring-ring"
+          aria-label="Search couples"
         />
-        {!isLoading && !error && orderedWeddingIds.length >= 2 ? (
-          <div
-            role="region"
-            aria-label="Pipeline wedding queue navigation"
-            className="flex items-center justify-between gap-2 rounded-md border border-border bg-background/80 px-2 py-1.5"
-          >
-            <div className="min-w-0">
-              <span className="text-[11px] font-medium text-muted-foreground">Queue</span>
-              {queuePosition ? (
-                <span className="ml-1.5 tabular-nums text-[11px] text-muted-foreground" aria-live="polite">
-                  {queuePosition.current} / {queuePosition.total}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                title="Previous wedding (Alt+↑)"
-                aria-label="Previous wedding in queue"
-                onClick={goPrevWedding}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"
-              >
-                <ChevronUp className="h-4 w-4" strokeWidth={2} aria-hidden />
-              </button>
-              <button
-                type="button"
-                title="Next wedding (Alt+↓)"
-                aria-label="Next wedding in queue"
-                onClick={goNextWedding}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"
-              >
-                <ChevronDown className="h-4 w-4" strokeWidth={2} aria-hidden />
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <Button variant="outline" size="sm" className="h-8 w-full border-slate-200 text-slate-900 hover:bg-slate-100 hover:text-slate-900 text-[12px]" asChild>
-          <Link to="/weddings/new">
-            <Plus className="size-3.5" strokeWidth={2} />
-            Add wedding
-          </Link>
-        </Button>
+        <Link
+          to="/weddings/new"
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-[13px] font-medium text-foreground shadow-sm transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+        >
+          <Plus className="size-3.5" strokeWidth={2} />
+          Add wedding
+        </Link>
       </div>
 
       <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
         {isLoading && (
-          <p className="px-2 py-3 text-[12px] text-muted-foreground">Loading weddings…</p>
+          <p className="px-2 py-3 text-[12px] text-muted-foreground">Loading weddings...</p>
         )}
         {error && (
           <p className="px-2 py-3 text-[12px] text-destructive">Error: {error}</p>
@@ -231,7 +171,7 @@ export function PipelineContextList() {
                 <CollapsibleTrigger
                   className={cn(
                     "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-foreground",
-                    "hover:bg-accent/50 data-[state=open]:bg-accent/30 [&[data-state=open]_svg]:rotate-180"
+                    "hover:bg-black/[0.04] data-[state=open]:bg-black/[0.03] dark:hover:bg-white/[0.06] dark:data-[state=open]:bg-white/[0.04] [&[data-state=open]_svg]:rotate-180",
                   )}
                 >
                   <span>
@@ -262,9 +202,9 @@ export function PipelineContextList() {
                                 data-pipeline-wedding-row={w.id}
                                 onClick={() => selectWedding(w.id)}
                                 className={cn(
-                                  "flex w-full flex-col gap-1 rounded-md border border-transparent px-2 py-2 text-left transition-colors",
+                                  "box-border flex w-full flex-col gap-1 rounded-xl border border-transparent px-2.5 py-2 text-left transition-colors",
                                   "hover:border-border hover:bg-background/80",
-                                  selected && "border-border bg-accent"
+                                  selected && "border-border bg-black/[0.04] dark:bg-white/[0.06]",
                                 )}
                               >
                                 <span className="font-medium leading-tight text-foreground">
@@ -274,13 +214,13 @@ export function PipelineContextList() {
                                   <span
                                     className={cn(
                                       "inline-flex max-w-full truncate rounded-full border px-1.5 py-0.5 text-[11px] font-medium capitalize",
-                                      stageBadgeClass(w.stage)
+                                      stageBadgeClass(w.stage),
                                     )}
                                   >
                                     {formatStageLabel(w.stage)}
                                   </span>
                                   <span className="text-[12px] text-muted-foreground">
-                                    {formatShortDate(w.wedding_date)}
+                                    {formatWeddingPipelineShortDate(w)}
                                   </span>
                                 </div>
                               </button>

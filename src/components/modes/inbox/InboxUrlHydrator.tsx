@@ -6,11 +6,7 @@ import {
   INBOX_UNRESOLVED_DRAFT_MESSAGE,
   hasUsableDraftWeddingId,
 } from "../../../lib/inboxDraftDeepLink";
-import {
-  persistInboxDeepLinkPayload,
-  resolveInboxDeepLinkPayload,
-  clearPersistedInboxDeepLink,
-} from "../../../lib/inboxDeepLinkPersistence";
+import { resolveInboxDeepLinkPayload, clearPersistedInboxDeepLink } from "../../../lib/inboxDeepLinkPersistence";
 import {
   shouldSkipInboxHydrationApply,
   shouldStripInboxUrlAfterDraftReviewHydration,
@@ -20,6 +16,7 @@ import {
 import { useUnfiledInbox } from "../../../hooks/useUnfiledInbox";
 import { usePendingApprovals } from "../../../hooks/usePendingApprovals";
 import { fetchThreadRowForEscalationDeepLink } from "../../../lib/inboxEscalationDeepLink";
+import { stripInboxThreadDeepLinkParams } from "../../../lib/inboxUrlInboxParams";
 import { useInboxMode } from "./InboxModeContext";
 
 export function InboxUrlHydrator() {
@@ -41,16 +38,15 @@ export function InboxUrlHydrator() {
 
     const payloadSignature = signatureForInboxDeepLinkPayload(payload);
 
-    if (searchParams.get("threadId")) {
-      persistInboxDeepLinkPayload(payload);
-    }
-
-    /** Strip persisted mirror + search params only on terminal failure (success keeps canonical URL). */
+    /** Strip thread deep-link keys only (preserves `q` and unrelated params). */
     const stripDeepLinkFromUrlAndSession = () => {
       queueMicrotask(() => {
         if (cancelled) return;
         clearPersistedInboxDeepLink();
-        setSearchParams({}, { replace: true });
+        setSearchParams(
+          (prev) => stripInboxThreadDeepLinkParams(prev),
+          { replace: true },
+        );
       });
     };
 
@@ -113,37 +109,27 @@ export function InboxUrlHydrator() {
     if (threadsLoading) return;
 
     const thread = inboxThreads.find((t) => t.id === payload.threadId);
-    const escalationId = searchParams.get("escalationId");
 
     if (!thread) {
-      if (escalationId) {
-        if (shouldSkipInboxHydrationApply(processedDeepLinkSignatureRef.current, payloadSignature)) {
-          return () => {
-            cancelled = true;
-          };
+      if (shouldSkipInboxHydrationApply(processedDeepLinkSignatureRef.current, payloadSignature)) {
+        return () => {
+          cancelled = true;
+        };
+      }
+      processedDeepLinkSignatureRef.current = payloadSignature;
+      void (async () => {
+        const mapped = await fetchThreadRowForEscalationDeepLink(payload.threadId);
+        if (cancelled) return;
+        if (!mapped) {
+          processedDeepLinkSignatureRef.current = null;
+          stripDeepLinkFromUrlAndSession();
+          return;
         }
-        processedDeepLinkSignatureRef.current = payloadSignature;
-        void (async () => {
-          const mapped = await fetchThreadRowForEscalationDeepLink(payload.threadId);
-          if (cancelled) return;
-          if (!mapped) {
-            processedDeepLinkSignatureRef.current = null;
-            stripDeepLinkFromUrlAndSession();
-            return;
-          }
-          selectThread(mapped);
-        })();
-        return () => {
-          cancelled = true;
-        };
-      }
-      if (shouldStripInboxUrlAfterUnfiledThreadHydration(true)) {
-        processedDeepLinkSignatureRef.current = null;
-        stripDeepLinkFromUrlAndSession();
-        return () => {
-          cancelled = true;
-        };
-      }
+        selectThread(mapped);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (shouldStripInboxUrlAfterUnfiledThreadHydration(Boolean(thread))) {

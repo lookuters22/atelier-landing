@@ -23,6 +23,7 @@ import {
 } from "./anthropicPromptCache.ts";
 import { logModelInvocation } from "../telemetry/modelInvocationLog.ts";
 import { truncatePersonaOrchestratorFactsForModel } from "./personaAgentA5Budget.ts";
+import { fetchWithTimeout } from "../http/fetchWithTimeout.ts";
 
 /**
  * Reinforces first-pass compliance when **BUDGET STATEMENT SLOT** is active (same token as injector contract).
@@ -101,7 +102,17 @@ const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 
 type AnthropicTextBlock = { type: "text"; text: string };
-type AnthropicContentBlock = AnthropicTextBlock | { type: string; [key: string]: unknown };
+type AnthropicToolUseBlock = {
+  type: "tool_use";
+  id: string;
+  name: string;
+  /** Already parsed object — not model-authored JSON text (transport-safe). */
+  input: Record<string, unknown>;
+};
+type AnthropicContentBlock =
+  | AnthropicTextBlock
+  | AnthropicToolUseBlock
+  | { type: string; [key: string]: unknown };
 
 type AnthropicMessagesResponse = {
   content?: AnthropicContentBlock[];
@@ -116,6 +127,49 @@ function extractAssistantText(response: AnthropicMessagesResponse): string {
     .join("")
     .trim();
 }
+
+/** Anthropic Messages `submit_persona_draft` tool — primary structured output path (no JSON.parse on model text). */
+export const SUBMIT_PERSONA_DRAFT_TOOL_NAME = "submit_persona_draft";
+
+const SUBMIT_PERSONA_DRAFT_TOOL = {
+  name: SUBMIT_PERSONA_DRAFT_TOOL_NAME,
+  description:
+    "Submit the client-facing email and the deterministic committed_terms audit contract. " +
+    "Use one string per paragraph in email_draft_lines (each array element is one paragraph; newlines inside a paragraph are allowed). " +
+    "The runtime joins elements with blank lines for the final body.",
+  input_schema: {
+    type: "object",
+    properties: {
+      email_draft_lines: {
+        type: "array",
+        items: { type: "string" },
+        minItems: 1,
+        description: "Each string is one paragraph; minimum one paragraph.",
+      },
+      committed_terms: {
+        type: "object",
+        description: "Honest audit contract for downstream deterministic verification.",
+        properties: {
+          package_names: {
+            type: "array",
+            items: { type: "string" },
+            description: "Studio package/collection names treated as confirmed facts; empty if hedged only.",
+          },
+          deposit_percentage: {
+            description: "Deposit/retainer percent 0–100, or null if none committed.",
+            type: ["number", "null"],
+          },
+          travel_miles_included: {
+            description: "Included travel radius in miles, or null if none committed.",
+            type: ["number", "null"],
+          },
+        },
+        required: ["package_names", "deposit_percentage", "travel_miles_included"],
+      },
+    },
+    required: ["email_draft_lines", "committed_terms"],
+  },
+};
 
 /**
  * Full system prompt for persona Messages calls (orchestrator + legacy paths).
@@ -177,16 +231,14 @@ function buildPersonaUserMessage(approvedFactualOutput: string): string {
 const STRUCTURED_OUTPUT_SUFFIX = [
   "",
   "=== OUTPUT FORMAT (mandatory) ===",
-  "Return a single JSON object ONLY (no prose before or after the JSON). Shape:",
-  '{ "email_draft": "<full client-facing email body as a single JSON string>",',
-  '  "committed_terms": {',
-  '    "package_names": ["<studio package/collection names you treated as confirmed facts in email_draft — empty if hedged only>"],',
-  '    "deposit_percentage": <null | number 0-100 — null if email_draft does not commit to a specific deposit/retainer percent>,',
-  '    "travel_miles_included": <null | number — null if email_draft does not commit to a specific included mileage radius>',
-  "  }",
-  "}",
-  "Be honest in committed_terms: it is the contract for downstream deterministic audit.",
+  `Call the tool \`${SUBMIT_PERSONA_DRAFT_TOOL_NAME}\` exactly once with your draft.`,
+  "Do **not** rely on writing a raw JSON object in freeform assistant text — that path is brittle (illegal control characters break JSON.parse). The tool passes structured input safely.",
+  "Put each paragraph as a separate string in email_draft_lines (one paragraph per array element). The runtime joins them with blank lines for the final email body.",
+  "committed_terms must honestly reflect the audit contract: package_names, deposit_percentage (0–100 or null), travel_miles_included (miles or null).",
 ].join("\n");
+
+/** Legacy text-JSON fallback only — assistant prefill so a continuation can complete `{...}`. */
+const ASSISTANT_JSON_OBJECT_PREFILL = "{";
 
 export type PersonaWriterCommittedTerms = {
   package_names: string[];
@@ -195,25 +247,19 @@ export type PersonaWriterCommittedTerms = {
 };
 
 export type PersonaWriterStructuredOutput = {
+  /** Joined client-facing body (paragraphs separated by \\n\\n). */
   email_draft: string;
   committed_terms: PersonaWriterCommittedTerms;
 };
 
-function parsePersonaStructuredJson(text: string): PersonaWriterStructuredOutput {
-  let t = text.trim();
-  const fence = /^```(?:json)?\s*([\s\S]*?)```/m.exec(t);
-  if (fence) t = fence[1]!.trim();
-  const first = t.indexOf("{");
-  const last = t.lastIndexOf("}");
-  if (first < 0 || last <= first) {
-    throw new Error("personaAgent: structured response missing JSON object");
-  }
-  t = t.slice(first, last + 1);
-  const parsed = JSON.parse(t) as unknown;
-  if (!parsed || typeof parsed !== "object") throw new Error("personaAgent: structured JSON not an object");
-  const rec = parsed as Record<string, unknown>;
-  const email_draft = typeof rec.email_draft === "string" ? rec.email_draft : "";
-  const ct = rec.committed_terms;
+function normalizeParagraphLine(s: string): string {
+  return String(s ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseCommittedTermsObject(ct: unknown): PersonaWriterCommittedTerms {
   if (!ct || typeof ct !== "object") {
     throw new Error("personaAgent: missing committed_terms");
   }
@@ -231,17 +277,95 @@ function parsePersonaStructuredJson(text: string): PersonaWriterStructuredOutput
     const n = Number(ctr.travel_miles_included);
     if (Number.isFinite(n)) travel_miles_included = n;
   }
-  if (email_draft.trim().length === 0) {
-    throw new Error("personaAgent: empty email_draft");
+  return { package_names, deposit_percentage, travel_miles_included };
+}
+
+/**
+ * Validates tool input or parsed JSON object — **primary shape logic** for persona structured output.
+ * Does not call JSON.parse on freeform model text (use {@link parsePersonaStructuredOutput} only for legacy fallback).
+ */
+export function buildPersonaWriterStructuredFromRecord(rec: Record<string, unknown>): PersonaWriterStructuredOutput {
+  const ct = parseCommittedTermsObject(rec.committed_terms);
+
+  const linesRaw = rec.email_draft_lines;
+  if (Array.isArray(linesRaw) && linesRaw.length > 0) {
+    const lines = linesRaw
+      .map((x) => normalizeParagraphLine(String(x ?? "")))
+      .filter((x) => x.length > 0);
+    if (lines.length === 0) {
+      throw new Error("personaAgent: email_draft_lines parsed to empty after normalization");
+    }
+    return {
+      email_draft: lines.join("\n\n"),
+      committed_terms: ct,
+    };
   }
-  return {
-    email_draft: email_draft.trim(),
-    committed_terms: {
-      package_names,
-      deposit_percentage,
-      travel_miles_included,
-    },
-  };
+
+  /** Narrow legacy: single string field (valid only inside successfully parsed JSON). */
+  if (typeof rec.email_draft === "string" && rec.email_draft.trim().length > 0) {
+    return {
+      email_draft: rec.email_draft.trim(),
+      committed_terms: ct,
+    };
+  }
+
+  throw new Error("personaAgent: missing email_draft_lines (non-empty string array) or legacy email_draft");
+}
+
+/**
+ * Prefer `tool_use` with {@link SUBMIT_PERSONA_DRAFT_TOOL_NAME} — **no JSON.parse of assistant-authored JSON text**.
+ * Exported for unit tests.
+ */
+export function extractPersonaStructuredFromAnthropicResponse(
+  response: AnthropicMessagesResponse,
+): PersonaWriterStructuredOutput {
+  const blocks = response.content ?? [];
+  for (const b of blocks) {
+    if (!b || typeof b !== "object") continue;
+    const block = b as Record<string, unknown>;
+    if (block.type !== "tool_use") continue;
+    if (block.name !== SUBMIT_PERSONA_DRAFT_TOOL_NAME) continue;
+    const input = block.input;
+    if (!input || typeof input !== "object") {
+      throw new Error("personaAgent: submit_persona_draft tool_use missing input");
+    }
+    return buildPersonaWriterStructuredFromRecord(input as Record<string, unknown>);
+  }
+  throw new Error("personaAgent: expected submit_persona_draft tool_use in Anthropic response");
+}
+
+/**
+ * **Legacy / debug-only:** parses persona JSON from assistant text (fragile — bad control chars in strings break JSON.parse).
+ * Prefer {@link extractPersonaStructuredFromAnthropicResponse}. Exported for regression tests.
+ */
+export function parsePersonaStructuredOutput(rawAssistantText: string): PersonaWriterStructuredOutput {
+  let t = rawAssistantText.trim();
+  const fence = /^```(?:json)?\s*([\s\S]*?)```/m.exec(t);
+  if (fence) t = fence[1]!.trim();
+  const first = t.indexOf("{");
+  const last = t.lastIndexOf("}");
+  if (first < 0 || last <= first) {
+    throw new Error("personaAgent: structured response missing JSON object");
+  }
+  t = t.slice(first, last + 1);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(t) as unknown;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`personaAgent: invalid structured JSON (${msg})`);
+  }
+
+  if (!parsed || typeof parsed !== "object") throw new Error("personaAgent: structured JSON not an object");
+  return buildPersonaWriterStructuredFromRecord(parsed as Record<string, unknown>);
+}
+
+function combinePrefixedAssistantJson(prefill: string, continuation: string): string {
+  const tail = continuation.trim();
+  if (!tail) return prefill;
+  if (tail.startsWith("{")) return tail;
+  return `${prefill}${tail}`;
 }
 
 /**
@@ -250,30 +374,53 @@ function parsePersonaStructuredJson(text: string): PersonaWriterStructuredOutput
  * `agentContext` may be a full graph; only {@link extractPersonaWriterBoundary} fields are sent to the model
  * besides `orchestratorFacts` (approved factual output).
  */
+type RunPersonaAnthropicMessagesOptions = {
+  /** Legacy text-JSON path only — conflicts with tools; ignored when `tools` is set. */
+  assistantJsonPrefill?: string | null;
+  /** Anthropic tool definitions (structured output). */
+  tools?: ReadonlyArray<{ name: string; description: string; input_schema: Record<string, unknown> }>;
+  /** Forces a specific tool (default: forced {@link SUBMIT_PERSONA_DRAFT_TOOL_NAME} when tools provided). */
+  toolChoice?: { type: "tool"; name: string };
+};
+
 async function runPersonaAnthropicMessages(
   apiKey: string,
   system: string,
   userText: string,
   maxTokens: number,
+  opts?: RunPersonaAnthropicMessagesOptions,
 ): Promise<AnthropicMessagesResponse> {
+  const useTools = Boolean(opts?.tools && opts.tools.length > 0);
+
   logModelInvocation({
     source: "client_orchestrator_persona",
     model: "claude-haiku-4-5",
-    phase: "anthropic_messages",
+    phase: useTools ? "anthropic_messages_tool" : "anthropic_messages",
   });
 
-  const body = {
+  const messages: Array<{ role: "user" | "assistant"; content: string }> = [{ role: "user", content: userText }];
+  const pre = opts?.assistantJsonPrefill;
+  if (!useTools && pre != null && pre.length > 0) {
+    messages.push({ role: "assistant", content: pre });
+  }
+
+  const body: Record<string, unknown> = {
     model: "claude-haiku-4-5",
     max_tokens: maxTokens,
     temperature: 0.7,
     system: cachedEphemeralSystemBlocks(system),
-    messages: [{ role: "user" as const, content: userText }],
+    messages,
   };
+  if (useTools) {
+    body.tools = [...opts!.tools!];
+    body.tool_choice = opts?.toolChoice ?? { type: "tool", name: SUBMIT_PERSONA_DRAFT_TOOL_NAME };
+  }
 
-  const res = await fetch(MESSAGES_URL, {
+  const res = await fetchWithTimeout(MESSAGES_URL, {
     method: "POST",
     headers: anthropicMessagesHeadersWithPromptCaching(apiKey, ANTHROPIC_VERSION),
     body: JSON.stringify(body),
+    timeoutMs: 120_000,
   });
 
   const rawBody = await res.text();
@@ -294,7 +441,8 @@ async function runPersonaAnthropicMessages(
 }
 
 /**
- * Orchestrator / clientOrchestratorV1 path: JSON with `email_draft` + `committed_terms` for deterministic audit.
+ * Orchestrator / clientOrchestratorV1 path: **Anthropic tool** `submit_persona_draft` → `email_draft_lines` joined to `email_draft` + `committed_terms` for deterministic audit.
+ * Legacy assistant-text JSON is fallback only.
  */
 export async function draftPersonaStructuredResponse(
   agentContext: AgentContext,
@@ -310,7 +458,7 @@ export async function draftPersonaStructuredResponse(
   const budgetSlotHint = orchestratorFacts.includes("BUDGET STATEMENT SLOT")
     ? [
         "",
-        `If the approved facts above include **BUDGET STATEMENT SLOT**, email_draft MUST contain the literal token ${BUDGET_STATEMENT_PLACEHOLDER} exactly once. Omitting it fails automated verification.`,
+        `If the approved facts above include **BUDGET STATEMENT SLOT**, one paragraph in email_draft_lines must contain the literal token ${BUDGET_STATEMENT_PLACEHOLDER} exactly once (the joined email body must include it). Omitting it fails automated verification.`,
         PERSONA_BUDGET_CRITICAL_FORMATTING_USER_HINT_LINE,
       ].join("\n")
     : "";
@@ -340,13 +488,32 @@ export async function draftPersonaStructuredResponse(
     consultationFirstVoiceHint +
     STRUCTURED_OUTPUT_SUFFIX;
 
-  const data = await runPersonaAnthropicMessages(apiKey, system, userText, 2048);
-  const text = extractAssistantText(data);
-  if (!text) {
-    throw new Error("draftPersonaStructuredResponse: Anthropic returned no text content");
-  }
+  const data = await runPersonaAnthropicMessages(apiKey, system, userText, 2048, {
+    tools: [SUBMIT_PERSONA_DRAFT_TOOL],
+    toolChoice: { type: "tool", name: SUBMIT_PERSONA_DRAFT_TOOL_NAME },
+  });
 
-  return parsePersonaStructuredJson(text);
+  try {
+    return extractPersonaStructuredFromAnthropicResponse(data);
+  } catch (primaryErr) {
+    console.warn(
+      "[personaAgent] submit_persona_draft tool path failed; attempting legacy assistant-text JSON fallback:",
+      primaryErr,
+    );
+    const tail = extractAssistantText(data);
+    if (!tail) {
+      const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      throw new Error(`draftPersonaStructuredResponse: ${msg} (no assistant text for fallback)`);
+    }
+    try {
+      const combined = combinePrefixedAssistantJson(ASSISTANT_JSON_OBJECT_PREFILL, tail);
+      return parsePersonaStructuredOutput(combined);
+    } catch (fallbackErr) {
+      const a = primaryErr instanceof Error ? primaryErr.message : String(primaryErr);
+      const b = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      throw new Error(`draftPersonaStructuredResponse: tool path failed (${a}); legacy JSON failed (${b})`);
+    }
+  }
 }
 
 export async function draftPersonaResponse(

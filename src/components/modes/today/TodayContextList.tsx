@@ -134,7 +134,7 @@ export function TodayContextList() {
   }, [selectedRailId, orderedRailIds]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-border bg-sidebar text-[13px] text-foreground">
+    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
       {!isLoading && orderedRailIds.length >= 2 ? (
         <div
           role="region"

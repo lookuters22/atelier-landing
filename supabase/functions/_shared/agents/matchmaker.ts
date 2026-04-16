@@ -22,9 +22,14 @@ const SYSTEM_PROMPT = `You are the Matchmaker Agent. Cross-reference the inbound
 You MUST respond with a single JSON object only (no markdown fences), with exactly these keys:
 - "suggested_wedding_id": a string UUID from the roster, or null if none fits
 - "confidence_score": number from 0 to 100
-- "reasoning": brief string
+- "reasoning": brief string (see below)
 
-Be highly conservative. Only give confidence_score > 90 if dates, unique venues, or rare names match exactly.`;
+Be highly conservative. Only give confidence_score > 90 if dates, unique venues, or rare names match exactly.
+
+Reasoning guidance: If couple names, dates, or venues appear in the inbound message but **no roster row** is a strong match,
+say clearly that **those details did not align with an existing project in the roster** — do NOT imply that no names,
+dates, or locations were present in the email. Reserve phrasing like "no inquiry details" only when the message truly
+lacks identifiable couple/date/venue cues.`;
 
 function stripJsonFences(text: string): string {
   const t = text.trim();

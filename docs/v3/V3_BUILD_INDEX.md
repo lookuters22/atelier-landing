@@ -149,6 +149,8 @@ Read first:
   - `## 5.1 photographers`
   - `## 5.1A studio_business_profiles`
   - `## 5.17 playbook_rules`
+- `docs/v3/ONBOARDING_BRIEFING_MASTER_PLAN.md`
+- the exact `docs/v3/ONBOARDING_BRIEFING_SLICE_*.md` file for the current slice
 
 Likely repo focus:
 
@@ -347,6 +349,11 @@ Read first:
 - `docs/v3/V3_OVERVIEW.md`:
   - `## 15. The Onboarding Process`
   - `## 10. Internal APIs And Worker Entry Points`
+- `docs/v3/ONBOARDING_BRIEFING_MASTER_PLAN.md`
+- the exact `docs/v3/ONBOARDING_BRIEFING_SLICE_*.md` file for the current slice
+- for the experience-layer rebuild:
+  - `docs/v3/ONBOARDING_EXPERIENCE_REDESIGN_MASTER_PLAN.md`
+  - the exact `docs/v3/ONBOARDING_EXPERIENCE_REDESIGN_SLICE_*.md` file for the current slice
 
 Likely repo focus:
 

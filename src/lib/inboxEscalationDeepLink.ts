@@ -1,6 +1,11 @@
 import { supabase } from "./supabase";
 import type { UnfiledThread } from "../hooks/useUnfiledInbox";
 import { fetchGmailImportHtmlForDisplay } from "./gmailImportMessageMetadata";
+import {
+  INBOX_SINGLE_THREAD_SELECT_FULL,
+  INBOX_SINGLE_THREAD_SELECT_LEGACY,
+  isMissingLatestProviderMessageIdPostgresError,
+} from "./inboxLatestViewSelect";
 import { mapInboxLatestProjectionRow } from "./inboxThreadProjection";
 
 /**
@@ -8,14 +13,21 @@ import { mapInboxLatestProjectionRow } from "./inboxThreadProjection";
  * Uses `v_threads_inbox_latest_message` (G4) — same projection as the unfiled list.
  */
 export async function fetchThreadRowForEscalationDeepLink(threadId: string): Promise<UnfiledThread | null> {
-  const { data, error } = await supabase
+  let res = await supabase
     .from("v_threads_inbox_latest_message")
-    .select(
-      "id, title, last_activity_at, ai_routing_metadata, latest_message_id, latest_sender, latest_body, latest_message_metadata, latest_attachments_json",
-    )
+    .select(INBOX_SINGLE_THREAD_SELECT_FULL)
     .eq("id", threadId)
     .maybeSingle();
 
+  if (res.error && isMissingLatestProviderMessageIdPostgresError(res.error)) {
+    res = await supabase
+      .from("v_threads_inbox_latest_message")
+      .select(INBOX_SINGLE_THREAD_SELECT_LEGACY)
+      .eq("id", threadId)
+      .maybeSingle();
+  }
+
+  const { data, error } = res;
   if (error || !data) return null;
 
   const mapped = mapInboxLatestProjectionRow(data as Record<string, unknown>);

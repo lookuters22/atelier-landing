@@ -15,6 +15,10 @@ export type GmailImportRenderHtmlRefV1 = {
   byte_size: number;
 };
 
+export type PersistGmailRenderHtmlResult =
+  | { ok: true; artifactId: string; ref: GmailImportRenderHtmlRefV1 }
+  | { ok: false; error: string };
+
 export function parseGmailImportRenderHtmlRefFromMetadata(
   metadata: unknown,
 ): GmailImportRenderHtmlRefV1 | null {
@@ -52,9 +56,11 @@ export async function persistGmailRenderHtmlArtifact(
     importCandidateId?: string;
     messageId?: string;
   },
-): Promise<{ artifactId: string; ref: GmailImportRenderHtmlRefV1 } | null> {
+): Promise<PersistGmailRenderHtmlResult> {
   const { photographerId, html, importCandidateId, messageId } = opts;
-  if (!html || html.length === 0) return null;
+  if (!html || html.length === 0) {
+    return { ok: false, error: "empty_html" };
+  }
 
   const bytes = textEncoder().encode(html);
   const byteSize = bytes.byteLength;
@@ -70,8 +76,7 @@ export async function persistGmailRenderHtmlArtifact(
     });
 
   if (upErr) {
-    console.warn("[gmailPersistRenderArtifact] storage upload failed", upErr.message);
-    return null;
+    return { ok: false, error: `storage_upload:${upErr.message}` };
   }
 
   const { data: ins, error: insErr } = await supabase
@@ -90,12 +95,12 @@ export async function persistGmailRenderHtmlArtifact(
     .single();
 
   if (insErr || !ins?.id) {
-    console.warn("[gmailPersistRenderArtifact] insert artifact row", insErr?.message);
     await supabase.storage.from(GMAIL_IMPORT_MEDIA_BUCKET).remove([storagePath]).catch(() => {});
-    return null;
+    return { ok: false, error: `artifact_insert:${insErr?.message ?? "unknown"}` };
   }
 
   return {
+    ok: true,
     artifactId: ins.id as string,
     ref: {
       version: 1,

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Cursor IDE (local plans / state — not required for deploy)
+.cursor/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -50,6 +53,7 @@ public/models/custom_iphone_17_3d_model.glb
 # Environment Variables (Keep Secrets Safe)
 .env
 .env.*
+!.env.example
 supabase/.env
 
 # V3 verification harness — local mirror of Edge triage/intake gate secrets (copy from scripts/v3_verify_gate_posture.env.example)

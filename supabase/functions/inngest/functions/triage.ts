@@ -86,7 +86,6 @@ import {
   OPERATOR_WHATSAPP_LEGACY_RECEIVED_EVENT,
   ORCHESTRATOR_CLIENT_V1_EVENT,
   ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION,
-  type AtelierEvents,
 } from "../../_shared/inngest.ts";
 import {
   getMainPathCommercialKnownWeddingOrchestratorLiveCutoverReadiness,
@@ -127,17 +126,25 @@ import {
   isTriageLiveOrchestratorMainPathStudioKnownWeddingEnabled,
   isTriageLiveOrchestratorWebWidgetKnownWeddingEnabled,
   isTriageBoundedUnresolvedEmailMatchmakerEnabled,
-  isTriageBoundedUnresolvedEmailMatchApprovalEscalationEnabled,
-  BOUNDED_UNRESOLVED_MATCH_APPROVAL_ESCALATION_MIN_CONFIDENCE,
-  BOUNDED_UNRESOLVED_MATCH_AUTO_RESOLVE_MIN_CONFIDENCE,
-  getTriageQaBoundedNearMatchSyntheticConfidenceScore,
-  TRIAGE_QA_BOUNDED_NEAR_MATCH_SYNTHETIC_CONFIDENCE_V1_ENV,
   isTriageShadowOrchestratorClientV1Enabled,
 } from "../../_shared/orchestrator/triageShadowOrchestratorClientV1Gate.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { runTriageAgent, type TriageIntent } from "../../_shared/agents/triage.ts";
-import { runMatchmakerAgent, type MatchmakerResult } from "../../_shared/agents/matchmaker.ts";
+import { applyUnlinkedWeddingLeadIntakeBoost } from "../../_shared/triage/unlinkedWeddingLeadIntakeBoost.ts";
 import { insertBoundedUnresolvedMatchApprovalEscalation } from "../../_shared/triage/boundedUnresolvedMatchApprovalEscalation.ts";
+import {
+  buildAiRoutingMetadataForUnresolved,
+  deriveEmailIngressRouting,
+  type MatchmakerStepResult,
+  resolveDeterministicIdentity,
+  runConditionalMatchmakerForEmail,
+  enforceStageGate,
+} from "../../_shared/triage/emailIngressClassification.ts";
+import {
+  orchestratorInboundSenderFields,
+  runMainPathEmailDispatch,
+  type MainPathEmailDispatchResult,
+} from "../../_shared/triage/runMainPathEmailDispatch.ts";
 import {
   buildMainPathRetirementDispatchV1,
   buildUnfiledEarlyExitRetirementDispatchV1,
@@ -145,106 +152,7 @@ import {
   logRetirementDispatchV1,
 } from "../../_shared/triage/retirementDispatchObservabilityV1.ts";
 
-// ── Stage-based routing rules ────────────────────────────────────
-
-type StageGroup = "new_lead" | "pre_booking" | "active" | "post_wedding";
-
-const STAGE_GROUP_MAP: Record<string, StageGroup> = {
-  inquiry: "new_lead",
-  consultation: "pre_booking",
-  proposal_sent: "pre_booking",
-  contract_out: "pre_booking",
-  booked: "active",
-  prep: "active",
-  final_balance: "active",
-  delivered: "post_wedding",
-  archived: "post_wedding",
-};
-
-const ALLOWED_INTENTS: Record<StageGroup, ReadonlySet<TriageIntent>> = {
-  new_lead: new Set(["intake"]),
-  pre_booking: new Set(["intake", "commercial", "concierge"]),
-  active: new Set(["concierge", "project_management", "logistics", "commercial"]),
-  post_wedding: new Set(["studio", "concierge"]),
-};
-
-const FALLBACK_INTENT: Record<StageGroup, TriageIntent> = {
-  new_lead: "intake",
-  pre_booking: "concierge",
-  active: "concierge",
-  post_wedding: "studio",
-};
-
-function enforceStageGate(
-  llmIntent: TriageIntent,
-  stage: string | null,
-  hasWedding: boolean,
-): TriageIntent {
-  if (!hasWedding || !stage) return "intake";
-
-  const group = STAGE_GROUP_MAP[stage] ?? "new_lead";
-  const allowed = ALLOWED_INTENTS[group];
-
-  if (allowed.has(llmIntent)) return llmIntent;
-
-  return FALLBACK_INTENT[group];
-}
-
-/** Matchmaker step output + explicit skip reason for observability (see UNFILED_UNRESOLVED_MATCHING_SLICE.md). */
-type MatchmakerStepResult = {
-  weddingId: string | null;
-  match: MatchmakerResult | null;
-  photographerId?: string | null;
-  /** Set when OpenAI matchmaker auto-resolves a wedding (confidence ≥ 90). Used to re-apply the stage gate. */
-  resolved_wedding_project_stage?: string | null;
-  matchmaker_invoked: boolean;
-  matchmaker_skip_reason: string;
-  /** True when the bounded unresolved-email experimental path invoked the matchmaker. */
-  bounded_unresolved_activation?: boolean;
-  /** QA-only: `TRIAGE_QA_BOUNDED_NEAR_MATCH_SYNTHETIC_CONFIDENCE_V1` applied this score for proof runs. */
-  qa_synthetic_near_match_confidence?: number | null;
-};
-
-function buildWeddingResolutionTrace(input: {
-  identity: { weddingId: string | null; projectStage: string | null };
-  llmIntent: TriageIntent;
-  enforcedIntent: TriageIntent;
-  dispatchIntent: TriageIntent;
-  projectStageUsedForDispatch: string | null;
-  matchResult: MatchmakerStepResult;
-  finalWeddingId: string | null;
-  boundedUnresolved: {
-    gate_on: boolean;
-    subset_eligible: boolean;
-    activation: boolean;
-    outcome:
-      | "not_eligible"
-      | "resolved_above_threshold"
-      | "escalated_for_approval"
-      | "declined_low_confidence"
-      | "skipped_matchmaker_not_invoked";
-  };
-}): Record<string, unknown> {
-  return {
-    deterministic_wedding_id: !!input.identity.weddingId,
-    project_stage_at_identity: input.identity.projectStage,
-    project_stage_used_for_dispatch: input.projectStageUsedForDispatch,
-    llm_intent: input.llmIntent,
-    enforced_intent: input.enforcedIntent,
-    dispatch_intent: input.dispatchIntent,
-    matchmaker_invoked: input.matchResult.matchmaker_invoked,
-    matchmaker_skip_reason: input.matchResult.matchmaker_skip_reason,
-    bounded_unresolved_activation: input.matchResult.bounded_unresolved_activation ?? false,
-    final_wedding_id: input.finalWeddingId,
-    bounded_unresolved_email_matchmaker: input.boundedUnresolved,
-    ...(input.matchResult.qa_synthetic_near_match_confidence != null
-      ? {
-          qa_synthetic_near_match_confidence_applied:
-            input.matchResult.qa_synthetic_near_match_confidence,
-        }
-      : {}),
-  };
-}
+// ── Stage gate + matchmaker: ../../_shared/triage/emailIngressClassification.ts ──
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -275,29 +183,7 @@ function extractSenderAndBody(payload: Record<string, unknown>): {
   return { sender, body };
 }
 
-/**
- * Pass verified email-shaped sender into `ai/orchestrator.client.v1` for IE2 B2B domain signals.
- * Omits web/phone-only senders (no `@`).
- */
-function orchestratorInboundSenderFields(sender: string): { inboundSenderEmail?: string } {
-  const t = sender.trim();
-  if (!t.includes("@")) return {};
-  return { inboundSenderEmail: t };
-}
-
-/**
- * Legacy specialist events for **email + dashboard-web** main path when env-gated orchestrator live paths are off.
- * `ai/intent.persona` is **not** emitted by triage (intake/specialists chain into persona). Near-match escalation
- * skips this map. Retirement sequencing: `docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`.
- */
-const INTENT_EVENT_MAP: Record<TriageIntent, keyof AtelierEvents> = {
-  intake: "ai/intent.intake",
-  commercial: "ai/intent.commercial",
-  logistics: "ai/intent.logistics",
-  project_management: "ai/intent.project_management",
-  concierge: "ai/intent.concierge",
-  studio: "ai/intent.studio",
-};
+// Orchestrator sender fields: `runMainPathEmailDispatch.ts` (also used by shadow fan-out below).
 
 // ── Inngest function ─────────────────────────────────────────────
 
@@ -366,41 +252,17 @@ export const triageFunction = inngest.createFunction(
         : {},
     );
 
+    const emailSubject =
+      typeof payload === "object" &&
+      payload !== null &&
+      typeof (payload as Record<string, unknown>).subject === "string"
+        ? ((payload as Record<string, unknown>).subject as string)
+        : "";
+
     // ── Step 1: Deterministic Identity + Stage ────────────────────
-    const identity = await step.run("deterministic-identity", async () => {
-      let weddingId: string | null = null;
-      let photographerId: string | null = null;
-      let projectStage: string | null = null;
-
-      if (sender) {
-        const { data: client } = await supabaseAdmin
-          .from("clients")
-          .select("wedding_id")
-          .eq("email", sender)
-          .limit(1)
-          .maybeSingle();
-
-        weddingId = (client?.wedding_id as string) ?? null;
-      }
-
-      if (weddingId) {
-        const { data: wedding } = await supabaseAdmin
-          .from("weddings")
-          .select("photographer_id, stage")
-          .eq("id", weddingId)
-          .single();
-
-        photographerId = (wedding?.photographer_id as string) ?? null;
-        projectStage = (wedding?.stage as string) ?? null;
-      }
-
-      // Ingress always carries tenant on email/web; use it when DB join is stale or incomplete.
-      if (!photographerId && payloadPhotographerId) {
-        photographerId = payloadPhotographerId;
-      }
-
-      return { weddingId, photographerId, projectStage };
-    });
+    const identity = await step.run("deterministic-identity", async () =>
+      resolveDeterministicIdentity(supabaseAdmin, { sender, payloadPhotographerId }),
+    );
 
     // ── Web widget fast-path (known wedding) — CUT2 live orchestrator vs legacy ai/intent.concierge (CUT2-only D1) ──
     // Main-path concierge (CUT4) is a separate branch below.
@@ -588,7 +450,9 @@ export const triageFunction = inngest.createFunction(
 
     // ── Step 2: Traffic Cop (Intent Classification) ──────────────
     const llmIntent = await step.run("classify-intent", async () => {
-      return runTriageAgent(body);
+      const raw = await runTriageAgent(body);
+      if (identity.weddingId) return raw;
+      return applyUnlinkedWeddingLeadIntakeBoost(raw, body, emailSubject);
     });
 
     // ── Step 2b: Stage Gate — override LLM if invalid for stage ──
@@ -606,209 +470,35 @@ export const triageFunction = inngest.createFunction(
       llmIntent !== "intake";
 
     // ── Step 3: Conditional Matchmaker ───────────────────────────
-    const matchResult = await step.run("conditional-matchmaker", async (): Promise<MatchmakerStepResult> => {
-      if (identity.weddingId) {
-        return {
-          weddingId: identity.weddingId,
-          match: null,
-          matchmaker_invoked: false,
-          matchmaker_skip_reason: "deterministic_client_email_match",
-        };
-      }
-
-      if (stageGateIntent === "intake" && !boundedUnresolvedSubsetEligible) {
-        return {
-          weddingId: null,
-          match: null,
-          matchmaker_invoked: false,
-          matchmaker_skip_reason: "stage_gate_intake_without_deterministic_wedding",
-        };
-      }
-
-      const tenantPhotographerId = identity.photographerId ?? payloadPhotographerId;
-      if (!tenantPhotographerId) {
-        return {
-          weddingId: null,
-          match: null,
-          matchmaker_invoked: false,
-          matchmaker_skip_reason: "missing_tenant_photographer_id",
-        };
-      }
-
-      const { data: activeWeddings } = await supabaseAdmin
-        .from("weddings")
-        .select("id, couple_names, wedding_date, location, stage")
-        .eq("photographer_id", tenantPhotographerId)
-        .neq("stage", "archived")
-        .neq("stage", "delivered");
-
-      if (!activeWeddings || activeWeddings.length === 0) {
-        return {
-          weddingId: null,
-          match: null,
-          matchmaker_invoked: false,
-          matchmaker_skip_reason: "no_active_weddings_for_tenant",
-        };
-      }
-
-      let match = await runMatchmakerAgent(
+    const matchResult = await step.run("conditional-matchmaker", async (): Promise<MatchmakerStepResult> =>
+      runConditionalMatchmakerForEmail(supabaseAdmin, {
         body,
-        activeWeddings as Record<string, unknown>[],
-      );
-
-      let qaSyntheticNearMatchConfidence: number | null = null;
-      const qaSyntheticScore = getTriageQaBoundedNearMatchSyntheticConfidenceScore();
-      const sid =
-        typeof match.suggested_wedding_id === "string" ? match.suggested_wedding_id.trim() : "";
-      if (
-        qaSyntheticScore !== null &&
-        boundedUnresolvedSubsetEligible &&
-        isTriageBoundedUnresolvedEmailMatchApprovalEscalationEnabled() &&
-        sid.length > 0
-      ) {
-        qaSyntheticNearMatchConfidence = qaSyntheticScore;
-        match = {
-          ...match,
-          confidence_score: qaSyntheticScore,
-          reasoning: `[qa:${TRIAGE_QA_BOUNDED_NEAR_MATCH_SYNTHETIC_CONFIDENCE_V1_ENV}=${qaSyntheticScore}] ${match.reasoning}`,
-        };
-        console.log(
-          "[triage.qa_synthetic_near_match_confidence]",
-          JSON.stringify({ score: qaSyntheticScore, suggested_wedding_id: sid }),
-        );
-      }
-
-      const resolvedWeddingId =
-        match.confidence_score >= BOUNDED_UNRESOLVED_MATCH_AUTO_RESOLVE_MIN_CONFIDENCE
-          ? match.suggested_wedding_id
-          : null;
-
-      if (resolvedWeddingId) {
-        const { data: wedding } = await supabaseAdmin
-          .from("weddings")
-          .select("photographer_id, stage")
-          .eq("id", resolvedWeddingId)
-          .single();
-
-        return {
-          weddingId: resolvedWeddingId,
-          photographerId: (wedding?.photographer_id as string) ?? identity.photographerId,
-          resolved_wedding_project_stage: (wedding?.stage as string) ?? null,
-          match,
-          matchmaker_invoked: true,
-          matchmaker_skip_reason: "matchmaker_resolved_above_threshold",
-          bounded_unresolved_activation: boundedUnresolvedSubsetEligible,
-          qa_synthetic_near_match_confidence: qaSyntheticNearMatchConfidence,
-        };
-      }
-
-      return {
-        weddingId: null,
-        match,
-        matchmaker_invoked: true,
-        matchmaker_skip_reason: "matchmaker_below_threshold_or_unresolved",
-        bounded_unresolved_activation: boundedUnresolvedSubsetEligible,
-        qa_synthetic_near_match_confidence: qaSyntheticNearMatchConfidence,
-      };
-    });
-
-    const finalWeddingId = matchResult.weddingId ?? identity.weddingId;
-    const finalPhotographerId =
-      matchResult.photographerId ?? identity.photographerId ?? payloadPhotographerId;
-
-    const matchCandidateId =
-      typeof matchResult.match?.suggested_wedding_id === "string" &&
-      matchResult.match.suggested_wedding_id.trim().length > 0
-        ? matchResult.match.suggested_wedding_id.trim()
-        : null;
-    const matchConfidence =
-      typeof matchResult.match?.confidence_score === "number"
-        ? matchResult.match.confidence_score
-        : 0;
-
-    const approvalEscalationGateOn = isTriageBoundedUnresolvedEmailMatchApprovalEscalationEnabled();
-    const nearMatchForApproval =
-      approvalEscalationGateOn &&
-      boundedUnresolvedSubsetEligible &&
-      matchResult.matchmaker_invoked &&
-      !finalWeddingId &&
-      matchCandidateId !== null &&
-      matchConfidence >= BOUNDED_UNRESOLVED_MATCH_APPROVAL_ESCALATION_MIN_CONFIDENCE &&
-      matchConfidence < BOUNDED_UNRESOLVED_MATCH_AUTO_RESOLVE_MIN_CONFIDENCE;
-
-    const projectStageUsedForDispatch: string | null = identity.weddingId
-      ? identity.projectStage
-      : finalWeddingId
-        ? (matchResult.resolved_wedding_project_stage ?? null)
-        : null;
-
-    const dispatchIntent = enforceStageGate(
-      llmIntent,
-      projectStageUsedForDispatch,
-      !!finalWeddingId,
+        identity,
+        stageGateIntent,
+        boundedUnresolvedSubsetEligible,
+        payloadPhotographerId,
+      }),
     );
 
-    const boundedOutcome: {
-      gate_on: boolean;
-      subset_eligible: boolean;
-      activation: boolean;
-      outcome:
-        | "not_eligible"
-        | "resolved_above_threshold"
-        | "escalated_for_approval"
-        | "declined_low_confidence"
-        | "skipped_matchmaker_not_invoked";
-    } = (() => {
-      if (!boundedUnresolvedSubsetEligible) {
-        return {
-          gate_on: boundedUnresolvedGateOn,
-          subset_eligible: false,
-          activation: false,
-          outcome: "not_eligible" as const,
-        };
-      }
-      if (!matchResult.matchmaker_invoked) {
-        return {
-          gate_on: true,
-          subset_eligible: true,
-          activation: false,
-          outcome: "skipped_matchmaker_not_invoked" as const,
-        };
-      }
-      if (matchResult.matchmaker_skip_reason === "matchmaker_resolved_above_threshold") {
-        return {
-          gate_on: true,
-          subset_eligible: true,
-          activation: true,
-          outcome: "resolved_above_threshold" as const,
-        };
-      }
-      if (nearMatchForApproval) {
-        return {
-          gate_on: true,
-          subset_eligible: true,
-          activation: true,
-          outcome: "escalated_for_approval" as const,
-        };
-      }
-      return {
-        gate_on: true,
-        subset_eligible: true,
-        activation: true,
-        outcome: "declined_low_confidence" as const,
-      };
-    })();
-
-    const weddingResolutionTrace = buildWeddingResolutionTrace({
+    const derived = deriveEmailIngressRouting({
       identity,
       llmIntent,
-      enforcedIntent: stageGateIntent,
-      dispatchIntent,
-      projectStageUsedForDispatch,
+      stageGateIntent,
       matchResult,
-      finalWeddingId,
-      boundedUnresolved: boundedOutcome,
+      payloadPhotographerId,
+      boundedUnresolvedSubsetEligible,
     });
+    const {
+      finalWeddingId,
+      finalPhotographerId,
+      matchCandidateId,
+      matchConfidence,
+      nearMatchForApproval,
+      dispatchIntent,
+      boundedUnresolved: boundedOutcome,
+      weddingResolutionTrace,
+      approvalEscalationGateOn,
+    } = derived;
 
     console.log(
       "[triage.routing_resolution]",
@@ -836,21 +526,12 @@ export const triageFunction = inngest.createFunction(
           ? ((payload as Record<string, unknown>).subject as string)
           : body.slice(0, 60);
 
-      const routingMetadata =
-        !finalWeddingId && matchResult.match
-          ? {
-              suggested_wedding_id: matchResult.match.suggested_wedding_id,
-              confidence_score: matchResult.match.confidence_score,
-              reasoning: matchResult.match.reasoning,
-              classified_intent: dispatchIntent,
-              ...(nearMatchForApproval
-                ? {
-                    pending_photographer_wedding_approval: true as const,
-                    routing_kind: "near_match_escalation_candidate" as const,
-                  }
-                : {}),
-            }
-          : null;
+      const routingMetadata = buildAiRoutingMetadataForUnresolved({
+        finalWeddingId,
+        matchResult,
+        dispatchIntent,
+        nearMatchForApproval,
+      });
 
       if (!finalPhotographerId) {
         throw new Error("Cannot create thread: missing photographer_id on payload or resolved wedding.");
@@ -940,229 +621,19 @@ export const triageFunction = inngest.createFunction(
     // ── Dispatch downstream event (live production path — legacy `ai/intent.*` or CUT4–CUT8 orchestrator) ──
     const dispatchResult = await step.run(
       "dispatch-event",
-      async (): Promise<
-        | { kind: "near_match_approval_escalation"; escalationId: string }
-        | { kind: "intake" }
-        | { kind: "cut4_d1_blocked_no_dispatch" }
-        | { kind: "cut4_live"; cut4LiveCorrelationId: string }
-        | { kind: "cut5_d1_blocked_no_dispatch" }
-        | { kind: "cut5_live"; cut5LiveCorrelationId: string }
-        | { kind: "cut6_d1_blocked_no_dispatch" }
-        | { kind: "cut6_live"; cut6LiveCorrelationId: string }
-        | { kind: "cut7_d1_blocked_no_dispatch" }
-        | { kind: "cut7_live"; cut7LiveCorrelationId: string }
-        | { kind: "cut8_d1_blocked_no_dispatch" }
-        | { kind: "cut8_live"; cut8LiveCorrelationId: string }
-        | { kind: "legacy"; legacyEvent: keyof AtelierEvents }
-      > => {
-        if (nearMatchForApproval && nearMatchEscalationId) {
-          return { kind: "near_match_approval_escalation" as const, escalationId: nearMatchEscalationId };
-        }
-
-        const eventName = INTENT_EVENT_MAP[dispatchIntent];
-
-        const cut4MainPathLive =
-          isTriageLiveOrchestratorMainPathConciergeKnownWeddingEnabled() &&
-          dispatchIntent === "concierge" &&
-          !!finalWeddingId;
-
-        const cut5MainPathLive =
-          isTriageLiveOrchestratorMainPathProjectManagementKnownWeddingEnabled() &&
-          dispatchIntent === "project_management" &&
-          !!finalWeddingId;
-
-        const cut6MainPathLive =
-          isTriageLiveOrchestratorMainPathLogisticsKnownWeddingEnabled() &&
-          dispatchIntent === "logistics" &&
-          !!finalWeddingId;
-
-        const cut7MainPathLive =
-          isTriageLiveOrchestratorMainPathCommercialKnownWeddingEnabled() &&
-          dispatchIntent === "commercial" &&
-          !!finalWeddingId;
-
-        const cut8MainPathLive =
-          isTriageLiveOrchestratorMainPathStudioKnownWeddingEnabled() &&
-          dispatchIntent === "studio" &&
-          !!finalWeddingId;
-
-        if (eventName === "ai/intent.intake") {
-          await inngest.send({
-            name: "ai/intent.intake",
-            data: {
-              photographer_id: finalPhotographerId ?? "",
-              wedding_id: finalWeddingId ?? undefined,
-              thread_id: threadInfo.threadId,
-              raw_message: body,
-              sender_email: sender,
-              reply_channel: replyChannel,
-            },
-          });
-          return { kind: "intake" };
-        }
-
-        if (!finalPhotographerId) {
-          throw new Error(
-            "dispatch: missing photographer_id for legacy ai/intent.* (tenant-proof required).",
-          );
-        }
-
-        if (cut4MainPathLive) {
-          const cut4LiveCorrelationId = crypto.randomUUID();
-          await inngest.send({
-            name: ORCHESTRATOR_CLIENT_V1_EVENT,
-            data: {
-              schemaVersion: ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION,
-              photographerId: finalPhotographerId,
-              weddingId: finalWeddingId!,
-              threadId: threadInfo.threadId,
-              replyChannel: replyChannel === "web" ? "web" : "email",
-              rawMessage: body,
-              ...orchestratorInboundSenderFields(sender),
-              requestedExecutionMode: "draft_only",
-              cut4LiveCorrelationId,
-              cut4LiveFanoutSource: "triage_main_concierge_live" as const,
-            },
-          });
-          return { kind: "cut4_live", cut4LiveCorrelationId };
-        }
-
-        if (
-          dispatchIntent === "concierge" &&
-          !!finalWeddingId &&
-          !cut4MainPathLive &&
-          !isTriageD1Cut4MainPathConciergeLegacyConciergeDispatchWhenCut4OffAllowed()
-        ) {
-          return { kind: "cut4_d1_blocked_no_dispatch" as const };
-        }
-
-        if (cut5MainPathLive) {
-          const cut5LiveCorrelationId = crypto.randomUUID();
-          await inngest.send({
-            name: ORCHESTRATOR_CLIENT_V1_EVENT,
-            data: {
-              schemaVersion: ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION,
-              photographerId: finalPhotographerId,
-              weddingId: finalWeddingId!,
-              threadId: threadInfo.threadId,
-              replyChannel: replyChannel === "web" ? "web" : "email",
-              rawMessage: body,
-              ...orchestratorInboundSenderFields(sender),
-              requestedExecutionMode: "draft_only",
-              cut5LiveCorrelationId,
-              cut5LiveFanoutSource: "triage_main_project_management_live" as const,
-            },
-          });
-          return { kind: "cut5_live", cut5LiveCorrelationId };
-        }
-
-        if (
-          dispatchIntent === "project_management" &&
-          !!finalWeddingId &&
-          !cut5MainPathLive &&
-          !isTriageD1Cut5MainPathProjectManagementLegacyDispatchWhenCut5OffAllowed()
-        ) {
-          return { kind: "cut5_d1_blocked_no_dispatch" as const };
-        }
-
-        if (cut6MainPathLive) {
-          const cut6LiveCorrelationId = crypto.randomUUID();
-          await inngest.send({
-            name: ORCHESTRATOR_CLIENT_V1_EVENT,
-            data: {
-              schemaVersion: ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION,
-              photographerId: finalPhotographerId,
-              weddingId: finalWeddingId!,
-              threadId: threadInfo.threadId,
-              replyChannel: replyChannel === "web" ? "web" : "email",
-              rawMessage: body,
-              ...orchestratorInboundSenderFields(sender),
-              requestedExecutionMode: "draft_only",
-              cut6LiveCorrelationId,
-              cut6LiveFanoutSource: "triage_main_logistics_live" as const,
-            },
-          });
-          return { kind: "cut6_live", cut6LiveCorrelationId };
-        }
-
-        if (
-          dispatchIntent === "logistics" &&
-          !!finalWeddingId &&
-          !cut6MainPathLive &&
-          !isTriageD1Cut6MainPathLogisticsLegacyDispatchWhenCut6OffAllowed()
-        ) {
-          return { kind: "cut6_d1_blocked_no_dispatch" as const };
-        }
-
-        if (cut7MainPathLive) {
-          const cut7LiveCorrelationId = crypto.randomUUID();
-          await inngest.send({
-            name: ORCHESTRATOR_CLIENT_V1_EVENT,
-            data: {
-              schemaVersion: ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION,
-              photographerId: finalPhotographerId,
-              weddingId: finalWeddingId!,
-              threadId: threadInfo.threadId,
-              replyChannel: replyChannel === "web" ? "web" : "email",
-              rawMessage: body,
-              ...orchestratorInboundSenderFields(sender),
-              requestedExecutionMode: "draft_only",
-              cut7LiveCorrelationId,
-              cut7LiveFanoutSource: "triage_main_commercial_live" as const,
-            },
-          });
-          return { kind: "cut7_live", cut7LiveCorrelationId };
-        }
-
-        if (
-          dispatchIntent === "commercial" &&
-          !!finalWeddingId &&
-          !cut7MainPathLive &&
-          !isTriageD1Cut7MainPathCommercialLegacyDispatchWhenCut7OffAllowed()
-        ) {
-          return { kind: "cut7_d1_blocked_no_dispatch" as const };
-        }
-
-        if (cut8MainPathLive) {
-          const cut8LiveCorrelationId = crypto.randomUUID();
-          await inngest.send({
-            name: ORCHESTRATOR_CLIENT_V1_EVENT,
-            data: {
-              schemaVersion: ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION,
-              photographerId: finalPhotographerId,
-              weddingId: finalWeddingId!,
-              threadId: threadInfo.threadId,
-              replyChannel: replyChannel === "web" ? "web" : "email",
-              rawMessage: body,
-              ...orchestratorInboundSenderFields(sender),
-              requestedExecutionMode: "draft_only",
-              cut8LiveCorrelationId,
-              cut8LiveFanoutSource: "triage_main_studio_live" as const,
-            },
-          });
-          return { kind: "cut8_live", cut8LiveCorrelationId };
-        }
-
-        if (
-          dispatchIntent === "studio" &&
-          !!finalWeddingId &&
-          !cut8MainPathLive &&
-          !isTriageD1Cut8MainPathStudioLegacyDispatchWhenCut8OffAllowed()
-        ) {
-          return { kind: "cut8_d1_blocked_no_dispatch" as const };
-        }
-
-        await inngest.send({
-          name: eventName,
-          data: {
-            wedding_id: finalWeddingId!,
-            photographer_id: finalPhotographerId,
-            raw_message: body,
-            reply_channel: replyChannel,
-          },
-        });
-        return { kind: "legacy", legacyEvent: eventName };
-      },
+      async (): Promise<MainPathEmailDispatchResult> =>
+        runMainPathEmailDispatch({
+          nearMatchForApproval,
+          nearMatchEscalationId,
+          dispatchIntent,
+          finalWeddingId,
+          finalPhotographerId,
+          threadId: threadInfo.threadId,
+          body,
+          sender,
+          replyChannel,
+          useExistingThreadIntakeEvent: false,
+        }),
     );
 
     if (dispatchResult.kind === "cut4_d1_blocked_no_dispatch") {

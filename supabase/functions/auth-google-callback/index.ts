@@ -6,6 +6,7 @@ import {
   mergeGoogleReconnectRefreshToken,
 } from "../_shared/gmail/googleOAuthToken.ts";
 import { verifyGoogleOAuthState } from "../_shared/gmail/googleOAuthState.ts";
+import { fetchWithTimeout } from "../_shared/http/fetchWithTimeout.ts";
 import { supabaseAdmin } from "../_shared/supabase.ts";
 
 function redirectToApp(url: string): Response {
@@ -61,8 +62,9 @@ Deno.serve(async (req) => {
     return fail(msg);
   }
 
-  const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+  const userRes = await fetchWithTimeout("https://www.googleapis.com/oauth2/v3/userinfo", {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
+    timeoutMs: 30_000,
   });
   if (!userRes.ok) {
     return fail("userinfo_failed");
@@ -74,7 +76,7 @@ Deno.serve(async (req) => {
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-  const { data: existing, error: findErr } = await supabaseAdmin
+  const { data: existingRow, error: findErr } = await supabaseAdmin
     .from("connected_accounts")
     .select("id")
     .eq("photographer_id", payload.photographerId)
@@ -87,69 +89,32 @@ Deno.serve(async (req) => {
     return fail("db_error");
   }
 
-  let accountId: string;
-  if (existing?.id) {
-    accountId = existing.id;
-    const { error: upErr } = await supabaseAdmin
-      .from("connected_accounts")
-      .update({
-        email: user.email,
-        display_name: user.name ?? null,
-        sync_status: "connected",
-        sync_error_summary: null,
-        token_expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", accountId);
-    if (upErr) {
-      console.error("[auth-google-callback]", upErr.message);
-      return fail("db_error");
-    }
-  } else {
-    const { data: inserted, error: insErr } = await supabaseAdmin
-      .from("connected_accounts")
-      .insert({
-        photographer_id: payload.photographerId,
-        provider: "google",
-        provider_account_id: user.sub,
-        email: user.email,
-        display_name: user.name ?? null,
-        sync_status: "connected",
-        sync_error_summary: null,
-        token_expires_at: expiresAt,
-      })
-      .select("id")
-      .single();
-    if (insErr || !inserted?.id) {
-      console.error("[auth-google-callback]", insErr?.message);
-      return fail("db_error");
-    }
-    accountId = inserted.id;
-  }
-
-  const { data: existingTokens } = await supabaseAdmin
-    .from("connected_account_oauth_tokens")
-    .select("refresh_token")
-    .eq("connected_account_id", accountId)
-    .maybeSingle();
+  const { data: existingTokens } = existingRow?.id
+    ? await supabaseAdmin
+        .from("connected_account_oauth_tokens")
+        .select("refresh_token")
+        .eq("connected_account_id", existingRow.id)
+        .maybeSingle()
+    : { data: null };
 
   const refreshTokenToStore = mergeGoogleReconnectRefreshToken(
     tokens.refresh_token,
     existingTokens?.refresh_token ?? null,
   );
 
-  const { error: tokErr } = await supabaseAdmin.from("connected_account_oauth_tokens").upsert(
-    {
-      connected_account_id: accountId,
-      access_token: tokens.access_token,
-      refresh_token: refreshTokenToStore,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "connected_account_id" },
-  );
+  const { error: rpcErr } = await supabaseAdmin.rpc("complete_google_oauth_connection", {
+    p_photographer_id: payload.photographerId,
+    p_provider: "google",
+    p_provider_account_id: user.sub,
+    p_email: user.email,
+    p_display_name: user.name ?? null,
+    p_token_expires_at: expiresAt,
+    p_access_token: tokens.access_token,
+    p_refresh_token: refreshTokenToStore,
+  });
 
-  if (tokErr) {
-    console.error("[auth-google-callback]", tokErr.message);
+  if (rpcErr) {
+    console.error("[auth-google-callback]", rpcErr.message);
     return fail("db_error");
   }
 

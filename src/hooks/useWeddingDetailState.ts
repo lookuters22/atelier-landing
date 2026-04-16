@@ -51,14 +51,42 @@ export function useWeddingDetailState({
   weddingFieldsRef.current = weddingFields;
   peopleRef.current = people;
 
+  /** Reset edit mode when switching projects. */
+  useEffect(() => {
+    setEditingWedding(false);
+    setEditingPeople(false);
+  }, [weddingId]);
+
+  /**
+   * Live CRM row (`entry`) wins for core wedding identity + commercial summary fields.
+   * LocalStorage only supplies extra overlay for keys not replaced here; skipped while the user is editing the wedding card.
+   */
   useEffect(() => {
     const base = buildWeddingDetailDefaults(weddingId, entry);
     const loaded = loadWeddingDetailPersisted(weddingId, base);
-    setWeddingFields(loaded.wedding);
+    if (editingWedding) return;
+    setWeddingFields({
+      ...loaded.wedding,
+      couple: entry.couple,
+      when: entry.when,
+      where: entry.where,
+      stage: entry.stage,
+      package: entry.package,
+      value: entry.value,
+      balance: entry.balance,
+    });
     setPhotographerNotes(loaded.photographerNotes);
-    setEditingWedding(false);
-    setEditingPeople(false);
-  }, [entry, weddingId]);
+  }, [
+    weddingId,
+    editingWedding,
+    entry.couple,
+    entry.when,
+    entry.where,
+    entry.stage,
+    entry.package,
+    entry.value,
+    entry.balance,
+  ]);
 
   useEffect(() => {
     if (liveClients.length > 0) {

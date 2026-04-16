@@ -120,6 +120,7 @@ import { syncComplianceWhatsAppPendingCollectState } from "../../_shared/orchest
 import { maybeRewriteOrchestratorDraftWithPersona } from "../../_shared/orchestrator/maybeRewriteOrchestratorDraftWithPersona.ts";
 import { enrichProposalsWithComplianceAssetResolution } from "../../_shared/orchestrator/resolveComplianceAssetStorage.ts";
 import { recordStrategicTrustRepairEscalation } from "../../_shared/orchestrator/recordStrategicTrustRepairEscalation.ts";
+import { maybeRecordOrchestratorNoDraftableEscalation } from "../../_shared/orchestrator/recordOrchestratorNoDraftableEscalation.ts";
 import { upsertV3ThreadWorkflowFromInboundMessage } from "../../_shared/workflow/v3ThreadWorkflowRepository.ts";
 import {
   buildShadowOrchestratorReadinessRecord,
@@ -305,9 +306,14 @@ export const clientOrchestratorV1Function = inngest.createFunction(
           }),
         );
       } else if (result.applied && !result.auditPassed) {
+        const personaStructuredFailure = result.violations?.some((v) =>
+          v.startsWith("persona_structured_output_failed:"),
+        );
         console.log(
           JSON.stringify({
-            type: "orchestrator_persona_draft_audit_rejected",
+            type: personaStructuredFailure
+              ? "orchestrator_persona_draft_structured_output_failed"
+              : "orchestrator_persona_draft_audit_rejected",
             draftId: result.draftId,
             violations: result.violations,
             escalationId: result.escalationId,
@@ -362,6 +368,28 @@ export const clientOrchestratorV1Function = inngest.createFunction(
               threadId,
               weddingId,
             }),
+    );
+
+    await step.run(
+      skipIntakeParityDbSideEffects
+        ? "record-no-draftable-operator-escalation-skipped-intake-parity"
+        : "record-no-draftable-operator-escalation",
+      async () => {
+        if (skipIntakeParityDbSideEffects || !threadId) {
+          return { recorded: false as const, reason: "skipped_intake_parity_or_no_thread" as const };
+        }
+        return maybeRecordOrchestratorNoDraftableEscalation(supabaseAdmin, {
+          photographerId,
+          threadId,
+          weddingId,
+          verifierSuccess: verifierResult.success === true,
+          orchestratorOutcome,
+          draftSkipReason: draftAttempt.skipReason ?? null,
+          draftCreated: draftAttempt.draftCreated,
+          proposedActions,
+          rawMessage,
+        });
+      },
     );
 
     /** Only when verifier passes — matches pre-refactor worker (no calculator step on block). Intake parity skips I/O. */

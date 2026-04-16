@@ -1,6 +1,9 @@
 /**
  * Google OAuth token refresh + expiry skew (shared by Edge + Inngest).
  */
+import { fetchWithTimeout } from "../http/fetchWithTimeout.ts";
+
+const GOOGLE_OAUTH_FETCH_TIMEOUT_MS = 30_000;
 
 /**
  * On OAuth reconnect, Google often omits `refresh_token`. Never overwrite a stored refresh token with null.
@@ -50,10 +53,11 @@ export async function exchangeGoogleAuthorizationCode(
     grant_type: "authorization_code",
     redirect_uri: redirectUri,
   });
-  const res = await fetch("https://oauth2.googleapis.com/token", {
+  const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
+    timeoutMs: GOOGLE_OAUTH_FETCH_TIMEOUT_MS,
   });
   const json = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {
@@ -82,10 +86,11 @@ export async function exchangeGoogleRefreshToken(
     refresh_token: refreshToken,
     grant_type: "refresh_token",
   });
-  const res = await fetch("https://oauth2.googleapis.com/token", {
+  const res = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
+    timeoutMs: GOOGLE_OAUTH_FETCH_TIMEOUT_MS,
   });
   const json = (await res.json()) as Record<string, unknown>;
   if (!res.ok) {

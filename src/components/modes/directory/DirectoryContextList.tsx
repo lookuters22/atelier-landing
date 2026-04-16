@@ -13,7 +13,7 @@ export function DirectoryContextList() {
     useDirectoryMode();
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-r border-border bg-sidebar text-[13px] text-foreground">
+    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
       <div className="shrink-0 p-2 pb-4">
         <div className="relative">
           <Search

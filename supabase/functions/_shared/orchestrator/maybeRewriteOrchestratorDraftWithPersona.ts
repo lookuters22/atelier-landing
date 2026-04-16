@@ -1,6 +1,6 @@
 /**
  * After Slice A2 inserts the deterministic orchestrator **stub** body, optionally replace it with
- * real client-facing prose via {@link draftPersonaStructuredResponse} (JSON: `email_draft` + `committed_terms`) and
+ * real client-facing prose via {@link draftPersonaStructuredResponse} (Anthropic tool `submit_persona_draft` → `email_draft_lines` joined + `committed_terms`) and
  * {@link auditDraftTerms} backstop (same writer boundary as WhatsApp `draftPersonaResponse` for non-orchestrator flows).
  *
  * - **Default:** rewrite when `ANTHROPIC_API_KEY` is set (unset `ORCHESTRATOR_CLIENT_V1_PERSONA_DRAFT_BODY` → try persona).
@@ -443,13 +443,86 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
     params.decisionContext.audience,
   );
 
+  const draftId = params.draftAttempt.draftId!;
+  const { data: rowEarly, error: fetchEarlyErr } = await supabase
+    .from("drafts")
+    .select("instruction_history")
+    .eq("id", draftId)
+    .single();
+
+  if (fetchEarlyErr) {
+    return { applied: false, reason: `fetch_instruction_history:${fetchEarlyErr.message}` };
+  }
+  const prior = Array.isArray(rowEarly?.instruction_history) ? (rowEarly!.instruction_history as unknown[]) : [];
+
   let structured: PersonaWriterStructuredOutput;
   try {
     structured = await draftPersonaStructuredResponse(params.decisionContext, facts);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[clientOrchestratorV1] persona draft rewrite failed:", msg);
-    return { applied: false, reason: `persona_error:${msg}` };
+    const violations = [`persona_structured_output_failed:${msg.slice(0, 800)}`];
+
+    let escalationId: string | null = null;
+    if (params.threadId) {
+      const esc = await recordV3OutputAuditorEscalation(supabase, {
+        photographerId: params.photographerId,
+        threadId: params.threadId,
+        weddingId: params.decisionContext.weddingId ?? null,
+        violations,
+        draftId,
+        variant: "persona_structured_output",
+      });
+      escalationId = esc?.id ?? null;
+    }
+
+    const stub = buildOrchestratorStubDraftBody(
+      chosen,
+      params.rawMessage,
+      params.replyChannel,
+      params.playbookRules,
+      params.decisionContext.audience,
+    );
+    const body =
+      stub +
+      "\n\n[PERSONA DRAFT FAILED — operator review required]\n" +
+      "Automated client-facing rewrite did not complete (structured JSON/persona error). Do not send this draft to the client as final copy.\n" +
+      `Detail: ${msg.slice(0, 1200)}`;
+    const failStep = {
+      step: "persona_writer_after_client_orchestrator_v1",
+      source: "personaAgent.draftPersonaStructuredResponse",
+      model: "claude-haiku-4-5",
+      failed: true as const,
+      error: msg.slice(0, 2000),
+      violations,
+      escalation_id: escalationId,
+    };
+    const structuredFailureAuditStep = {
+      step: "v3_persona_structured_output_escalation",
+      passed: false as const,
+      reason_code: "persona_structured_output_failed" as const,
+      violations,
+      escalation_id: escalationId,
+    };
+    const { error: upErr } = await supabase
+      .from("drafts")
+      .update({
+        body,
+        instruction_history: [...prior, failStep, structuredFailureAuditStep],
+      })
+      .eq("id", draftId);
+
+    if (upErr) {
+      return { applied: false, reason: `draft_update_failed:${upErr.message}` };
+    }
+
+    return {
+      applied: true,
+      draftId,
+      auditPassed: false,
+      violations,
+      escalationId,
+    };
   }
 
   const emailFromModel = structured.email_draft;
@@ -479,18 +552,6 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
 
   const enforceClientSafeProse = params.decisionContext.audience.clientVisibleForPrivateCommercialRedaction;
   const leakAudit = auditPlannerPrivateLeakage(structured.email_draft, enforceClientSafeProse);
-
-  const { data: row, error: fetchErr } = await supabase
-    .from("drafts")
-    .select("instruction_history")
-    .eq("id", params.draftAttempt.draftId)
-    .single();
-
-  if (fetchErr) {
-    return { applied: false, reason: `fetch_instruction_history:${fetchErr.message}` };
-  }
-
-  const prior = Array.isArray(row?.instruction_history) ? (row!.instruction_history as unknown[]) : [];
   const committedTermsForHistory = redactPersonaCommittedTermsForAudience(
     structured.committed_terms,
     params.decisionContext.audience,

@@ -60,17 +60,13 @@ describe("inboxDeepLinkPersistence", () => {
     });
   });
 
-  it("resolveInboxDeepLinkPayload falls back to session when URL has no threadId", () => {
+  it("resolveInboxDeepLinkPayload does not use session when URL has no threadId", () => {
     persistInboxDeepLinkPayload({
       threadId: "from-session",
       draftId: "d9",
       action: "review_draft",
     });
-    expect(resolveInboxDeepLinkPayload(new URLSearchParams(""))).toEqual({
-      threadId: "from-session",
-      draftId: "d9",
-      action: "review_draft",
-    });
+    expect(resolveInboxDeepLinkPayload(new URLSearchParams(""))).toBeNull();
   });
 
   it("serializeInboxDeepLinkPayload is stable for dedup", () => {

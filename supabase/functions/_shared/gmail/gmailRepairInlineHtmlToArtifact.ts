@@ -80,11 +80,11 @@ export async function repairGmailMessageInlineHtmlToArtifact(
     messageId,
   });
 
-  if (!persisted) {
+  if (!persisted.ok) {
     return {
       outcome: "failed",
       message_id: messageId,
-      reason: "persist_gmail_render_html_returned_null",
+      reason: persisted.error,
     };
   }
 
