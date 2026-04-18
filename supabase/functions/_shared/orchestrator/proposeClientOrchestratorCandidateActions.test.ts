@@ -34,6 +34,7 @@ function baseAudience(overrides: Partial<DecisionAudienceSnapshot> = {}): Decisi
     clientVisibleForPrivateCommercialRedaction:
       overrides.clientVisibleForPrivateCommercialRedaction ?? true,
     approvalContactPersonIds: overrides.approvalContactPersonIds ?? [],
+    inboundSuppression: overrides.inboundSuppression ?? null,
   };
 }
 
@@ -753,6 +754,43 @@ describe("proposeClientOrchestratorCandidateActions — authority policy Phase 2
     expect(proposals[0]?.action_key).toBe("send_message");
     expect(proposals.some((p) => p.action_key === "v3_authority_policy_risk")).toBe(false);
   });
+
+  it("Belgrade-style booking-progress follow-up: prior discount in snippet does not force AP1 clarification", () => {
+    const inbound1 =
+      "Hi — we're looking at Sept 12 or Sept 19 next year at Belgrade Fortress. We want a package with online gallery, second photographer, high-res downloads, and cinematic film / sound design. Could you send a brochure?";
+    const studioReply =
+      "Thanks for reaching out — we offer photography only (no videography). We can share trusted videographer partners when you book.";
+    const inbound2 =
+      "Could you share the trusted partner list? We've locked Sept 12. What are the next steps to officially book you? Are 24h sneak peeks included or extra? Is there a destination fee for Belgrade Fortress locally? Could we do a brief call Thursday?";
+    const threadContextSnippet = `${inbound1}\n\n${studioReply}\n\n(Older thread line — not current turn) Can we get a bulk discount for 500 extra photos?`;
+
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience(),
+      playbookRules: [],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: "w1",
+      threadId: "t1",
+      replyChannel: "email",
+      rawMessage: inbound2,
+      threadContextSnippet,
+      requestedExecutionMode: "draft_only",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+      candidateWeddingIds: [],
+      inboundSenderAuthority: {
+        bucket: "planner",
+        personId: "pl1",
+        isApprovalContact: false,
+        source: "thread_sender",
+      },
+    });
+
+    expect(proposals[0]?.action_key).toBe("send_message");
+    expect(proposals.some((p) => p.action_key === "v3_authority_policy_clarification")).toBe(false);
+    expect(proposals.some((p) => p.action_key === "v3_authority_policy_risk")).toBe(false);
+  });
 });
 
 describe("proposeClientOrchestratorCandidateActions — authority policy Phase 3 binding", () => {
@@ -946,5 +984,215 @@ describe("proposeClientOrchestratorCandidateActions — AP1 workflow and playboo
     });
     expect(proposals.some((p) => p.action_key === "v3_authority_policy_risk")).toBe(true);
     expect(proposals.some((p) => p.action_key === "v3_stalled_inquiry_nudge_scheduled")).toBe(false);
+  });
+});
+
+describe("proposeClientOrchestratorCandidateActions \u2014 inbound suppression guard", () => {
+  it("blocks send_message and surfaces operator routing when inbound is promotional", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience({
+        broadcastRisk: "high",
+        inboundSuppression: {
+          verdict: "promotional_or_marketing",
+          suppressed: true,
+          reasons: [
+            "sender_domain_ota_or_marketplace",
+            "body_ota_promo_copy",
+            "body_unsubscribe_language",
+          ],
+          confidence: "high",
+          normalizedSenderEmail: "email.campaign@sg.booking.com",
+          normalizedSenderDomain: "sg.booking.com",
+        },
+      }),
+      playbookRules: [],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: "w1",
+      threadId: "t1",
+      replyChannel: "email",
+      rawMessage: "30% off selected stays — book your next getaway now.",
+      requestedExecutionMode: "auto",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+
+    const send = proposals.find(
+      (p) => p.action_family === "send_message" && p.action_key === "send_message",
+    );
+    expect(send?.likely_outcome).toBe("block");
+    expect(
+      send?.blockers_or_missing_facts.some((b) =>
+        b.startsWith("inbound_suppressed_non_client:promotional_or_marketing"),
+      ),
+    ).toBe(true);
+    expect(
+      proposals.some((p) => p.action_family === "operator_notification_routing"),
+    ).toBe(true);
+  });
+
+  it("does not block send_message when inboundSuppression is absent or not suppressed", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience({
+        inboundSuppression: {
+          verdict: "human_client_or_lead",
+          suppressed: false,
+          reasons: [],
+          confidence: "medium",
+          normalizedSenderEmail: "sarah@gmail.com",
+          normalizedSenderDomain: "gmail.com",
+        },
+      }),
+      playbookRules: [],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: "w1",
+      threadId: "t1",
+      replyChannel: "email",
+      rawMessage: "Hi, checking availability for our October wedding.",
+      requestedExecutionMode: "draft_only",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+
+    const send = proposals.find(
+      (p) => p.action_family === "send_message" && p.action_key === "send_message",
+    );
+    expect(send?.likely_outcome).toBe("draft");
+    expect(
+      send?.blockers_or_missing_facts.some((b) =>
+        b.startsWith("inbound_suppressed_non_client"),
+      ),
+    ).toBe(false);
+  });
+
+  it("still blocks send_message in draft_only mode when suppression fires", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience({
+        broadcastRisk: "high",
+        inboundSuppression: {
+          verdict: "system_or_notification",
+          suppressed: true,
+          reasons: ["sender_local_system_token", "body_do_not_reply_language"],
+          confidence: "high",
+          normalizedSenderEmail: "noreply@notifications.example.com",
+          normalizedSenderDomain: "notifications.example.com",
+        },
+      }),
+      playbookRules: [],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: "w1",
+      threadId: "t1",
+      replyChannel: "email",
+      rawMessage: "Your weekly report is ready. Do not reply to this email.",
+      requestedExecutionMode: "draft_only",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+
+    const send = proposals.find(
+      (p) => p.action_family === "send_message" && p.action_key === "send_message",
+    );
+    expect(send?.likely_outcome).toBe("block");
+    expect(
+      send?.blockers_or_missing_facts.some((b) =>
+        b.startsWith("inbound_suppressed_non_client:system_or_notification"),
+      ),
+    ).toBe(true);
+  });
+
+  /**
+   * Issue #4 from the Booking.com follow-up review: even after the generic
+   * `send_message` proposal began honoring inbound suppression, a tenant
+   * playbook rule with `action_key: send_message` could still emit a
+   * draftable proposal — the playbook branch did not include the
+   * `inboundSuppressed` gate. These tests lock that closed.
+   */
+  it("forces playbook send_message proposals to block when inbound suppression fires", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience({
+        broadcastRisk: "high",
+        inboundSuppression: {
+          verdict: "promotional_or_marketing",
+          suppressed: true,
+          reasons: ["sender_domain_ota_or_marketplace", "body_unsubscribe_language"],
+          confidence: "high",
+          normalizedSenderEmail: "email.campaign@sg.booking.com",
+          normalizedSenderDomain: "sg.booking.com",
+        },
+      }),
+      playbookRules: [
+        {
+          id: "rule-promo-still-replies-1234",
+          topic: "general_followup",
+          channel: "email",
+          action_key: "send_message",
+          decision_mode: "draft_only",
+          instruction: "Send a short polite follow-up if the inbound mentions getaway or stay.",
+          is_active: true,
+          // deno-lint-ignore no-explicit-any
+        } as any,
+      ],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: "w1",
+      threadId: "t1",
+      replyChannel: "email",
+      rawMessage: "30% off selected stays — book your next getaway now.",
+      requestedExecutionMode: "auto",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+
+    const playbookProposals = proposals.filter((p) => p.id.startsWith("cand-") && p.id.includes("-pb-"));
+    const playbookSend = playbookProposals.find((p) => p.action_family === "send_message");
+    expect(playbookSend).toBeTruthy();
+    expect(playbookSend?.likely_outcome).toBe("block");
+    expect(
+      playbookSend?.blockers_or_missing_facts.some((b) =>
+        b.startsWith("inbound_suppressed_non_client:promotional_or_marketing"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does NOT force playbook send_message to block when no suppression fires", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience({}),
+      playbookRules: [
+        {
+          id: "rule-clean-followup-1234",
+          topic: "general_followup",
+          channel: "email",
+          action_key: "send_message",
+          decision_mode: "draft_only",
+          instruction: "Send a short polite follow-up.",
+          is_active: true,
+          // deno-lint-ignore no-explicit-any
+        } as any,
+      ],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: "w1",
+      threadId: "t1",
+      replyChannel: "email",
+      rawMessage: "Thanks — looking forward to it.",
+      requestedExecutionMode: "auto",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+    const playbookProposals = proposals.filter((p) => p.id.startsWith("cand-") && p.id.includes("-pb-"));
+    const playbookSend = playbookProposals.find((p) => p.action_family === "send_message");
+    expect(playbookSend?.likely_outcome).not.toBe("block");
+    expect(
+      playbookSend?.blockers_or_missing_facts.some((b) =>
+        b.startsWith("inbound_suppressed_non_client"),
+      ) ?? false,
+    ).toBe(false);
   });
 });

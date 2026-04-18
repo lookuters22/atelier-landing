@@ -68,7 +68,17 @@ export function mailboxesAreSameMailbox(a: string, b: string): boolean {
   return normalizeMailboxForComparison(a) === normalizeMailboxForComparison(b);
 }
 
-const SYSTEM_LOCAL_DENY = new Set([
+/**
+ * Local-part patterns that are never a replyable human mailbox. Covers both
+ * classic no-reply forms (`noreply`, `mailer-daemon`) and bulk/marketing
+ * patterns (`campaign`, `newsletter`, `marketing`, `promo`, `offers`, etc.).
+ *
+ * NOTE: keep this table in sync with `supabase/functions/_shared/gmail/mailboxNormalize.ts`
+ * and with the authoritative classifier in `src/lib/inboundSuppressionClassifier.ts`.
+ * Changes here affect UI replyability **and** Gmail import / convert-to-inquiry
+ * guards, so add tests when extending.
+ */
+const SYSTEM_LOCAL_DENY: ReadonlySet<string> = new Set([
   "noreply",
   "no-reply",
   "donotreply",
@@ -78,14 +88,80 @@ const SYSTEM_LOCAL_DENY = new Set([
   "bounce",
   "bounces",
   "notifications",
+  "notification",
+  "notify",
+  "alerts",
+  "alert",
+  "automated",
+  "system",
+  "campaign",
+  "campaigns",
+  "newsletter",
+  "newsletters",
+  "marketing",
+  "promo",
+  "promos",
+  "promotion",
+  "promotions",
+  "offers",
+  "deals",
+  "mailers",
+  "mailer",
+  "digest",
+  "updates",
+  "announce",
+  "announcements",
 ]);
 
-/** Heuristic: automated / no-reply style local parts (not exhaustive). */
+/** Tokens inside a local-part (split by `.`, `-`, `_`, `+`) that mark it as non-replyable. */
+const SYSTEM_LOCAL_TOKEN_DENY: ReadonlySet<string> = new Set([
+  "noreply",
+  "no-reply",
+  "donotreply",
+  "do-not-reply",
+  "campaign",
+  "campaigns",
+  "newsletter",
+  "newsletters",
+  "marketing",
+  "promo",
+  "promos",
+  "promotion",
+  "promotions",
+  "offers",
+  "deals",
+  "mailers",
+  "mailer",
+  "digest",
+  "notifications",
+  "notification",
+  "alerts",
+  "alert",
+  "updates",
+]);
+
+/**
+ * Heuristic: automated / no-reply / marketing local parts.
+ *
+ * Catches:
+ *   - Bare tokens: `noreply@`, `campaign@`, `newsletter@`.
+ *   - Compound tokens separated by `.`, `-`, `_`, `+`:
+ *     `email.campaign@sg.booking.com`, `no-reply@`, `brand.marketing@`.
+ *   - Run-together forms: `donotreply`, `noreply01`.
+ *
+ * Conservative by design — returns `false` for normal human local parts like
+ * `alice.smith@`, `hello@`, `info@`.
+ */
 export function isLikelyNonReplyableSystemLocalPart(localPart: string): boolean {
   const base = localPart.split("+")[0]?.toLowerCase() ?? "";
   if (!base) return true;
   if (SYSTEM_LOCAL_DENY.has(base)) return true;
   if (base.startsWith("no-reply") || base.startsWith("noreply")) return true;
   if (base.includes("donotreply")) return true;
+
+  const tokens = base.split(/[.+_\-]/g).filter((t) => t.length > 0);
+  for (const t of tokens) {
+    if (SYSTEM_LOCAL_TOKEN_DENY.has(t)) return true;
+  }
   return false;
 }

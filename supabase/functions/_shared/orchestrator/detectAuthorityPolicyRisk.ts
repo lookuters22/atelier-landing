@@ -1,6 +1,12 @@
 /**
  * Authority policy for orchestrator proposals — deterministic, upstream of persona.
  *
+ * **Escalation scope (V3 booking-progress fix):** Commercial and ambiguous-approval AP1 triggers
+ * are evaluated on the **current inbound (`rawMessage`) only**. `threadContextSnippet` is accepted for
+ * API compatibility but does **not** contribute to those hits — prior messages must not smear
+ * commitment/binding patterns into a benign current turn. Snippet/thread text still feeds persona
+ * and drafting via `DecisionContext`, not this module.
+ *
  * **Phase 2 — commercial terms (commitment vs coordination):**
  * - **Commitment-level** commercial language (discounts, waivers, contract/payment-term changes,
  *   negotiation, etc.) may **not** be treated as safe routine drafts on the strength of a
@@ -63,9 +69,9 @@ const COMMERCIAL_TERMS_PLANNER_COORDINATION_AUTHORITY = new Set<InboundSenderAut
   "planner",
 ]);
 
-function normalizeCombinedText(rawMessage: string, threadContextSnippet: string | undefined): string {
-  const t = `${rawMessage}\n${threadContextSnippet ?? ""}`.trim().toLowerCase();
-  const collapsed = t.replace(/\s+/g, " ");
+/** Current turn only — used for AP1 commercial and ambiguous-approval escalation. */
+function normalizeCurrentTurnOnly(rawMessage: string): string {
+  const collapsed = rawMessage.trim().toLowerCase().replace(/\s+/g, " ");
   return collapsed.length > MAX_COMBINED_CHARS ? collapsed.slice(-MAX_COMBINED_CHARS) : collapsed;
 }
 
@@ -138,7 +144,8 @@ export function detectCommercialTermsAuthorityRisk(
   threadContextSnippet: string | undefined,
   authority: InboundSenderAuthoritySnapshot,
 ): AuthorityPolicyDetection {
-  const text = normalizeCombinedText(rawMessage, threadContextSnippet);
+  void threadContextSnippet;
+  const text = normalizeCurrentTurnOnly(rawMessage);
   const commitment = matchesCommitmentLevelCommercialTerms(text);
   const coordination = matchesPlannerCommercialCoordinationTerms(text);
 
@@ -257,6 +264,46 @@ export function matchesBindingApprovalAuthorizationShape(text: string): boolean 
 }
 
 /**
+ * Narrow inquiry / booking-progress informational cues on the **current message only**.
+ * When true, the turn is still not safe to treat as commitment if
+ * {@link matchesCommitmentLevelCommercialTerms} or {@link matchesBindingApprovalAuthorizationShape}
+ * already matched the same text.
+ */
+export function matchesInquiryBookingProgressInformationalTurn(rawMessage: string): boolean {
+  const t = normalizeCurrentTurnOnly(rawMessage);
+  if (t.length === 0) return false;
+  if (matchesCommitmentLevelCommercialTerms(t)) return false;
+  if (matchesBindingApprovalAuthorizationShape(t)) return false;
+
+  const nextStepsBook =
+    /\bnext\s+steps\b/.test(t) &&
+    /\b(?:book|booking|reserve|retainer|contract|officially)\b/.test(t);
+  const howToBook =
+    /\bhow\s+(?:do\s+we|can\s+we|to)\s+(?:book|reserve|secure)\b/.test(t) ||
+    /\bofficially\s+book\b/.test(t);
+  const inclusionAsk =
+    /\b(?:included|inclusion|add[-\s]?on|extra|additional)\b/.test(t) ||
+    /\bis\s+.{0,40}\s+included\b/.test(t) ||
+    /\bincluded\s+or\s+(?:extra|additional|an?\s+add[-\s]?on)\b/.test(t);
+  const feeInformational =
+    /\b(?:destination|travel|local)\s+fee\b/.test(t) ||
+    (/\bfee\b/.test(t) &&
+      /\b(?:apply|applies|for\s+(?:the\s+)?(?:venue|location|wedding)|is\s+there|do\s+you\s+charge)\b/.test(
+        t,
+      ));
+  const scheduleCall =
+    /\b(?:schedule|book)\s+(?:a\s+)?(?:call|chat|meeting|consultation)\b/.test(t) ||
+    /\b(?:zoom|facetime|google\s+meet|teams)\b/.test(t) ||
+    /\b(?:jump\s+on|hop\s+on)\s+(?:a\s+)?(?:quick\s+)?call\b/.test(t) ||
+    /\bcall\s+(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(
+      rawMessage,
+    ) ||
+    /\b(?:brief|quick)\s+call\b/.test(t);
+
+  return Boolean(nextStepsBook || howToBook || inclusionAsk || feeInformational || scheduleCall);
+}
+
+/**
  * Escalate when **binding** approval/authorization language appears from someone who is not an
  * approval contact and not `client_primary` or `payer`. Planners, vendors, assistants, and unknown
  * senders do not automatically pass (Phase 3).
@@ -266,7 +313,8 @@ export function detectAmbiguousApprovalAuthorityRisk(
   threadContextSnippet: string | undefined,
   authority: InboundSenderAuthoritySnapshot,
 ): AuthorityPolicyDetection {
-  const text = normalizeCombinedText(rawMessage, threadContextSnippet);
+  void threadContextSnippet;
+  const text = normalizeCurrentTurnOnly(rawMessage);
   if (!matchesBindingApprovalAuthorizationShape(text)) {
     return { hit: false };
   }

@@ -69,6 +69,14 @@ const DEFAULT_INBOUND_SENDER_AUTHORITY: InboundSenderAuthoritySnapshot = {
 };
 
 /**
+ * Structured blocker code surfaced on `send_message` proposals when the
+ * decision context classifies the latest inbound as promo / system / non-client.
+ * The verdict suffix lets downstream audit tools quickly see which bucket fired
+ * (e.g. `inbound_suppressed_non_client:promotional_or_marketing`).
+ */
+export const INBOUND_SUPPRESSED_NON_CLIENT_BLOCKER = "inbound_suppressed_non_client";
+
+/**
  * When true, routine client `send_message` must not be draftable — durable workflow state
  * already covers the thread (timeline elsewhere, wire-chase window, stalled nudge window).
  * Matches the same conditions as `sendMessageBlockers` workflow entries.
@@ -208,6 +216,7 @@ export function proposeClientOrchestratorCandidateActions(
   const bc = detectBankingComplianceOrchestratorException(rawMessage, threadContextSnippet);
   const vac = detectVisualAssetVerificationOrchestratorRequest(rawMessage, threadContextSnippet);
   const spd = detectSensitivePersonalDocumentOrchestratorRequest(rawMessage, threadContextSnippet);
+  /** AP1 uses current inbound only for commercial / ambiguous-approval; snippet does not escalate alone. */
   const ap1 = detectAuthorityPolicyRisk({
     rawMessage,
     threadContextSnippet,
@@ -297,6 +306,22 @@ export function proposeClientOrchestratorCandidateActions(
     sendMessageBlockers.push(STRATEGIC_TRUST_REPAIR_BLOCKER);
   }
 
+  /**
+   * Inbound suppression — promo / system / non-client mail (Booking.com campaigns,
+   * newsletters, do-not-reply notifications, OTA blasts). When the decision
+   * context's audience snapshot carries a `suppressed` classification for the
+   * latest inbound message, a routine client `send_message` must not proceed.
+   * We add a deterministic blocker + force `likely_outcome` to `"block"` so the
+   * verifier/runtime returns the same `block` mapping as other policy gates.
+   */
+  const inboundSuppression = aud.inboundSuppression ?? null;
+  const inboundSuppressed = inboundSuppression?.suppressed === true;
+  if (inboundSuppressed && inboundSuppression) {
+    sendMessageBlockers.push(
+      `${INBOUND_SUPPRESSED_NON_CLIENT_BLOCKER}:${inboundSuppression.verdict}`,
+    );
+  }
+
   /** Pending approval on-thread: do not treat another client reply as safely `auto` when mode is `auto`. */
   let sendMessageLikely: OrchestratorProposalLikelyOutcome = likelyPrimary;
   if (
@@ -344,6 +369,9 @@ export function proposeClientOrchestratorCandidateActions(
     sendMessageLikely = "block";
   }
   if (str.hit) {
+    sendMessageLikely = "block";
+  }
+  if (inboundSuppressed) {
     sendMessageLikely = "block";
   }
 
@@ -396,6 +424,11 @@ export function proposeClientOrchestratorCandidateActions(
     sendMessageRationale +=
       " Contradiction or expectation-mismatch / credibility-risk thread — not a routine primary reply path; use operator routing (see strategic_trust_repair_reason_code on proposals).";
   }
+  if (inboundSuppressed && inboundSuppression) {
+    const reasons = inboundSuppression.reasons.slice(0, 5).join(", ") || "none";
+    sendMessageRationale +=
+      ` Inbound message was classified as ${inboundSuppression.verdict} (confidence=${inboundSuppression.confidence}, reasons=[${reasons}]) — do not draft a client reply; promotional / system / non-client mail must route to operator attention only.`;
+  }
 
   sendMessageRationale += orchestratorContextRationaleSuffix;
 
@@ -407,7 +440,8 @@ export function proposeClientOrchestratorCandidateActions(
   const needsOperatorRouting =
     aud.agencyCcLock === true ||
     aud.broadcastRisk === "high" ||
-    escalationOpenCount > 0;
+    escalationOpenCount > 0 ||
+    inboundSuppressed;
 
   const operatorLikely = inferLikelyOutcome(requestedExecutionMode, aud.broadcastRisk, null);
 
@@ -1098,7 +1132,16 @@ export function proposeClientOrchestratorCandidateActions(
         ie2.hit ||
         ap1.hit ||
         ccm.hit ||
-        str.hit)
+        str.hit ||
+        /**
+         * Inbound suppression — promo / system / non-client thread. Without
+         * this branch a playbook rule (e.g. "always send timeline note on
+         * keyword X") could still produce a draftable `send_message` proposal
+         * on a Booking.com promo thread, defeating the entire suppression
+         * gate. Treat it identically to other safety hits: force `block`,
+         * propagate the canonical blocker codes.
+         */
+        inboundSuppressed)
     ) {
       likely = "block";
       pbBlockers = [...pbBlockers, ...sendMessageBlockers.filter((b) => !pbBlockers.includes(b))];

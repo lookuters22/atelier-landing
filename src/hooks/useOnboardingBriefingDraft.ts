@@ -7,7 +7,8 @@ import {
   mergeOnboardingBriefingSnapshotIntoSettings,
   parseOnboardingBriefingSnapshotV1,
 } from "@/lib/onboardingBriefingSettings.ts";
-import { mergePhotographerSettings } from "@/lib/photographerSettings.ts";
+import { finalizeOnboardingBriefingRuntime } from "@/lib/completeOnboardingRuntime.ts";
+import { shouldAllowDraftSnapshotWrites } from "@/lib/onboardingBriefingDraftGuards.ts";
 import {
   ONBOARDING_BRIEFING_STEPS,
   type OnboardingBriefingStepId,
@@ -48,9 +49,23 @@ export function useOnboardingBriefingDraft(
 ): UseOnboardingBriefingDraftResult {
   const [loading, setLoading] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Mirrors `onboarding_briefing_v1.status` after load / persist / finalize. */
+  const [briefingStatus, setBriefingStatus] = useState<"draft" | "completed">("draft");
+  /**
+   * When the loaded snapshot is `completed`, we block draft autosave until the user edits.
+   * After that, autosave may write `status: "draft"` again (re-entry) without the
+   * post-finalize race that overwrote `completed` with a stale draft.
+   */
+  const [hasPendingDraftEdits, setHasPendingDraftEdits] = useState(false);
+  const briefingStatusRef = useRef(briefingStatus);
+  useEffect(() => {
+    briefingStatusRef.current = briefingStatus;
+  }, [briefingStatus]);
   const [stepIndex, setStepIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [payload, setPayload] = useState<OnboardingPayloadV4>(createEmptyOnboardingPayloadV4);
+  const completingRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!photographerId) {
       setLoading(false);
@@ -68,10 +83,14 @@ export function useOnboardingBriefingDraft(
           setPayload(snap.payload);
           setCompletedSteps(snap.completed_steps);
           setStepIndex(stepIndexFromId(snap.current_step));
+          setBriefingStatus(snap.status);
+          setHasPendingDraftEdits(false);
         } else {
           setPayload(createEmptyOnboardingPayloadV4());
           setCompletedSteps([]);
           setStepIndex(0);
+          setBriefingStatus("draft");
+          setHasPendingDraftEdits(false);
         }
       } catch (e) {
         if (!cancelled) setSaveError(e instanceof Error ? e.message : "Failed to load briefing draft");
@@ -84,6 +103,13 @@ export function useOnboardingBriefingDraft(
     };
   }, [photographerId]);
 
+  /** Only payload changes unlock draft autosave on a completed briefing; navigation is review-only. */
+  const markPayloadEditIfCompletedSnapshot = useCallback(() => {
+    if (briefingStatusRef.current === "completed") {
+      setHasPendingDraftEdits(true);
+    }
+  }, []);
+
   const persist = useCallback(
     async (next: {
       stepIndex: number;
@@ -91,6 +117,9 @@ export function useOnboardingBriefingDraft(
       payload: OnboardingPayloadV4;
     }) => {
       if (!photographerId) return;
+      if (!shouldAllowDraftSnapshotWrites(briefingStatus, hasPendingDraftEdits)) return;
+      const wasEditingCompletedSnapshot =
+        briefingStatus === "completed" && hasPendingDraftEdits;
       setSaveError(null);
       const read = await readPhotographerSettings(supabase, photographerId);
       const raw = read?.raw ?? {};
@@ -110,9 +139,13 @@ export function useOnboardingBriefingDraft(
         setSaveError(error.message);
         throw new Error(error.message);
       }
+      if (wasEditingCompletedSnapshot) {
+        setBriefingStatus("draft");
+      }
+      setHasPendingDraftEdits(false);
       fireDataChanged("settings");
     },
-    [photographerId],
+    [briefingStatus, hasPendingDraftEdits, photographerId],
   );
 
   const saveDraft = useCallback(
@@ -131,9 +164,9 @@ export function useOnboardingBriefingDraft(
 
   const completeOnboarding = useCallback(async () => {
     if (!photographerId) return;
+    if (completingRef.current) return;
+
     setSaveError(null);
-    const read = await readPhotographerSettings(supabase, photographerId);
-    const raw = read?.raw ?? {};
     const now = new Date().toISOString();
     const completed = Array.from(new Set([...completedSteps, ...ONBOARDING_BRIEFING_STEPS]));
     const nextPayload: OnboardingPayloadV4 = {
@@ -143,26 +176,36 @@ export function useOnboardingBriefingDraft(
         onboarding_completed_at: now,
       },
     };
-    const snapshot = {
-      schema_version: 1 as const,
-      status: "completed" as const,
-      completed_steps: completed,
-      last_saved_at: now,
-      current_step: idFromStepIndex(ONBOARDING_BRIEFING_STEPS.length - 1),
-      payload: nextPayload,
-    };
 
-    const withSnapshot = mergeOnboardingBriefingSnapshotIntoSettings(raw, snapshot, { updatedAtIso: now });
-    const merged = mergePhotographerSettings(withSnapshot, { onboarding_completed_at: now });
-    const { error } = await supabase.from("photographers").update({ settings: merged }).eq("id", photographerId);
-    if (error) {
-      setSaveError(error.message);
-      throw new Error(error.message);
+    completingRef.current = true;
+    try {
+      await finalizeOnboardingBriefingRuntime({
+        supabase,
+        photographerId,
+        completedPayload: nextPayload,
+        completedSteps,
+        nowIso: now,
+      });
+    } catch (e) {
+      completingRef.current = false;
+      const msg = e instanceof Error ? e.message : "Failed to complete onboarding";
+      setSaveError(msg);
+      throw new Error(msg);
     }
 
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    const lastIndex = ONBOARDING_BRIEFING_STEPS.length - 1;
+    setBriefingStatus("completed");
+    setHasPendingDraftEdits(false);
     setCompletedSteps(completed);
     setPayload(nextPayload);
+    setStepIndex(lastIndex);
     fireDataChanged("settings");
+    completingRef.current = false;
   }, [completedSteps, payload, photographerId]);
 
   const goNext = useCallback(() => {
@@ -183,13 +226,17 @@ export function useOnboardingBriefingDraft(
     setStepIndex(clamped);
   }, []);
 
-  const updatePayload = useCallback((fn: (prev: OnboardingPayloadV4) => OnboardingPayloadV4) => {
-    setPayload(fn);
-  }, []);
+  const updatePayload = useCallback(
+    (fn: (prev: OnboardingPayloadV4) => OnboardingPayloadV4) => {
+      markPayloadEditIfCompletedSnapshot();
+      setPayload(fn);
+    },
+    [markPayloadEditIfCompletedSnapshot],
+  );
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!photographerId || loading) return;
+    if (!shouldAllowDraftSnapshotWrites(briefingStatus, hasPendingDraftEdits)) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       void persist({ stepIndex, completedSteps, payload }).catch(() => {
@@ -199,7 +246,16 @@ export function useOnboardingBriefingDraft(
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [photographerId, loading, stepIndex, completedSteps, payload, persist]);
+  }, [
+    briefingStatus,
+    completedSteps,
+    hasPendingDraftEdits,
+    payload,
+    loading,
+    persist,
+    photographerId,
+    stepIndex,
+  ]);
 
   const currentStepId = useMemo(() => idFromStepIndex(stepIndex), [stepIndex]);
 

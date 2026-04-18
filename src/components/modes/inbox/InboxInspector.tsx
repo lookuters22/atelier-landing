@@ -26,6 +26,18 @@ import { useInboxLayout } from "./InboxLayoutContext";
 import { getPipelineMoneyLine } from "../../../data/weddingFinancials";
 import { ProjectStoryAndNotes } from "../../shared/ProjectStoryAndNotes";
 import { extractCoupleNamesForNewInquiry } from "../../../lib/inquiryCoupleNameExtract";
+import { InboxSenderContactActions } from "./InboxSenderContactActions";
+import {
+  PaneInspectorEmptyState,
+  PaneInspectorFrame,
+  PaneInspectorScrollBody,
+  PaneInspectorSectionTitle,
+  PaneQuietCard,
+  PANE_INSPECTOR_IDLE_LIST_CARD,
+  PANE_INSPECTOR_META_LABEL,
+  PANE_INSPECTOR_SECONDARY,
+  PANE_INSPECTOR_TITLE,
+} from "@/components/panes";
 
 function formatStageLabel(stage: string): string {
   return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -45,7 +57,7 @@ export function InboxInspector() {
 
   if (layout?.inspectorCollapsed) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-center justify-center border-l border-border bg-background px-0.5">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center bg-background px-0.5">
         <button
           type="button"
           onClick={layout.expandInspector}
@@ -60,9 +72,9 @@ export function InboxInspector() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden border-l border-border bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       {layout ? (
-        <div className="flex shrink-0 items-center justify-end border-b border-border px-2 py-1.5">
+        <div className="flex shrink-0 items-center justify-end px-2 py-1.5">
           <button
             type="button"
             onClick={layout.collapseInspector}
@@ -91,12 +103,10 @@ function InboxInspectorBody() {
 
 function IdleState() {
   return (
-    <div className="flex h-full min-h-[200px] flex-col items-center justify-center px-8 text-center">
-      <MessageSquare className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />
-      <p className="mt-3 max-w-[220px] text-[12px] leading-relaxed text-muted-foreground">
-        Select a thread or project to view details.
-      </p>
-    </div>
+    <PaneInspectorEmptyState
+      icon={<MessageSquare className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />}
+      message="Select a thread or project to view details."
+    />
   );
 }
 
@@ -195,8 +205,8 @@ function LinkerState() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody>
         {/* Unassigned warning */}
         {assignedWedding ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
@@ -264,25 +274,19 @@ function LinkerState() {
 
         {/* Linker dropdown */}
         {showLinker && (
-          <div className="rounded-lg border border-border bg-background">
-            <div className="px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Select a project
-              </p>
-            </div>
+          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+            <PaneInspectorSectionTitle className="mb-0">Select a project</PaneInspectorSectionTitle>
             {activeWeddings.length === 0 ? (
-              <p className="px-3 pb-3 text-[12px] text-muted-foreground">
-                No active projects found.
-              </p>
+              <p className={cn("mt-2", PANE_INSPECTOR_SECONDARY)}>No active projects found.</p>
             ) : (
-              <ul className="max-h-[200px] overflow-y-auto pb-1">
+              <ul className="mt-2 max-h-[200px] overflow-y-auto">
                 {activeWeddings.map((w) => (
                   <li key={w.id}>
                     <button
                       type="button"
                       onClick={() => handleLink(w.id)}
                       disabled={linkingId !== null}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent/50 disabled:opacity-50"
+                      className="flex w-full items-center gap-2.5 rounded-md border border-transparent py-2 text-left text-[12px] transition-colors hover:bg-muted/20 disabled:opacity-50 dark:hover:bg-white/[0.06]"
                     >
                       <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb]/10 text-[9px] font-semibold text-[#2563eb]">
                         {w.couple_names.charAt(0)}
@@ -300,18 +304,16 @@ function LinkerState() {
         )}
 
         {/* Phase 11 Step 11B — outbound control: thread automation mode */}
-        <div className="rounded-lg border border-border bg-background px-3 py-3">
+        <PaneQuietCard>
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Outbound automation
-            </h3>
+            <PaneInspectorSectionTitle className="mb-0">Outbound automation</PaneInspectorSectionTitle>
           </div>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
+          <p className={cn("mt-1.5", PANE_INSPECTOR_SECONDARY)}>
             Controls how Ana handles this thread after send (draft queue vs full auto). Phase 11B inbox slice.
           </p>
           {automationLoading ? (
-            <p className="mt-2 text-[12px] text-muted-foreground">Loading mode…</p>
+            <p className={cn("mt-2", PANE_INSPECTOR_SECONDARY)}>Loading mode…</p>
           ) : (
             <label className="mt-2 block text-[13px]">
               <span className="sr-only">Automation mode</span>
@@ -329,24 +331,25 @@ function LinkerState() {
           {automationError ? (
             <p className="mt-2 text-[12px] text-red-600">{automationError}</p>
           ) : null}
-        </div>
+        </PaneQuietCard>
 
         {/* Sender info */}
         <div>
-          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Sender
-          </h3>
-          <p className="text-[13px] font-medium text-foreground">
-            {thread.sender || "Unknown"}
-          </p>
+          <PaneInspectorSectionTitle>Sender</PaneInspectorSectionTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 text-[13px] font-medium text-foreground">
+              {selectedThread.sender || "Unknown"}
+            </p>
+            {selectedThread.sender ? (
+              <InboxSenderContactActions sender={selectedThread.sender} />
+            ) : null}
+          </div>
         </div>
 
         {/* AI suggestion */}
         {meta && (
           <div>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              AI Suggestion
-            </h3>
+            <PaneInspectorSectionTitle>AI Suggestion</PaneInspectorSectionTitle>
             <div className="space-y-1.5 text-[12px]">
               <p>
                 <span className="text-muted-foreground">Intent:</span>{" "}
@@ -360,8 +363,8 @@ function LinkerState() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </PaneInspectorScrollBody>
+    </PaneInspectorFrame>
   );
 }
 
@@ -376,25 +379,28 @@ function CrmState() {
 
   if (!wedding) {
     return (
-      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-        <p className="text-[12px] text-muted-foreground">Project not found.</p>
-      </div>
+      <PaneInspectorEmptyState
+        icon={<MessageSquare className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />}
+        message="Project not found."
+      />
     );
   }
 
   const moneyLine = getPipelineMoneyLine(wedding.id);
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 space-y-5 p-4">
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody>
         {/* Project header */}
         <div>
-          <h2 className="text-[15px] font-semibold text-foreground">{wedding.couple_names}</h2>
+          <h2 className={PANE_INSPECTOR_TITLE}>{wedding.couple_names}</h2>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className={cn(
-              "inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize",
-              stageBadge(wedding.stage),
-            )}>
+            <span
+              className={cn(
+                "inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize",
+                stageBadge(wedding.stage),
+              )}
+            >
               {formatStageLabel(wedding.stage)}
             </span>
           </div>
@@ -402,25 +408,29 @@ function CrmState() {
 
         {/* Key details */}
         <div className="space-y-3">
-          <div className="flex items-start gap-2.5">
-            <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Event Date</p>
-              <p className="mt-0.5 text-[13px] text-foreground">{formatDate(wedding.wedding_date)}</p>
+          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+            <div className="flex items-start gap-2.5">
+              <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+              <div>
+                <p className={PANE_INSPECTOR_META_LABEL}>Event Date</p>
+                <p className="mt-0.5 text-[13px] text-foreground">{formatDate(wedding.wedding_date)}</p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-start gap-2.5">
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Location</p>
-              <p className="mt-0.5 text-[13px] text-foreground">{wedding.location}</p>
+          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+            <div className="flex items-start gap-2.5">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+              <div>
+                <p className={PANE_INSPECTOR_META_LABEL}>Location</p>
+                <p className="mt-0.5 text-[13px] text-foreground">{wedding.location}</p>
+              </div>
             </div>
           </div>
 
           {moneyLine && (
-            <div className="rounded-lg border border-border bg-background px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Financials</p>
+            <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+              <p className={PANE_INSPECTOR_META_LABEL}>Financials</p>
               <p className="mt-0.5 text-[13px] text-foreground">{moneyLine}</p>
             </div>
           )}
@@ -429,15 +439,18 @@ function CrmState() {
         {/* Open in Pipeline link */}
         <Link
           to={`/pipeline/${wedding.id}`}
-          className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-accent/50"
+          className={cn(
+            PANE_INSPECTOR_IDLE_LIST_CARD,
+            "flex items-center justify-between text-[13px] font-medium text-foreground transition-colors hover:bg-muted/25 dark:hover:bg-white/[0.08]",
+          )}
         >
           Open in Pipeline
           <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
         </Link>
 
         <ProjectStoryAndNotes projectId={wedding.id} />
-      </div>
-    </div>
+      </PaneInspectorScrollBody>
+    </PaneInspectorFrame>
   );
 }
 

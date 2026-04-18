@@ -235,11 +235,16 @@ async function resolveLeadThreadId(sb, { weddingId }) {
     error: d1.error?.message ?? null,
     rowCount: d1.data?.length ?? 0,
   });
-  const orchDraft = (d1.data ?? []).find(
-    (d) =>
+  const orchDraft = (d1.data ?? []).find((d) => {
+    const b = String(d.body ?? "");
+    return (
       JSON.stringify(d.instruction_history ?? "").includes("client_orchestrator_v1") ||
-      String(d.body ?? "").includes("[Orchestrator draft — clientOrchestratorV1 QA path]"),
-  );
+      b.includes("[Orchestrator draft — clientOrchestratorV1 QA path]") ||
+      b.includes(
+        "Reply draft pending — generated text will replace this when the writer runs successfully.",
+      )
+    );
+  });
   if (orchDraft?.thread_id) {
     return { threadId: orchDraft.thread_id, trace, method: "drafts_orchestrator_thread_id" };
   }
@@ -318,9 +323,13 @@ console.log("draft rows:", drafts?.length ?? 0, dErr ? `(error: ${dErr.message})
 function classify(d) {
   const h = JSON.stringify(d.instruction_history ?? "");
   if (h.includes("persona_agent")) return "persona";
+  const b = String(d.body ?? "");
   if (
     h.includes("client_orchestrator_v1") ||
-    String(d.body ?? "").includes("[Orchestrator draft — clientOrchestratorV1 QA path]")
+    b.includes("[Orchestrator draft — clientOrchestratorV1 QA path]") ||
+    b.includes(
+      "Reply draft pending — generated text will replace this when the writer runs successfully.",
+    )
   ) {
     return "orchestrator";
   }

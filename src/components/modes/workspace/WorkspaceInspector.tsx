@@ -11,6 +11,20 @@ import {
   DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  PaneInspectorEmptyState,
+  PaneInspectorFrame,
+  PaneInspectorScrollBody,
+  PaneInspectorSectionTitle,
+  PANE_INSPECTOR_ACCENT_LINK,
+  PANE_INSPECTOR_COMPACT_LINE,
+  PANE_INSPECTOR_META_LABEL,
+  PANE_INSPECTOR_SECONDARY,
+  PANE_INSPECTOR_STATUS_PILL,
+  PANE_INSPECTOR_SUBTITLE,
+  PANE_INSPECTOR_TITLE,
+  PANE_INSPECTOR_IDLE_LIST_CARD,
+} from "@/components/panes";
 import { useWorkspaceMode } from "./WorkspaceModeContext";
 import { InvoiceForm } from "./InvoiceForm";
 import type { FinancialsOverviewRow, FinancialTransaction } from "../../../data/weddingFinancials";
@@ -46,12 +60,7 @@ function ActionButton({ icon: Icon, label, onClick }: { icon: typeof Send; label
 }
 
 function IdleShell({ icon, message }: { icon: React.ReactNode; message: string }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col items-center justify-center border-l border-border bg-background px-8 text-center">
-      {icon}
-      <p className="mt-3 max-w-[220px] text-[12px] leading-relaxed text-muted-foreground">{message}</p>
-    </div>
-  );
+  return <PaneInspectorEmptyState icon={icon} message={message} />;
 }
 
 function RecentCashflow() {
@@ -68,26 +77,26 @@ function RecentCashflow() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
+    <PaneInspectorFrame>
       <div className="shrink-0 px-4 pt-4 pb-5">
-        <h2 className="text-[13px] font-semibold text-foreground">Recent Cashflow</h2>
-        <p className="mt-0.5 text-[12px] text-muted-foreground">Latest recorded payments</p>
+        <PaneInspectorSectionTitle className="mb-1">Recent Cashflow</PaneInspectorSectionTitle>
+        <p className={PANE_INSPECTOR_SECONDARY}>Latest recorded payments</p>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-1.5">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
         {recent.map((tx) => (
-          <div key={tx.id} className="rounded-md border border-border bg-background p-3">
+          <div key={tx.id} className={PANE_INSPECTOR_IDLE_LIST_CARD}>
             <div className="flex items-center justify-between">
-              <span className="text-[13px] font-medium text-foreground">{tx.couple}</span>
+              <span className="font-medium text-foreground">{tx.couple}</span>
               <span className="text-[12px] font-medium tabular-nums text-emerald-700">
                 +{new Intl.NumberFormat("en", { style: "currency", currency: tx.currency, maximumFractionDigits: 0 }).format(tx.amount)}
               </span>
             </div>
-            <p className="mt-1 text-[12px] text-muted-foreground">{tx.note}</p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{tx.date}</p>
+            <p className={cn("mt-1", PANE_INSPECTOR_SECONDARY)}>{tx.note}</p>
+            <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{tx.date}</p>
           </div>
         ))}
       </div>
-    </div>
+    </PaneInspectorFrame>
   );
 }
 
@@ -127,22 +136,22 @@ function InvoiceDossier({ row }: { row: FinancialsOverviewRow }) {
   const invoice = bundle.invoices.find((i) => i.id === row.id);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody>
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-accent/50">
             <FileText className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold text-foreground">{row.title}</h2>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">Invoice</p>
+            <h2 className={PANE_INSPECTOR_TITLE}>{row.title}</h2>
+            <p className={cn("mt-0.5", PANE_INSPECTOR_SUBTITLE)}>Invoice</p>
           </div>
         </div>
 
-        <div className="space-y-2 text-[13px]">
+        <div className={cn("space-y-2", PANE_INSPECTOR_BODY)}>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Wedding</span>
-            <Link to={`/pipeline/${row.weddingId}`} className="font-medium text-[#2563eb] hover:underline">{row.couple}</Link>
+            <Link to={`/pipeline/${row.weddingId}`} className={PANE_INSPECTOR_ACCENT_LINK}>{row.couple}</Link>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Amount</span>
@@ -150,7 +159,7 @@ function InvoiceDossier({ row }: { row: FinancialsOverviewRow }) {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Status</span>
-            <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize", statusPill(row.status))}>{row.status}</span>
+            <span className={cn("rounded-full border px-2 py-0.5", PANE_INSPECTOR_STATUS_PILL, statusPill(row.status))}>{row.status}</span>
           </div>
           {invoice && (
             <>
@@ -168,7 +177,7 @@ function InvoiceDossier({ row }: { row: FinancialsOverviewRow }) {
 
         {invoice && invoice.lineItems.length > 0 && (
           <div>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Line Items</h3>
+            <PaneInspectorSectionTitle>Line Items</PaneInspectorSectionTitle>
             <div className="rounded-lg border border-border bg-background">
               {invoice.lineItems.map((li, i) => (
                 <div
@@ -184,14 +193,19 @@ function InvoiceDossier({ row }: { row: FinancialsOverviewRow }) {
                   </span>
                 </div>
               ))}
-              <div className="flex items-center justify-between border-t border-border bg-muted/20 px-3 py-2 text-[12px] font-semibold">
+              <div
+                className={cn(
+                  "flex items-center justify-between border-t border-border bg-muted/20 px-3 py-2 font-semibold",
+                  PANE_INSPECTOR_COMPACT_LINE,
+                )}
+              >
                 <span>Total</span>
                 <span className="tabular-nums">{row.amountLabel}</span>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </PaneInspectorScrollBody>
 
       <div className="shrink-0 border-t border-border px-4 py-3">
         <div className="flex flex-wrap gap-2">
@@ -201,7 +215,7 @@ function InvoiceDossier({ row }: { row: FinancialsOverviewRow }) {
           <ActionButton icon={Send} label="Send Reminder" onClick={() => alert("Reminder sent (demo)")} />
         </div>
       </div>
-    </div>
+    </PaneInspectorFrame>
   );
 }
 
@@ -210,24 +224,25 @@ function ContractDossier({ row }: { row: FinancialsOverviewRow }) {
   const contract = bundle.contracts.find((c) => c.id === row.id);
 
   return (
-    <div className="space-y-5 border-l border-border p-4">
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody>
       <div className="flex items-start gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-accent/50">
           <FileSignature className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold text-foreground">{row.title}</h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">Contract</p>
+          <h2 className={PANE_INSPECTOR_TITLE}>{row.title}</h2>
+          <p className={cn("mt-0.5", PANE_INSPECTOR_SUBTITLE)}>Contract</p>
         </div>
       </div>
-      <div className="space-y-2 text-[13px]">
+      <div className={cn("space-y-2", PANE_INSPECTOR_BODY)}>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Wedding</span>
-          <Link to={`/pipeline/${row.weddingId}`} className="font-medium text-[#2563eb] hover:underline">{row.couple}</Link>
+          <Link to={`/pipeline/${row.weddingId}`} className={PANE_INSPECTOR_ACCENT_LINK}>{row.couple}</Link>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Status</span>
-          <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize", statusPill(row.status))}>{row.status}</span>
+          <span className={cn("rounded-full border px-2 py-0.5", PANE_INSPECTOR_STATUS_PILL, statusPill(row.status))}>{row.status}</span>
         </div>
         {contract?.counterparty && (
           <div className="flex justify-between">
@@ -248,7 +263,8 @@ function ContractDossier({ row }: { row: FinancialsOverviewRow }) {
           <ActionButton icon={Send} label="Resend for Signature" onClick={() => alert("Contract resent (demo)")} />
         )}
       </div>
-    </div>
+      </PaneInspectorScrollBody>
+    </PaneInspectorFrame>
   );
 }
 
@@ -257,20 +273,21 @@ function ProposalDossier({ row }: { row: FinancialsOverviewRow }) {
   const proposal = bundle.proposals.find((p) => p.id === row.id);
 
   return (
-    <div className="space-y-5 border-l border-border p-4">
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody>
       <div className="flex items-start gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-accent/50">
           <ScrollText className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold text-foreground">{row.title}</h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">Proposal</p>
+          <h2 className={PANE_INSPECTOR_TITLE}>{row.title}</h2>
+          <p className={cn("mt-0.5", PANE_INSPECTOR_SUBTITLE)}>Proposal</p>
         </div>
       </div>
-      <div className="space-y-2 text-[13px]">
+      <div className={cn("space-y-2", PANE_INSPECTOR_BODY)}>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Wedding</span>
-          <Link to={`/pipeline/${row.weddingId}`} className="font-medium text-[#2563eb] hover:underline">{row.couple}</Link>
+          <Link to={`/pipeline/${row.weddingId}`} className={PANE_INSPECTOR_ACCENT_LINK}>{row.couple}</Link>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Amount</span>
@@ -278,7 +295,7 @@ function ProposalDossier({ row }: { row: FinancialsOverviewRow }) {
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Status</span>
-          <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize", statusPill(row.status))}>{row.status}</span>
+          <span className={cn("rounded-full border px-2 py-0.5", PANE_INSPECTOR_STATUS_PILL, statusPill(row.status))}>{row.status}</span>
         </div>
         {proposal?.sentAt && (
           <div className="flex justify-between">
@@ -299,7 +316,8 @@ function ProposalDossier({ row }: { row: FinancialsOverviewRow }) {
           <ActionButton icon={Send} label="Resend" onClick={() => alert("Proposal resent (demo)")} />
         )}
       </div>
-    </div>
+      </PaneInspectorScrollBody>
+    </PaneInspectorFrame>
   );
 }
 
@@ -311,21 +329,21 @@ function FinancialDossier({ row }: { row: FinancialsOverviewRow }) {
 
 function TransactionDossier({ tx }: { tx: FinancialTransaction }) {
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody className="space-y-4">
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-accent/50">
             <ArrowLeftRight className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-semibold text-foreground">Recorded payment</h2>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">{tx.date}</p>
+            <h2 className={PANE_INSPECTOR_TITLE}>Recorded payment</h2>
+            <p className={cn("mt-0.5", PANE_INSPECTOR_SUBTITLE)}>{tx.date}</p>
           </div>
         </div>
-        <div className="space-y-2 text-[13px]">
+        <div className={cn("space-y-2", PANE_INSPECTOR_BODY)}>
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">Couple</span>
-            <Link to={`/pipeline/${tx.weddingId}`} className="shrink-0 font-medium text-[#2563eb] hover:underline">
+            <Link to={`/pipeline/${tx.weddingId}`} className={cn("shrink-0", PANE_INSPECTOR_ACCENT_LINK)}>
               {tx.couple}
             </Link>
           </div>
@@ -341,13 +359,13 @@ function TransactionDossier({ tx }: { tx: FinancialTransaction }) {
           </div>
           {tx.note ? (
             <div className="pt-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Note</p>
-              <p className="mt-1 leading-relaxed text-muted-foreground">{tx.note}</p>
+              <p className={PANE_INSPECTOR_META_LABEL}>Note</p>
+              <p className={cn("mt-1", PANE_INSPECTOR_SECONDARY)}>{tx.note}</p>
             </div>
           ) : null}
         </div>
-      </div>
-    </div>
+      </PaneInspectorScrollBody>
+    </PaneInspectorFrame>
   );
 }
 

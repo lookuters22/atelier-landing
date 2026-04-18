@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { isSameDay, isSameWeek, isSameMonth, format } from "date-fns";
-import { ChevronLeft, Copy, ExternalLink, Link2, Mail, MapPin, Pencil, Plane, Phone, Video } from "lucide-react";
+import { ChevronLeft, Copy, Link2, Mail, MapPin, Pencil, Plane, Video } from "lucide-react";
 import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import {
-  formatMonthYear,
   useCalendarMode,
   WEDDING_OPTIONS,
   EVENT_COLORS,
@@ -11,6 +11,16 @@ import {
 } from "./CalendarModeContext";
 import type { BookingLink } from "../../../data/bookingLinks";
 import { EventForm } from "./EventForm";
+import {
+  PaneInspectorEmptyState,
+  PaneInspectorFrame,
+  PaneInspectorScrollBody,
+  PaneInspectorSectionTitle,
+  PANE_INSPECTOR_ACCENT_LINK,
+  PANE_INSPECTOR_IDLE_LIST_CARD,
+  PANE_INSPECTOR_SECONDARY,
+  PANE_INSPECTOR_TITLE,
+} from "@/components/panes";
 
 const PREP_NOTES: Record<string, { storySoFar: string; myNotes: string }> = {
   "lake-como": {
@@ -74,12 +84,7 @@ function IdleInspector() {
 }
 
 function IdleShell({ icon, message }: { icon: React.ReactNode; message: string }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col items-center justify-center border-l border-border bg-background px-8 text-center">
-      {icon}
-      <p className="mt-3 max-w-[220px] text-[12px] leading-relaxed text-muted-foreground">{message}</p>
-    </div>
-  );
+  return <PaneInspectorEmptyState icon={icon} message={message} />;
 }
 
 function ScheduleAgenda() {
@@ -125,26 +130,22 @@ function ScheduleAgenda() {
   }, [calendarView, anchor, visibleEvents]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
-      <div className="shrink-0 px-4 pt-4 pb-4">
-        <h2 className="text-[13px] font-semibold text-foreground">{title}</h2>
-        <p className="mt-0.5 text-[12px] text-muted-foreground">{subtitle}</p>
+    <PaneInspectorFrame>
+      <div className="shrink-0 px-4 pt-4 pb-5">
+        <PaneInspectorSectionTitle className="mb-1">{title}</PaneInspectorSectionTitle>
+        <p className={PANE_INSPECTOR_SECONDARY}>{subtitle}</p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
         {filtered.length === 0 ? (
-          <p className="px-1 py-8 text-center text-[12px] text-muted-foreground">
-            {emptyMsg}
-          </p>
+          <p className={cn(PANE_INSPECTOR_SECONDARY, "px-1 py-8 text-center")}>{emptyMsg}</p>
         ) : (
-          <div className="space-y-1.5">
-            {filtered.map((ev) => (
-              <AgendaCard key={ev.id} event={ev} showDate={calendarView !== "day"} onClick={() => viewEvent(ev)} />
-            ))}
-          </div>
+          filtered.map((ev) => (
+            <AgendaCard key={ev.id} event={ev} showDate={calendarView !== "day"} onClick={() => viewEvent(ev)} />
+          ))
         )}
       </div>
-    </div>
+    </PaneInspectorFrame>
   );
 }
 
@@ -157,24 +158,30 @@ function AgendaCard({ event, showDate, onClick }: { event: CalEvent; showDate: b
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-md border border-border bg-background p-3 text-left transition-colors hover:bg-accent/50"
+      className={cn(
+        PANE_INSPECTOR_IDLE_LIST_CARD,
+        "flex w-full items-start gap-3 text-left transition-colors hover:bg-muted/20 dark:hover:bg-white/[0.06]",
+      )}
     >
       <div className="mt-0.5">
         <span className={`block h-2 w-2 rounded-full ${dot}`} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium text-foreground leading-tight">{event.title}</p>
+        <p className="text-[13px] font-medium leading-tight text-foreground">{event.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           {showDate && <span>{dayLabel}</span>}
           {event.startTime && (
             <>
               {showDate && <span className="text-border">·</span>}
-              <span>{event.startTime}{event.endTime ? ` – ${event.endTime}` : ""}</span>
+              <span>
+                {event.startTime}
+                {event.endTime ? ` – ${event.endTime}` : ""}
+              </span>
             </>
           )}
         </div>
       </div>
-      <span className="shrink-0 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+      <span className="shrink-0 rounded border border-border/60 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
         {event.type}
       </span>
     </button>
@@ -188,7 +195,7 @@ function EventViewer({ event }: { event: CalEvent }) {
   const dot = EVENT_COLORS[event.type].dot;
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
+    <PaneInspectorFrame>
       <div className="shrink-0 flex items-center gap-1 border-b border-border px-2 py-2">
         <button
           type="button"
@@ -197,7 +204,7 @@ function EventViewer({ event }: { event: CalEvent }) {
         >
           <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
         </button>
-        <h2 className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{event.title}</h2>
+        <h2 className={cn("min-w-0 flex-1 truncate", PANE_INSPECTOR_TITLE)}>{event.title}</h2>
         <button
           type="button"
           onClick={() => openEditEvent(event)}
@@ -207,63 +214,51 @@ function EventViewer({ event }: { event: CalEvent }) {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-
-        <div className="mt-3 space-y-2">
+      <PaneInspectorScrollBody>
+        <div className="space-y-2">
           <div className="flex items-center gap-2 text-[12px]">
             <span className={`h-2 w-2 rounded-full ${dot}`} />
             <span className="capitalize text-muted-foreground">{event.type}</span>
           </div>
 
-          <p className="text-[12px] text-muted-foreground">
+          <p className={PANE_INSPECTOR_SECONDARY}>
             {event.dateISO}
             {event.startTime ? ` · ${event.startTime}` : ""}
             {event.endTime ? ` – ${event.endTime}` : ""}
           </p>
 
           {event.location && (
-            <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <div className={cn("flex items-center gap-1.5", PANE_INSPECTOR_SECONDARY)}>
+              <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
               {event.location}
             </div>
           )}
 
-          {event.sub && (
-            <p className="text-[12px] text-muted-foreground">{event.sub}</p>
-          )}
+          {event.sub && <p className={PANE_INSPECTOR_SECONDARY}>{event.sub}</p>}
         </div>
 
         {couple && couple.value && (
-          <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Linked Wedding
-            </p>
-            <Link
-              to={`${weddingLinkBase}/${couple.value}`}
-              className="mt-1 block text-[13px] font-semibold text-[#2563eb] hover:underline"
-            >
+          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+            <PaneInspectorSectionTitle className="mb-0">Linked Wedding</PaneInspectorSectionTitle>
+            <Link to={`${weddingLinkBase}/${couple.value}`} className={cn("mt-1 block font-medium", PANE_INSPECTOR_ACCENT_LINK)}>
               {couple.label}
             </Link>
           </div>
         )}
 
         {prep && (
-          <div className="mt-3 space-y-3">
-            <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Story So Far
-              </p>
+          <div className="space-y-3">
+            <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+              <PaneInspectorSectionTitle className="mb-0">Story So Far</PaneInspectorSectionTitle>
               <p className="mt-1.5 text-[12px] leading-relaxed text-foreground">{prep.storySoFar}</p>
             </div>
-            <div className="rounded-xl border border-border bg-muted/20 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                My Notes
-              </p>
+            <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+              <PaneInspectorSectionTitle className="mb-0">My Notes</PaneInspectorSectionTitle>
               <p className="mt-1.5 text-[12px] leading-relaxed text-foreground">{prep.myNotes}</p>
             </div>
           </div>
         )}
-      </div>
+      </PaneInspectorScrollBody>
 
       <div className="shrink-0 border-t border-border px-4 py-3">
         <div className="flex gap-2">
@@ -287,7 +282,7 @@ function EventViewer({ event }: { event: CalEvent }) {
           </button>
         </div>
       </div>
-    </div>
+    </PaneInspectorFrame>
   );
 }
 
@@ -299,42 +294,40 @@ function BookingViewer({ link }: { link: BookingLink }) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <h2 className="text-[14px] font-semibold text-foreground">{link.title}</h2>
-        <p className="mt-1 text-[12px] text-muted-foreground">{link.description}</p>
+    <PaneInspectorFrame>
+      <PaneInspectorScrollBody>
+        <div>
+          <h2 className={PANE_INSPECTOR_TITLE}>{link.title}</h2>
+          <p className={cn("mt-1", PANE_INSPECTOR_SECONDARY)}>{link.description}</p>
+        </div>
 
-        <div className="mt-4 space-y-3">
-          <div className="rounded-xl border border-border bg-muted/20 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Configuration
-            </p>
+        <div className="space-y-3">
+          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+            <PaneInspectorSectionTitle className="mb-0">Configuration</PaneInspectorSectionTitle>
             <div className="mt-2 space-y-1.5 text-[12px]">
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Duration</span>
                 <span className="font-medium text-foreground">{link.duration} minutes</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Buffer before</span>
                 <span className="font-medium text-foreground">{link.bufferBefore}m</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Buffer after</span>
                 <span className="font-medium text-foreground">{link.bufferAfter}m</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Status</span>
-                <span className={`font-medium ${link.active ? "text-emerald-600" : "text-zinc-400"}`}>
+                <span className={cn("font-medium", link.active ? "text-emerald-600" : "text-muted-foreground")}>
                   {link.active ? "Active" : "Inactive"}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-muted/20 p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Booking URL
-            </p>
+          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+            <PaneInspectorSectionTitle className="mb-0">Booking URL</PaneInspectorSectionTitle>
             <div className="mt-2 flex items-center gap-2">
               <input
                 readOnly
@@ -352,7 +345,7 @@ function BookingViewer({ link }: { link: BookingLink }) {
             </div>
           </div>
         </div>
-      </div>
+      </PaneInspectorScrollBody>
 
       <div className="shrink-0 border-t border-border px-4 py-3">
         <div className="flex gap-2">
@@ -380,6 +373,6 @@ function BookingViewer({ link }: { link: BookingLink }) {
           </button>
         </div>
       </div>
-    </div>
+    </PaneInspectorFrame>
   );
 }

@@ -248,7 +248,11 @@ async function fetchOpenEscalationStateForScope(
 
 const THREAD_CONTEXT_SNIPPET_MAX = 8000;
 
-/** Thread summary + last N message bodies for deterministic heuristics (bounded). */
+/**
+ * Thread summary + last N message bodies (bounded). Used for non-AP1 heuristics and downstream
+ * context only — **AP1 commercial / ambiguous-approval escalation uses `rawMessage` only** (see
+ * `detectAuthorityPolicyRisk.ts`); snippet must not create authority hits alone.
+ */
 function buildThreadContextSnippetForOrchestratorHeuristics(ctx: DecisionContext): string {
   const parts: string[] = [];
   if (typeof ctx.threadSummary === "string" && ctx.threadSummary.trim().length > 0) {

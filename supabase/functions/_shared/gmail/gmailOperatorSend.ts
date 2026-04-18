@@ -9,8 +9,10 @@ import {
   getGmailMessageHeaderMessageId,
   getGmailMessageRfc822ReplyHeaders,
   mergeReferencesForReply,
+  resolveGmailReplySubjectLine,
   sendGmailUsersMessagesSend,
 } from "./gmailSendRfc822.ts";
+import { buildGmailReplyThreadMismatchError } from "./gmailReplyThreadDiagnostics.ts";
 
 export function parseGmailThreadIdFromExternalKey(externalThreadKey: string | null | undefined): string | null {
   if (!externalThreadKey || typeof externalThreadKey !== "string") return null;
@@ -69,6 +71,17 @@ async function loadGoogleTokens(
   }
 }
 
+/**
+ * Gmail reply on an existing Atelier email thread.
+ *
+ * **Reply `Subject` precedence** (threading-safe; see `resolveGmailReplySubjectLine`):
+ * 1. `Subject` from the anchor Gmail message metadata (same fetch as RFC `Message-ID` / `References`)
+ * 2. `params.subject` when non-empty (e.g. UI-composed line)
+ * 3. `threads.title` fallback
+ * 4. `Re: (no subject)` if all absent
+ *
+ * Anchor wins over `params.subject` so `threads.title` drift cannot fork Gmail threading.
+ */
 export async function sendGmailReplyAndInsertMessage(
   supabaseAdmin: SupabaseClient,
   params: {
@@ -163,8 +176,11 @@ export async function sendGmailReplyAndInsertMessage(
 
   let inReplyRfc: string | null = null;
   let referencesMerged: string | null = null;
+  /** Snapshot from anchor metadata fetch (null if the fetch threw before returning). */
+  let replyHdrSnapshot: Awaited<ReturnType<typeof getGmailMessageRfc822ReplyHeaders>> | null = null;
   try {
     const hdr = await getGmailMessageRfc822ReplyHeaders(tok.accessToken, effectiveInReplyTo);
+    replyHdrSnapshot = hdr;
     inReplyRfc = hdr.messageIdRfc;
     referencesMerged = mergeReferencesForReply(hdr.references, hdr.messageIdRfc);
     if (!inReplyRfc) {
@@ -174,6 +190,7 @@ export async function sendGmailReplyAndInsertMessage(
       referencesMerged = inReplyRfc;
     }
   } catch {
+    replyHdrSnapshot = null;
     try {
       inReplyRfc = await getGmailMessageHeaderMessageId(tok.accessToken, effectiveInReplyTo);
     } catch {
@@ -182,7 +199,11 @@ export async function sendGmailReplyAndInsertMessage(
     referencesMerged = inReplyRfc;
   }
 
-  const subj = params.subject.trim() || `Re: ${String(thread.title ?? "").slice(0, 200)}`;
+  const { subject: subj } = resolveGmailReplySubjectLine({
+    anchorSubjectFromGmail: replyHdrSnapshot?.subject ?? null,
+    callerSubject: params.subject,
+    threadTitle: thread.title as string | null,
+  });
 
   const raw = buildPlainTextRfc822({
     from: tok.fromEmail,
@@ -207,10 +228,20 @@ export async function sendGmailReplyAndInsertMessage(
   }
 
   if (sent.threadId !== gmailThreadId) {
+    const anchorSubjectFound = Boolean(
+      replyHdrSnapshot?.subject && String(replyHdrSnapshot.subject).trim().length > 0,
+    );
+    const anchorRfcMessageIdFound = Boolean(inReplyRfc && inReplyRfc.trim().length > 0);
     return {
       ok: false,
-      error:
-        `Gmail associated this send with a different conversation than this Atelier thread (expected Gmail thread ${gmailThreadId}, got ${sent.threadId}). Not saved in Atelier — check Gmail if the message was still delivered.`,
+      error: buildGmailReplyThreadMismatchError({
+        expectedGmailThreadId: gmailThreadId,
+        actualGmailThreadId: sent.threadId,
+        anchorProviderMessageId: effectiveInReplyTo,
+        anchorRfcMessageIdFound,
+        anchorSubjectFound,
+        finalSubject: subj,
+      }),
     };
   }
 
@@ -438,7 +469,6 @@ export async function sendGmailReplyForApprovedDraft(
   }
 
   const to = String(lastIn.sender).trim();
-  const subj = `Re: ${String(thread.title ?? "").slice(0, 200)}`;
 
   const out = await sendGmailReplyAndInsertMessage(supabaseAdmin, {
     photographerId: params.photographerId,
@@ -447,7 +477,8 @@ export async function sendGmailReplyForApprovedDraft(
     to,
     cc: "",
     bcc: "",
-    subject: subj,
+    /** Empty: subject comes from anchor Gmail `Subject` via `sendGmailReplyAndInsertMessage`, then thread.title. */
+    subject: "",
     body: params.body,
     inReplyToProviderMessageId: inReplyTo,
   });

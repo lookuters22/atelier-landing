@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, FileText, Paperclip } from "lucide-react";
 import { trySanitizeEmailHtmlForIframe } from "../../lib/sanitizeEmailHtml";
 import { snippetForThreadRow } from "../../lib/threadMessageSnippet";
 import { partitionThreadForOmission, THREAD_OMISSION_THRESHOLD } from "../../lib/threadMessageOmission";
+import { EmailHtmlReadingSurface } from "../email/EmailHtmlReadingSurface";
 import { EmailHtmlIframe } from "../email/EmailHtmlIframe";
 import { MessageAttachmentChips, type ChatAttachmentRow } from "./MessageAttachmentChips";
 
@@ -32,6 +33,16 @@ interface ConversationFeedProps {
   onToggle?: (foldKey: string) => void;
   getFoldKey?: (msg: ChatMessage) => string;
   bottomSlot?: ReactNode;
+  /**
+   * Renders at the bottom of the **last** message’s expanded body (inside that message), not below the feed.
+   * Use for Gmail reply/forward so actions belong to the message (e.g. Inbox thread detail).
+   */
+  lastMessageFooter?: ReactNode;
+  /**
+   * Renders at the bottom of **every** expanded message. When set, overrides `lastMessageFooter` for placement
+   * (Pipeline timeline: Reply | Forward on each message, wired to one `GmailThreadInlineReplyDock` via ref).
+   */
+  messageFooter?: (msg: ChatMessage) => ReactNode;
   emptyText?: string;
   /** Min messages before first + omission + last {@link THREAD_OMISSION_TAIL_SIZE} layout. */
   omissionThreshold?: number;
@@ -57,12 +68,15 @@ function ThreadMessageRow({
   expanded,
   onToggle,
   foldable,
+  footerSlot,
 }: {
   msg: ChatMessage;
   foldKey: string;
   expanded: boolean;
   onToggle?: () => void;
   foldable: boolean;
+  /** Shown at bottom of expanded body only (e.g. reply/forward for last message). */
+  footerSlot?: ReactNode;
 }) {
   const iframeSrcDoc = useMemo(
     () => trySanitizeEmailHtmlForIframe(msg.bodyHtmlSanitized),
@@ -131,33 +145,31 @@ function ThreadMessageRow({
     </>
   );
 
-  const htmlContent =
-    iframeSrcDoc ? <EmailHtmlIframe srcDoc={iframeSrcDoc} expanded={expanded} /> : null;
+  const htmlContent = iframeSrcDoc ? (
+    <EmailHtmlReadingSurface>
+      <EmailHtmlIframe srcDoc={iframeSrcDoc} expanded={expanded} />
+    </EmailHtmlReadingSurface>
+  ) : null;
   const plainContent = (
     <span className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">{msg.body}</span>
   );
 
   const bodyBlock =
     hasHtml && iframeSrcDoc ? (
-      <div className="min-w-0 border-t border-border/60 bg-muted/10 px-3 pb-3 pt-2">{htmlContent}</div>
+      <div className="min-w-0 overflow-x-clip border-t border-border/50">{htmlContent}</div>
     ) : (
-      <div className="border-t border-border/60 bg-muted/10 px-3 pb-3 pt-2">{plainContent}</div>
+      <div className="border-t border-border/50 px-3 pb-3 pt-2">{plainContent}</div>
     );
 
   return (
-    <article
-      className={
-        "w-full min-w-0 overflow-hidden rounded-lg border border-border bg-card/50 shadow-sm " +
-        (incoming ? "ring-1 ring-border/40 " : "")
-      }
-    >
+    <article className="w-full min-w-0 overflow-hidden bg-transparent">
       {interactiveHeader ? (
         <button
           type="button"
           onClick={onToggle}
           className={
             "flex w-full min-w-0 items-start gap-2 px-3 py-2.5 text-left transition " +
-            (expanded ? "bg-accent/25 " : "hover:bg-accent/40")
+            (expanded ? "bg-muted/20 " : "hover:bg-muted/35")
           }
           aria-expanded={expanded}
           aria-controls={`thread-msg-${foldKey}`}
@@ -167,7 +179,7 @@ function ThreadMessageRow({
         </button>
       ) : (
         <div
-          className="flex w-full min-w-0 items-start gap-2 border-b border-border/60 bg-muted/15 px-3 py-2.5"
+          className="flex w-full min-w-0 items-start gap-2 border-b border-border/50 bg-muted/10 px-3 py-2.5"
           id={`thread-msg-hdr-${foldKey}`}
         >
           {headerInner}
@@ -178,10 +190,11 @@ function ThreadMessageRow({
         <div id={`thread-msg-${foldKey}`} role="region" aria-labelledby={`thread-msg-hdr-${foldKey}`}>
           {bodyBlock}
           {hasAttachments ? (
-            <div className="border-t border-border/60 px-3 py-2">
+            <div className="border-t border-border/50 px-3 py-2">
               <MessageAttachmentChips attachments={msg.attachments!} />
             </div>
           ) : null}
+          {footerSlot ? <div className="min-w-0 px-3 pb-3 pt-2">{footerSlot}</div> : null}
         </div>
       ) : null}
     </article>
@@ -234,6 +247,8 @@ export function ConversationFeed({
   onToggle,
   getFoldKey = (msg) => msg.id,
   bottomSlot,
+  lastMessageFooter,
+  messageFooter,
   emptyText = "No messages yet.",
   omissionThreshold = THREAD_OMISSION_THRESHOLD,
 }: ConversationFeedProps) {
@@ -267,12 +282,20 @@ export function ConversationFeed({
 
   const foldableEff = foldable ?? false;
 
+  const lastMessageIdInThread = useMemo(() => {
+    const seg = buildSegmentedRows(earlierMessages, todayMessages);
+    return seg.length > 0 ? seg[seg.length - 1].msg.id : null;
+  }, [earlierMessages, todayMessages]);
+
   const ctx = {
     foldable: foldableEff,
     expandedMap,
     defaultExpanded,
     getFoldKey,
     onToggle,
+    lastMessageFooter,
+    messageFooter,
+    lastMessageIdInThread,
   };
 
   function renderSegmentedList(
@@ -295,6 +318,12 @@ export function ConversationFeed({
         ctx.expandedMap,
         ctx.defaultExpanded,
       );
+      const isLastInThread = Boolean(ctx.lastMessageIdInThread && row.msg.id === ctx.lastMessageIdInThread);
+      const footerSlot = ctx.messageFooter
+        ? ctx.messageFooter(row.msg)
+        : isLastInThread
+          ? ctx.lastMessageFooter
+          : undefined;
       nodes.push(
         <ThreadMessageRow
           key={row.msg.id}
@@ -303,6 +332,7 @@ export function ConversationFeed({
           expanded={expanded}
           foldable={ctx.foldable}
           onToggle={ctx.onToggle ? () => ctx.onToggle!(foldKey) : undefined}
+          footerSlot={footerSlot}
         />,
       );
       lastSeg = row.seg;
@@ -351,7 +381,7 @@ export function ConversationFeed({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <div className="flex w-full max-w-full flex-col gap-2">
+      <div className="flex w-full max-w-full flex-col divide-y divide-border/50">
         {!hasMessages && (
           <p className="py-8 text-center text-[12px] text-muted-foreground">{emptyText}</p>
         )}
@@ -359,8 +389,9 @@ export function ConversationFeed({
         {messageNodes}
 
         {bottomSlot}
-        <div ref={endRef} />
       </div>
+      {/* Sentinel outside divide-y so it does not pick up an extra top border above an empty row */}
+      <div ref={endRef} className="h-0 w-full shrink-0 overflow-hidden" aria-hidden />
     </div>
   );
 }

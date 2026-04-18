@@ -5,8 +5,26 @@ vi.mock("../inngest.ts", () => ({
   ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION: 1,
 }));
 
-import { attemptOrchestratorDraft, buildOrchestratorStubDraftBody } from "./attemptOrchestratorDraft.ts";
+import {
+  ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER,
+  attemptOrchestratorDraft,
+  buildOrchestratorStubDraftBody,
+} from "./attemptOrchestratorDraft.ts";
 import type { OrchestratorProposalCandidate } from "../../../../src/types/decisionContext.types.ts";
+
+const FORBIDDEN_BODY_SUBSTRINGS = [
+  "Action:",
+  "Rationale:",
+  "[Orchestrator draft",
+  "v3_authority_policy",
+  "clientOrchestratorV1",
+];
+
+function expectNoInternalScaffolding(body: string) {
+  for (const s of FORBIDDEN_BODY_SUBSTRINGS) {
+    expect(body).not.toContain(s);
+  }
+}
 
 function blockedSendMessage(): OrchestratorProposalCandidate {
   return {
@@ -104,9 +122,13 @@ describe("attemptOrchestratorDraft", () => {
     expect(insert).toHaveBeenCalled();
     const hist = (capturedBody?.instruction_history as unknown[])?.[0] as Record<string, unknown> | undefined;
     expect(hist?.action_key).toBe("v3_wedding_identity_disambiguation");
+    const body = String(capturedBody?.body ?? "");
+    expect(body).toBe(ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER);
+    expectNoInternalScaffolding(body);
+    expect(String(hist?.orchestrator_rationale ?? "")).toContain("Ask which wedding.");
   });
 
-  it("redacts planner-private phrasing in persisted stub body when clientVisibleForPrivateCommercialRedaction is true", async () => {
+  it("persists safe placeholder body only; rationale and inbound live in instruction_history (client-visible redaction on metadata)", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     const insert = vi.fn((row: Record<string, unknown>) => {
       capturedBody = row;
@@ -150,12 +172,15 @@ describe("attemptOrchestratorDraft", () => {
     });
 
     const body = String(capturedBody?.body ?? "");
-    expect(body).not.toMatch(/planner\s+commission/i);
-    expect(body).not.toMatch(/agency\s+fee/i);
-    expect(body).toContain("[Orchestrator draft — clientOrchestratorV1 QA path]");
+    expect(body).toBe(ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER);
+    expectNoInternalScaffolding(body);
+
+    const hist = (capturedBody?.instruction_history as unknown[])?.[0] as Record<string, unknown> | undefined;
+    expect(String(hist?.orchestrator_rationale ?? "")).not.toMatch(/planner\s+commission/i);
+    expect(String(hist?.inbound_excerpt ?? "")).not.toMatch(/agency\s+fee/i);
   });
 
-  it("does not redact stub body when clientVisibleForPrivateCommercialRedaction is false", async () => {
+  it("planner-only audience keeps diagnostics unredacted in instruction_history", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     const insert = vi.fn((row: Record<string, unknown>) => {
       capturedBody = row;
@@ -196,7 +221,9 @@ describe("attemptOrchestratorDraft", () => {
       audience: { clientVisibleForPrivateCommercialRedaction: false },
     });
 
-    expect(String(capturedBody?.body ?? "")).toContain("Planner commission is 10%");
+    expect(String(capturedBody?.body ?? "")).toBe(ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER);
+    const hist = (capturedBody?.instruction_history as unknown[])?.[0] as Record<string, unknown> | undefined;
+    expect(String(hist?.orchestrator_rationale ?? "")).toContain("Planner commission is 10%");
   });
 });
 
@@ -211,18 +238,19 @@ describe("buildOrchestratorStubDraftBody — audience redaction", () => {
     blockers_or_missing_facts: [],
   };
 
-  it("applies multiline redaction for client-visible audience", () => {
+  it("returns only safe placeholder for client-visible audience (no inbound or rationale in body)", () => {
     const out = buildOrchestratorStubDraftBody(base, "Discuss agency fee.", "email", [], {
       clientVisibleForPrivateCommercialRedaction: true,
     });
-    expect(out).not.toMatch(/agency\s+fee/i);
-    expect(out).toContain("[Orchestrator draft — clientOrchestratorV1 QA path]");
+    expect(out).toBe(ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER);
+    expectNoInternalScaffolding(out);
   });
 
-  it("preserves stub text for planner-only (no redaction flag)", () => {
+  it("returns only safe placeholder when redaction flag is false", () => {
     const out = buildOrchestratorStubDraftBody(base, "Discuss agency fee.", "email", [], {
       clientVisibleForPrivateCommercialRedaction: false,
     });
-    expect(out).toContain("Discuss agency fee.");
+    expect(out).toBe(ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER);
+    expect(out).not.toContain("Discuss agency fee.");
   });
 });

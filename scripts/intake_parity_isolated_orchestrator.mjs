@@ -134,7 +134,13 @@ const { data: afterRows } = await sb
 const orch = (afterRows ?? []).filter((d) => {
   const h = JSON.stringify(d.instruction_history ?? "");
   const b = String(d.body ?? "");
-  return h.includes("client_orchestrator_v1") || b.includes("[Orchestrator draft — clientOrchestratorV1 QA path]");
+  return (
+    h.includes("client_orchestrator_v1") ||
+    b.includes("[Orchestrator draft — clientOrchestratorV1 QA path]") ||
+    b.includes(
+      "Reply draft pending — generated text will replace this when the writer runs successfully.",
+    )
+  );
 });
 
 console.log("\n--- DB: orchestrator-style drafts on fixture thread since before ---");

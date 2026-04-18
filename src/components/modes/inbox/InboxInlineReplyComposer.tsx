@@ -35,6 +35,8 @@ export interface InboxInlineReplyComposerProps {
   sending?: boolean;
   /** Stub: attachment pipeline not wired for unfiled inbox */
   onAttach?: () => void;
+  /** `message`: nested under thread row; `feed`: bottom-of-feed spacing. */
+  layout?: "feed" | "message";
 }
 
 export function InboxInlineReplyComposer({
@@ -58,6 +60,7 @@ export function InboxInlineReplyComposer({
   sendDisabledReason,
   sending = false,
   onAttach,
+  layout = "feed",
 }: InboxInlineReplyComposerProps) {
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -99,8 +102,13 @@ export function InboxInlineReplyComposer({
     }
   }
 
+  const shell =
+    layout === "message"
+      ? "px-0 pt-2"
+      : "mx-5 mt-4 border-t border-border/60 pt-4";
+
   return (
-    <div className="mx-5 mt-4 border-t border-border/60 pt-4">
+    <div className={shell}>
       <div
         className="rounded-lg border border-border bg-muted/25 p-3 shadow-sm"
         role="region"

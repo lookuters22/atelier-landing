@@ -14,35 +14,47 @@ function injectReaderCss(doc: Document): void {
   style.textContent = `
     html {
       overflow-x: hidden !important;
+      overflow-x: clip !important;
       overflow-y: visible !important;
       width: 100% !important;
       max-width: 100% !important;
       margin: 0 !important;
       padding: 0 !important;
-      background: transparent !important;
+      /* Do not set background — let the email HTML / UA define html surface (Gmail-like). */
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
     html::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
     body {
       overflow-x: hidden !important;
+      overflow-x: clip !important;
       overflow-y: visible !important;
       margin: 0 !important;
       padding: 0 !important;
       min-width: 0 !important;
       width: 100% !important;
-      max-width: 100% !important;
+      max-width: 100%;
       box-sizing: border-box !important;
-      background: transparent !important;
+      /* Do not set background — preserves email-authored body/wrapper colors. */
       scrollbar-width: none;
       -ms-overflow-style: none;
     }
     body::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
     body * { box-sizing: border-box; }
-    img, svg, video { max-width: 100% !important; height: auto !important; }
-    table { width: 100% !important; max-width: 100% !important; height: auto !important; }
+    img, svg, video, canvas, picture { max-width: 100% !important; height: auto !important; }
+    /* Do not force tables to 100% width — that stretches newsletter layouts; cap overflow only. */
+    table { max-width: 100% !important; height: auto !important; }
     td, th { word-wrap: break-word !important; overflow-wrap: anywhere !important; }
     pre { white-space: pre-wrap !important; word-break: break-word !important; }
+    /* Viewport units inside the iframe can exceed the email “canvas” (scrollbar / vw quirks). */
+    [style*="100vw"], [style*="100vmin"], [style*="100dvw"] {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    [style*="min-width"][style*="vw"], [style*="min-width"][style*="vmin"] {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
   `;
   if (doc.head) doc.head.appendChild(style);
   else doc.documentElement.appendChild(style);
@@ -68,8 +80,8 @@ type EmailHtmlIframeProps = {
 };
 
 /**
- * Sandboxed email document: full width of the thread pane, height follows content so the parent
- * scrolls (no inner iframe scrollbars).
+ * Sandboxed email document: fills the parent width (use {@link EmailHtmlReadingSurface} for a centered stage).
+ * Height follows content so the outer thread scrolls (no inner iframe scrollbars).
  */
 export function EmailHtmlIframe({ srcDoc, expanded, className }: EmailHtmlIframeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -136,7 +148,7 @@ export function EmailHtmlIframe({ srcDoc, expanded, className }: EmailHtmlIframe
       ref={containerRef}
       className={
         expanded
-          ? "w-full min-w-0 max-w-full overflow-x-hidden " + (className ?? "")
+          ? "w-full min-w-0 max-w-full overflow-x-clip " + (className ?? "")
           : "max-h-[5.5rem] w-full min-w-0 max-w-full overflow-hidden " + (className ?? "")
       }
     >

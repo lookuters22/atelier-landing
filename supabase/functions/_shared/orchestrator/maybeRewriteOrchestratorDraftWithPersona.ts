@@ -266,7 +266,7 @@ async function applyVerifiedMinimumPricingGuardrailBlock(
   },
 ): Promise<Extract<PersonaDraftRewriteResult, { applied: true }>> {
   const chosen = params.draftAttempt.chosenCandidate!;
-  const stub = buildOrchestratorStubDraftBody(
+  const body = buildOrchestratorStubDraftBody(
     chosen,
     params.rawMessage,
     params.replyChannel,
@@ -274,10 +274,9 @@ async function applyVerifiedMinimumPricingGuardrailBlock(
     params.decisionContext.audience,
   );
   const violations = [MISSING_PRICING_DATA_VIOLATION];
-  const body =
-    stub +
-    `\n\n${V3_PRICING_GUARDRAIL_BODY_MARKER} Automated reply blocked: verified minimum-investment policy text is not available in active playbook_rules (${params.budgetPlan.code}). ` +
-    "Draft retained as orchestrator stub for operator review — do not send client-facing studio pricing without playbook grounding.";
+  const pricingGuardrailDetail =
+    `Automated reply blocked: verified minimum-investment policy text is not available in active playbook_rules (${params.budgetPlan.code}). ` +
+    "Do not send client-facing studio pricing without playbook grounding.";
 
   const { data: row, error: fetchErr } = await supabase
     .from("drafts")
@@ -301,6 +300,7 @@ async function applyVerifiedMinimumPricingGuardrailBlock(
     step: V3_PRICING_DATA_GUARDRAIL_STEP,
     source: "planBudgetStatementInjection",
     code: params.budgetPlan.code,
+    operator_detail: `${V3_PRICING_GUARDRAIL_BODY_MARKER} ${pricingGuardrailDetail}`,
     ...(params.inquiryReplyPlan !== null
       ? {
           inquiry_reply_plan: {
@@ -476,24 +476,21 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
       escalationId = esc?.id ?? null;
     }
 
-    const stub = buildOrchestratorStubDraftBody(
+    const body = buildOrchestratorStubDraftBody(
       chosen,
       params.rawMessage,
       params.replyChannel,
       params.playbookRules,
       params.decisionContext.audience,
     );
-    const body =
-      stub +
-      "\n\n[PERSONA DRAFT FAILED — operator review required]\n" +
-      "Automated client-facing rewrite did not complete (structured JSON/persona error). Do not send this draft to the client as final copy.\n" +
-      `Detail: ${msg.slice(0, 1200)}`;
     const failStep = {
       step: "persona_writer_after_client_orchestrator_v1",
       source: "personaAgent.draftPersonaStructuredResponse",
       model: "claude-haiku-4-5",
       failed: true as const,
       error: msg.slice(0, 2000),
+      operator_notice:
+        "Automated client-facing rewrite did not complete — do not send this draft as final copy. See error and violations in this history entry.",
       violations,
       escalation_id: escalationId,
     };
@@ -587,16 +584,13 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
   };
 
   if (audit.isValid === false) {
-    const stub = buildOrchestratorStubDraftBody(
+    const body = buildOrchestratorStubDraftBody(
       chosen,
       params.rawMessage,
       params.replyChannel,
       params.playbookRules,
       params.decisionContext.audience,
     );
-    const body =
-      stub +
-      "\n\n[V3 output auditor] Persona draft rejected — stub restored. Operator escalation filed for ungrounded commercial terms.";
 
     let escalationId: string | null = null;
     if (params.threadId) {
@@ -619,6 +613,8 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
         passed: false,
         violations: audit.violations,
         escalation_id: escalationId,
+        operator_notice:
+          "Persona draft did not pass automated commercial review — body reset to pending placeholder. See violations in this history entry.",
       },
     ];
 
@@ -644,16 +640,13 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
   }
 
   if (leakAudit.isValid === false) {
-    const stub = buildOrchestratorStubDraftBody(
+    const body = buildOrchestratorStubDraftBody(
       chosen,
       params.rawMessage,
       params.replyChannel,
       params.playbookRules,
       params.decisionContext.audience,
     );
-    const body =
-      stub +
-      "\n\n[V3 output auditor] Persona draft rejected — planner-private commercial language in client-visible audience. Stub restored. Operator escalation filed.";
 
     let escalationId: string | null = null;
     if (params.threadId) {
@@ -677,6 +670,8 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
         passed: false,
         violations: leakAudit.violations,
         escalation_id: escalationId,
+        operator_notice:
+          "Planner-private wording was not allowed for this audience — body reset to pending placeholder. See violations in this history entry.",
       },
     ];
 

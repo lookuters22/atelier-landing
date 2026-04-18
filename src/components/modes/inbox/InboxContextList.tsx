@@ -1,20 +1,17 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { ExternalLink, FileEdit, Inbox, PenSquare, Send, Star, Tag } from "lucide-react";
 import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  FileEdit,
-  Inbox,
-  PenSquare,
-  Search,
-  Send,
-  Star,
-  Tag,
-  X,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+  ContextPaneRoot,
+  PaneCountBadge,
+  PaneHeaderStrip,
+  PaneNavRow,
+  PanePrimaryAction,
+  PaneScrollRegion,
+  PaneSearchInput,
+  PaneSectionToggle,
+} from "@/components/panes";
 import { useAuth } from "../../../context/AuthContext";
 import { useUnfiledInbox } from "../../../hooks/useUnfiledInbox";
 import { fetchThreadMessagesForInbox, inboxThreadMessagesQueryKey } from "../../../hooks/useThreadMessagesForInbox";
@@ -66,6 +63,8 @@ export function InboxContextList() {
     refreshGmailLabels,
   } = useInboxGmailLabels(photographerId ?? null, googleAccount ?? null);
 
+  const [inquiriesOpen, setInquiriesOpen] = useState(false);
+  const [weddingsOpen, setWeddingsOpen] = useState(true);
   const [labelsOpen, setLabelsOpen] = useState(true);
 
   const { inputValue, setInputValue, clearSearch, onSearchBlur, urlHasActiveSearch } = useInboxSearchInput();
@@ -168,63 +167,25 @@ export function InboxContextList() {
     [backToList, setInboxFolder, setGmailLabelFilterId],
   );
 
-  /**
-   * “Open in inbox” (list): filter threads by wedding and stay in the standard inbox list/detail — not `selectProject` pipeline timeline.
-   * Full CRM timeline remains via `/pipeline/:id` links in the sidebar.
-   */
-  const onOpenProjectInInboxList = useCallback(
-    (weddingId: string) => {
-      backToList();
-      setInboxFolder("inbox");
-      setGmailLabelFilterId(null);
-      setListTab("all");
-      setProjectFilterWeddingId(weddingId);
-    },
-    [backToList, setInboxFolder, setGmailLabelFilterId, setListTab, setProjectFilterWeddingId],
-  );
-
   return (
-    <div className="flex h-full min-h-0 flex-col text-[13px] text-foreground">
-      <div className="shrink-0 space-y-2 border-b border-border/60 p-2">
-        <button
-          type="button"
-          onClick={() => setScratchComposeOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-foreground py-2.5 text-[13px] font-semibold text-background shadow-sm transition hover:opacity-90"
-        >
-          <PenSquare className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+    <ContextPaneRoot withRightBorder={false}>
+      <PaneHeaderStrip variant="inbox">
+        <PanePrimaryAction icon={PenSquare} onClick={() => setScratchComposeOpen(true)}>
           Compose
-        </button>
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-            strokeWidth={1.75}
-          />
-          <input
-            type="search"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onBlur={onSearchBlur}
-            placeholder={searchPlaceholder}
-            className={cn(
-              "w-full rounded-md border border-border bg-background py-1.5 pl-8 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring",
-              showSearchClear || urlHasActiveSearch ? "pr-8" : "pr-2.5",
-            )}
-            aria-label={searchPlaceholder}
-          />
-          {showSearchClear ? (
-            <button
-              type="button"
-              onClick={clearSearch}
-              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-          ) : null}
-        </div>
-      </div>
+        </PanePrimaryAction>
+        <PaneSearchInput
+          value={inputValue}
+          onChange={setInputValue}
+          onBlur={onSearchBlur}
+          placeholder={searchPlaceholder}
+          showClear={showSearchClear}
+          onClear={clearSearch}
+          padRightForAux={urlHasActiveSearch && !showSearchClear}
+          aria-label={searchPlaceholder}
+        />
+      </PaneHeaderStrip>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
+      <PaneScrollRegion>
         {!authLoading && !photographerId ? (
           <div
             className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-950 dark:text-amber-100/95"
@@ -248,139 +209,120 @@ export function InboxContextList() {
           {FOLDERS.map(({ id, label, icon: Icon }) => {
             const folderActive = inboxFolder === id;
             return (
-              <button
+              <PaneNavRow
                 key={id}
-                type="button"
+                active={folderActive}
+                icon={Icon}
                 onClick={() => onPickFolder(id)}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-full px-3 py-2 text-left text-[13px] transition-colors",
-                  folderActive
-                    ? "bg-foreground/10 font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-                )}
+                endAdornment={
+                  id === "inbox" && !threadsLoading ? <PaneCountBadge>{threadCount}</PaneCountBadge> : undefined
+                }
               >
-                <Icon className="h-4 w-4 shrink-0 opacity-80" strokeWidth={1.75} aria-hidden />
-                <span className="min-w-0 flex-1">{label}</span>
-                {id === "inbox" && !threadsLoading ? (
-                  <span className="text-[11px] tabular-nums text-muted-foreground">{threadCount}</span>
-                ) : null}
-              </button>
+                {label}
+              </PaneNavRow>
             );
           })}
         </nav>
 
-        <div className="mt-5">
-          <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="mt-5 flex flex-col gap-5">
+        <div>
+          <PaneSectionToggle open={inquiriesOpen} onOpenChange={setInquiriesOpen}>
             Inquiries
-          </p>
-          <button
-            type="button"
-            onClick={onInquiriesNav}
-            className={cn(
-              "flex w-full items-center rounded-full px-3 py-2 text-left text-[13px] transition-colors",
-              listTab === "inquiries" && !projectFilterWeddingId && inboxFolder === "inbox" && !gmailLabelFilterId
-                ? "bg-foreground/10 font-medium text-foreground"
-                : "text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-            )}
-          >
-            All inquiries
-          </button>
-          {weddingsLoading ? (
-            <p className="px-3 py-2 text-[12px] text-muted-foreground">Loading…</p>
-          ) : inquiries.length === 0 ? (
-            <p className="px-3 py-1 text-[12px] text-muted-foreground">No inquiry-stage weddings</p>
-          ) : (
-            <ul className="mt-0.5 space-y-0.5">
-              {inquiries.map((w) => (
-                <li key={w.id} className="flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      prefetchLikelyThreadForWedding(w.id);
-                      onPickProjectFilter(w.id);
-                    }}
-                    onPointerEnter={() => scheduleRailPrefetchForWedding(w.id)}
-                    onPointerLeave={cancelRailHoverPrefetch}
-                    className={cn(
-                      "min-w-0 flex-1 rounded-full px-3 py-1.5 text-left text-[12px] transition-colors",
-                      projectFilterWeddingId === w.id
-                        ? "bg-foreground/10 font-medium text-foreground"
-                        : "text-foreground/90 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-                    )}
-                  >
-                    <span className="truncate">{w.couple_names}</span>
-                  </button>
-                  <Link
-                    to={`/pipeline/${w.id}`}
-                    className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                    title="Open in pipeline"
-                    aria-label={`Open ${w.couple_names} in pipeline`}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          </PaneSectionToggle>
+          {inquiriesOpen ? (
+            <>
+              <PaneNavRow
+                variant="sub"
+                active={
+                  listTab === "inquiries" &&
+                  !projectFilterWeddingId &&
+                  inboxFolder === "inbox" &&
+                  !gmailLabelFilterId
+                }
+                onClick={onInquiriesNav}
+              >
+                All inquiries
+              </PaneNavRow>
+              {weddingsLoading ? (
+                <p className="px-3 py-2 text-[12px] text-muted-foreground">Loading…</p>
+              ) : inquiries.length === 0 ? (
+                <p className="px-3 py-1 text-[12px] text-muted-foreground">No inquiry-stage weddings</p>
+              ) : (
+                <ul className="mt-0.5 space-y-0.5">
+                  {inquiries.map((w) => (
+                    <li key={w.id} className="flex items-center gap-0.5">
+                      <PaneNavRow
+                        variant="nested"
+                        active={projectFilterWeddingId === w.id}
+                        onClick={() => {
+                          prefetchLikelyThreadForWedding(w.id);
+                          onPickProjectFilter(w.id);
+                        }}
+                        onPointerEnter={() => scheduleRailPrefetchForWedding(w.id)}
+                        onPointerLeave={cancelRailHoverPrefetch}
+                      >
+                        {w.couple_names}
+                      </PaneNavRow>
+                      <Link
+                        to={`/pipeline/${w.id}`}
+                        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        title="Open in pipeline"
+                        aria-label={`Open ${w.couple_names} in pipeline`}
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : null}
         </div>
 
-        <div className="mt-5">
-          <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <div>
+          <PaneSectionToggle open={weddingsOpen} onOpenChange={setWeddingsOpen}>
             Weddings
-          </p>
-          {weddingsLoading ? (
-            <p className="px-3 py-2 text-[12px] text-muted-foreground">Loading…</p>
-          ) : active.length === 0 ? (
-            <p className="px-3 py-1 text-[12px] text-muted-foreground">No active weddings</p>
-          ) : (
-            <ul className="space-y-0.5">
-              {active.map((w) => (
-                <li key={w.id} className="flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      prefetchLikelyThreadForWedding(w.id);
-                      onPickProjectFilter(w.id);
-                    }}
-                    onPointerEnter={() => scheduleRailPrefetchForWedding(w.id)}
-                    onPointerLeave={cancelRailHoverPrefetch}
-                    className={cn(
-                      "min-w-0 flex-1 rounded-full px-3 py-1.5 text-left text-[12px] transition-colors",
-                      projectFilterWeddingId === w.id
-                        ? "bg-foreground/10 font-medium text-foreground"
-                        : "text-foreground/90 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-                    )}
-                  >
-                    <span className="truncate">{w.couple_names}</span>
-                  </button>
-                  <Link
-                    to={`/pipeline/${w.id}`}
-                    className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                    title="Open in pipeline"
-                    aria-label={`Open ${w.couple_names} in pipeline`}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          </PaneSectionToggle>
+          {weddingsOpen ? (
+            weddingsLoading ? (
+              <p className="px-3 py-2 text-[12px] text-muted-foreground">Loading…</p>
+            ) : active.length === 0 ? (
+              <p className="px-3 py-1 text-[12px] text-muted-foreground">No active weddings</p>
+            ) : (
+              <ul className="space-y-0.5">
+                {active.map((w) => (
+                  <li key={w.id} className="flex items-center gap-0.5">
+                    <PaneNavRow
+                      variant="nested"
+                      active={projectFilterWeddingId === w.id}
+                      onClick={() => {
+                        prefetchLikelyThreadForWedding(w.id);
+                        onPickProjectFilter(w.id);
+                      }}
+                      onPointerEnter={() => scheduleRailPrefetchForWedding(w.id)}
+                      onPointerLeave={cancelRailHoverPrefetch}
+                    >
+                      {w.couple_names}
+                    </PaneNavRow>
+                    <Link
+                      to={`/pipeline/${w.id}`}
+                      className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                      title="Open in pipeline"
+                      aria-label={`Open ${w.couple_names} in pipeline`}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : null}
         </div>
 
-        <div className="mt-5 border-t border-border/60 pt-3">
-          <button
-            type="button"
-            onClick={() => setLabelsOpen((o) => !o)}
-            className="mb-1 flex w-full items-center gap-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
-            aria-expanded={labelsOpen}
-          >
-            {labelsOpen ? (
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            )}
+        <div>
+          <PaneSectionToggle open={labelsOpen} onOpenChange={setLabelsOpen}>
             Labels
-          </button>
+          </PaneSectionToggle>
           {labelsOpen ? (
             !googleAccount ? (
               <p className="px-2 py-2 text-[11px] leading-snug text-muted-foreground">
@@ -439,34 +381,24 @@ export function InboxContextList() {
                 ) : (
                   <ul className="max-h-48 space-y-0.5 overflow-y-auto">
                     <li>
-                      <button
-                        type="button"
+                      <PaneNavRow
+                        variant="label"
+                        active={gmailLabelFilterId === null}
                         onClick={() => onPickLabel(null)}
-                        className={cn(
-                          "flex w-full items-center gap-2 rounded-full px-2 py-1.5 text-left text-[12px]",
-                          gmailLabelFilterId === null
-                            ? "bg-foreground/10 font-medium"
-                            : "hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-                        )}
                       >
                         All labels
-                      </button>
+                      </PaneNavRow>
                     </li>
                     {gmailLabels.map((lb) => (
                       <li key={lb.id}>
-                        <button
-                          type="button"
+                        <PaneNavRow
+                          variant="label"
+                          icon={Tag}
+                          active={gmailLabelFilterId === lb.id}
                           onClick={() => onPickLabel(lb.id)}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-full px-2 py-1.5 text-left text-[12px]",
-                            gmailLabelFilterId === lb.id
-                              ? "bg-foreground/10 font-medium"
-                              : "hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-                          )}
                         >
-                          <Tag className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2} aria-hidden />
-                          <span className="min-w-0 truncate">{lb.name}</span>
-                        </button>
+                          {lb.name}
+                        </PaneNavRow>
                       </li>
                     ))}
                   </ul>
@@ -475,45 +407,8 @@ export function InboxContextList() {
             )
           ) : null}
         </div>
-
-        <div className="mt-6 border-t border-border/60 pt-3">
-          <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Open in inbox
-          </p>
-          <p className="px-2 pb-2 text-[11px] leading-snug text-muted-foreground">
-            Filter the thread list to this project. For the full CRM timeline and pipeline tools, use{" "}
-            <span className="font-medium text-foreground/90">Open in pipeline</span> beside each name above.
-          </p>
-          {weddingsLoading ? null : (
-            <ul className="space-y-0.5">
-              {[...inquiries, ...active]
-                .filter((w, i, arr) => arr.findIndex((x) => x.id === w.id) === i)
-                .slice(0, 8)
-                .map((w) => (
-                  <li key={`open-${w.id}`}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        prefetchLikelyThreadForWedding(w.id);
-                        onOpenProjectInInboxList(w.id);
-                      }}
-                      onPointerEnter={() => scheduleRailPrefetchForWedding(w.id)}
-                      onPointerLeave={cancelRailHoverPrefetch}
-                      className={cn(
-                        "w-full rounded-full px-3 py-1.5 text-left text-[12px] transition-colors",
-                        projectFilterWeddingId === w.id
-                          ? "bg-foreground/10 font-medium text-foreground"
-                          : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]",
-                      )}
-                    >
-                      {w.couple_names}
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          )}
         </div>
-      </div>
-    </div>
+      </PaneScrollRegion>
+    </ContextPaneRoot>
   );
 }

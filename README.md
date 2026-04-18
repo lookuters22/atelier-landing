@@ -9,6 +9,16 @@ npm install
 npm run dev
 ```
 
+### Service area map picker (onboarding)
+
+The scope step ships bundled geography data under `public/serviceAreaPicker/` (`labels.json`, `polygons.json`). Sources: **Natural Earth** (public domain) and **GeoNames** `cities15000` ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)). To rebuild after upstream data changes:
+
+```bash
+npm run build:service-area-dataset
+```
+
+See [docs/v3/ONBOARDING_SERVICE_AREA_MAP_PICKER_IMPLEMENTATION.md](docs/v3/ONBOARDING_SERVICE_AREA_MAP_PICKER_IMPLEMENTATION.md) (historical v1 doc; execution plan is `.cursor/plans/service_area_map_picker_4565a808.plan.md`).
+
 ## Deploy (Vercel)
 
 1. Push this repo to GitHub (see below).

@@ -13,17 +13,26 @@ export type InquiryWritingQaFinalState =
 
 export type InstructionHistoryEntry = Record<string, unknown>;
 
+/** Legacy A2 diagnostic drafts — older rows only; must match historical `attemptOrchestratorDraft` copy. */
 const ORCHESTRATOR_STUB_MARKER = "[Orchestrator draft — clientOrchestratorV1 QA path]";
+
+/**
+ * Current pending-draft placeholder (client-safe). Must match
+ * `ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER` in `supabase/functions/_shared/orchestrator/attemptOrchestratorDraft.ts`.
+ */
+const ORCHESTRATOR_PENDING_DRAFT_PLACEHOLDER =
+  "Reply draft pending — generated text will replace this when the writer runs successfully.";
+
 const OUTPUT_AUDITOR_BODY_MARKER = "[V3 output auditor]";
 
 /** Must match `V3_PRICING_DATA_GUARDRAIL_STEP` in `budgetStatementInjection.ts` (instruction_history). */
 const PRICING_DATA_GUARDRAIL_STEP = "v3_pricing_data_guardrail_missing_verified_minimum";
 const PERSONA_WRITER_SUCCESS_STEP = "persona_writer_after_client_orchestrator_v1";
 
-/** Exported for tests and QA reporting — matches A2 stub header from `attemptOrchestratorDraft.ts`. */
+/** True when body is the safe pending placeholder or a legacy diagnostic stub (hosted QA / parity). */
 export function bodyLooksLikeOrchestratorStub(body: string): boolean {
   const t = body.trim();
-  return t.includes(ORCHESTRATOR_STUB_MARKER);
+  return t.includes(ORCHESTRATOR_PENDING_DRAFT_PLACEHOLDER) || t.includes(ORCHESTRATOR_STUB_MARKER);
 }
 
 export function bodyHasOutputAuditorRestoredMarker(body: string): boolean {

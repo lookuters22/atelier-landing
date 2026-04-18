@@ -1644,6 +1644,7 @@ export type Database = {
         Row: {
           booking_scope: Json
           client_types: Json
+          core_services: Json
           created_at: string
           deliverable_types: Json
           extensions: Json
@@ -1662,6 +1663,7 @@ export type Database = {
         Insert: {
           booking_scope?: Json
           client_types?: Json
+          core_services?: Json
           created_at?: string
           deliverable_types?: Json
           extensions?: Json
@@ -1680,6 +1682,7 @@ export type Database = {
         Update: {
           booking_scope?: Json
           client_types?: Json
+          core_services?: Json
           created_at?: string
           deliverable_types?: Json
           extensions?: Json
@@ -2482,6 +2485,16 @@ export type Database = {
           p_photographer_id: string
           p_thread_id: string
           p_thread_wedding_id: string
+        }
+        Returns: undefined
+      }
+      finalize_onboarding_briefing_v1: {
+        Args: {
+          p_knowledge_base_rows: Json
+          p_photographer_id: string
+          p_playbook_rules: Json
+          p_settings: Json
+          p_studio_business_profile: Json
         }
         Returns: undefined
       }

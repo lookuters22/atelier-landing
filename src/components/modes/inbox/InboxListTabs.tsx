@@ -3,7 +3,6 @@ import type { InboxListTab } from "../../../lib/inboxVisibleThreads";
 
 const TABS: { id: InboxListTab; label: string }[] = [
   { id: "all", label: "All Mail" },
-  { id: "inquiries", label: "Inquiries" },
   { id: "unassigned", label: "Unassigned" },
 ];
 

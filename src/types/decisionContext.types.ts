@@ -1,5 +1,10 @@
 import type { AgentContext } from "./agent.types.ts";
 import type { Database } from "./database.types.ts";
+import type {
+  InboundSuppressionClassification,
+  InboundSuppressionReasonCode,
+  InboundSuppressionVerdict,
+} from "../lib/inboundSuppressionClassifier.ts";
 
 export type {
   CrmSnapshot,
@@ -171,7 +176,24 @@ export type DecisionAudienceSnapshot = {
    * Empty when no wedding in scope or no flags set. Compare to `thread_participants.person_id` + `is_sender` for routing.
    */
   approvalContactPersonIds: string[];
+  /**
+   * Inbound suppression verdict for the **latest inbound message** on this thread.
+   *
+   * Populated by `buildDecisionContext` via the shared `classifyInboundSuppression`
+   * helper when an inbound message is in scope. When `suppressed === true`, the
+   * orchestrator must not produce a routine client send_message draft (promo /
+   * system / non-client mail such as OTA campaigns, newsletters, do-not-reply
+   * notifications). `null` / omitted when no inbound message is available
+   * (e.g. thread has no inbound rows yet, or this call has no thread in scope).
+   *
+   * Optional for backward compatibility with pre-suppression test harnesses and
+   * QA fixtures; production `buildDecisionContext` always sets it (possibly to
+   * `null`).
+   */
+  inboundSuppression?: InboundSuppressionClassification | null;
 };
+
+export type { InboundSuppressionClassification, InboundSuppressionReasonCode, InboundSuppressionVerdict };
 
 /**
  * Active `playbook_rules` rows attached to decision context (execute_v3 Step 5B).

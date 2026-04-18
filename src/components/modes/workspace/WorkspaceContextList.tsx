@@ -9,7 +9,13 @@ import {
   Package,
   Receipt,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  ContextPaneRoot,
+  PaneCountBadge,
+  PaneNavRow,
+  PaneScrollRegion,
+  PaneSectionLabel,
+} from "@/components/panes";
 import { useWorkspaceMode, type WorkspaceIndex } from "./WorkspaceModeContext";
 
 type NavItem = { id: WorkspaceIndex; label: string; icon: typeof FileText; showCount?: boolean; route?: string };
@@ -48,13 +54,15 @@ export function WorkspaceContextList() {
   }
 
   return (
-    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        <Section label="Financials" items={FINANCIAL_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
-        <Section label="Sales" items={SALES_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
-        <Section label="Studio Tools" items={TOOL_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
-      </div>
-    </div>
+    <ContextPaneRoot>
+      <PaneScrollRegion>
+        <div className="space-y-5">
+          <Section label="Financials" items={FINANCIAL_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
+          <Section label="Sales" items={SALES_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
+          <Section label="Studio Tools" items={TOOL_ITEMS} activeIndex={effectiveIndex} counts={counts} onSelect={handleSelect} />
+        </div>
+      </PaneScrollRegion>
+    </ContextPaneRoot>
   );
 }
 
@@ -79,53 +87,25 @@ function Section({
   onSelect: (item: NavItem) => void;
 }) {
   return (
-    <div className="mb-4">
-      <div className="mb-1 px-2 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
+    <div>
+      <PaneSectionLabel>{label}</PaneSectionLabel>
       {items.map((item) => (
-        <NavRow
+        <PaneNavRow
           key={item.id}
-          label={item.label}
-          icon={item.icon}
           active={activeIndex === item.id}
-          count={item.showCount === false ? undefined : counts[item.id]}
+          icon={item.icon}
           onClick={() => onSelect(item)}
-        />
+          endAdornment={
+            item.showCount === false || !counts[item.id]
+              ? undefined
+              : counts[item.id] > 0
+                ? <PaneCountBadge>{counts[item.id]}</PaneCountBadge>
+                : undefined
+          }
+        >
+          {item.label}
+        </PaneNavRow>
       ))}
     </div>
-  );
-}
-
-function NavRow({
-  label,
-  icon: Icon,
-  active,
-  count,
-  onClick,
-}: {
-  label: string;
-  icon: typeof FileText;
-  active: boolean;
-  count?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors",
-        active ? "bg-accent text-foreground" : "text-foreground hover:bg-accent/50",
-      )}
-    >
-      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className="shrink-0 rounded border border-border bg-background px-1.5 py-0 text-[11px] tabular-nums text-muted-foreground">
-          {count}
-        </span>
-      )}
-    </button>
   );
 }

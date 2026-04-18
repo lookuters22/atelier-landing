@@ -33,13 +33,28 @@ export async function linkInboxThreadToWedding(params: {
   return { ok: false, error: row.error ?? "unknown" };
 }
 
+export type ConvertUnfiledThreadToInquirySuppressionFailure = {
+  ok: false;
+  error: "suppressed_non_client_thread";
+  verdict: string;
+  reasons: string[];
+  confidence: string;
+};
+
 export type ConvertUnfiledThreadToInquiryResult =
   | { ok: true; weddingId: string; alreadyLinked: boolean }
+  | ConvertUnfiledThreadToInquirySuppressionFailure
   | { ok: false; error: string };
 
 /**
- * Create inquiry wedding + lead client; link canonical thread
- * (`20260430180000_rpc_convert_unfiled_thread_to_inquiry.sql`, names extension `20260430190000_…`).
+ * Create inquiry wedding + lead client; link canonical thread.
+ *
+ * Defense-in-depth: the RPC (migration 20260507000000) runs
+ * `classify_inbound_suppression()` against the latest inbound message and
+ * returns a structured `suppressed_non_client_thread` failure for promo /
+ * system / non-client senders (e.g. Booking.com campaign mail). Callers
+ * should surface `verdict` + `reasons` to the operator rather than silently
+ * showing a generic error.
  */
 export async function convertUnfiledThreadToInquiry(params: {
   threadId: string;
@@ -66,12 +81,27 @@ export async function convertUnfiledThreadToInquiry(params: {
     error?: string;
     wedding_id?: string;
     already_linked?: boolean;
+    verdict?: string;
+    reasons?: unknown;
+    confidence?: string;
   } | null;
 
   if (!row || typeof row !== "object") {
     return { ok: false, error: "invalid_response" };
   }
   if (row.ok !== true) {
+    if (row.error === "suppressed_non_client_thread") {
+      const reasons = Array.isArray(row.reasons)
+        ? (row.reasons.filter((r) => typeof r === "string") as string[])
+        : [];
+      return {
+        ok: false,
+        error: "suppressed_non_client_thread",
+        verdict: typeof row.verdict === "string" ? row.verdict : "unknown",
+        reasons,
+        confidence: typeof row.confidence === "string" ? row.confidence : "low",
+      };
+    }
     return { ok: false, error: row.error ?? "unknown" };
   }
   const wid = typeof row.wedding_id === "string" ? row.wedding_id : "";

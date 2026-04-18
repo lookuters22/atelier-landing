@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useOnboardingBriefingDraft } from "@/hooks/useOnboardingBriefingDraft.ts";
 import { OnboardingBriefingOverallBar } from "@/components/onboarding/OnboardingBriefingOverallBar.tsx";
+import { OnboardingBriefingHeaderProvider } from "@/components/onboarding/OnboardingBriefingHeaderContext.tsx";
 import { OnboardingBriefingShell } from "@/components/onboarding/OnboardingBriefingShell.tsx";
 import { OnboardingBriefingFooter } from "@/components/onboarding/OnboardingBriefingFooter.tsx";
 import { OnboardingBriefingIdentityStep } from "@/components/onboarding/OnboardingBriefingIdentityStep.tsx";
@@ -119,6 +120,7 @@ export function OnboardingBriefingPage() {
     ) : null;
 
   return (
+    <OnboardingBriefingHeaderProvider>
     <OnboardingBriefingShell
       contentFillHeight={draft.currentStepId === "review"}
       progress={<OnboardingBriefingOverallBar stepIndex={draft.stepIndex} />}
@@ -179,5 +181,6 @@ export function OnboardingBriefingPage() {
         )}
       </AnimatePresence>
     </OnboardingBriefingShell>
+    </OnboardingBriefingHeaderProvider>
   );
 }

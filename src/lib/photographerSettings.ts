@@ -10,6 +10,7 @@ import type {
   PhotographerSettingsKey,
 } from "../types/photographerSettings.types.ts";
 import { PHOTOGRAPHER_SETTINGS_KEYS } from "../types/photographerSettings.types.ts";
+import { parseStudioBaseLocation } from "./studioBaseLocation.ts";
 
 export type { PhotographerSettings, PhotographerSettingsKey };
 export { PHOTOGRAPHER_SETTINGS_KEYS };
@@ -53,6 +54,18 @@ export function parsePhotographerSettings(raw: unknown): Partial<PhotographerSet
       case "admin_mobile_number":
         if (typeof v === "string") out[key] = v;
         break;
+      case "base_location": {
+        // Null is persisted when the operator clears their base; treat it
+        // as an explicit absence rather than dropping the field, so the
+        // UI can tell "unset" apart from "never touched".
+        if (v === null) {
+          out[key] = null;
+        } else {
+          const parsed = parseStudioBaseLocation(v);
+          if (parsed) out[key] = parsed;
+        }
+        break;
+      }
       default:
         break;
     }
@@ -79,6 +92,19 @@ export function mergePhotographerSettings(
     const v = patch[key];
     if (v === undefined) {
       delete base[key];
+      continue;
+    }
+    if (key === "base_location" && v !== null) {
+      // Defence-in-depth: even though the TS type is strict, `as any` casts
+      // elsewhere could smuggle in a malformed object. The DB also enforces
+      // this via validate_studio_base_location_shape(), but we reject here
+      // so the client never writes garbage in the first place.
+      const parsed = parseStudioBaseLocation(v);
+      if (!parsed) {
+        delete base[key];
+        continue;
+      }
+      base[key] = parsed;
       continue;
     }
     base[key] = v;

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronUp, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   adjacentWeddingIdInOrderedList,
@@ -8,6 +9,11 @@ import {
   scrollPipelineWeddingRowIntoView,
   weddingQueuePosition,
 } from "@/lib/pipelineWeddingListNavigation";
+import { useAuth } from "../../../context/AuthContext";
+import { useDirectoryPeople } from "../../../hooks/useDirectoryPeople";
+import type { ContactCreateInput } from "../../../lib/peopleDirectoryApi";
+import { ContactCreateDialog } from "../../contacts/ContactCreateDialog";
+import { Button } from "../../ui/button";
 import { useDirectoryMode, matchesCategory, categoryLabel } from "./DirectoryModeContext";
 import type { DirectoryContact } from "../../../data/contactsDirectory";
 
@@ -23,6 +29,11 @@ function matchesContactSearch(c: DirectoryContact, q: string): boolean {
 }
 
 export function DirectoryLedger() {
+  const navigate = useNavigate();
+  const { photographerId } = useAuth();
+  const { createContact, isCreating } = useDirectoryPeople(photographerId);
+  const [createOpen, setCreateOpen] = useState(false);
+
   const { contacts, searchQuery, activeCategory, selectedRow, setSelectedRow } =
     useDirectoryMode();
 
@@ -88,6 +99,19 @@ export function DirectoryLedger() {
 
   const title = categoryLabel(activeCategory);
 
+  async function handleCreateContact(values: ContactCreateInput) {
+    const r = await createContact(values);
+    if (r.ok) {
+      navigate(`/directory?contactEmail=${encodeURIComponent(values.email.trim())}`);
+      return { ok: true };
+    }
+    if (r.existingPersonId) {
+      navigate(`/directory?contactEmail=${encodeURIComponent(values.email.trim())}`);
+      return { ok: true };
+    }
+    return { ok: false, error: r.error };
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex shrink-0 flex-row items-center justify-between border-b border-border bg-background px-6 py-5 min-h-[88px]">
@@ -97,6 +121,17 @@ export function DirectoryLedger() {
             {filtered.length} contact{filtered.length !== 1 ? "s" : ""}
           </p>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-[12px]"
+            onClick={() => setCreateOpen(true)}
+          >
+            <UserPlus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            Add contact
+          </Button>
         {orderedEmails.length >= 2 ? (
           <div
             role="region"
@@ -128,9 +163,17 @@ export function DirectoryLedger() {
             </button>
           </div>
         ) : (
-          <div className="flex items-center" />
+          <div className="flex w-[72px] shrink-0 items-center justify-end" aria-hidden />
         )}
+        </div>
       </div>
+
+      <ContactCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSubmit={handleCreateContact}
+        submitting={isCreating}
+      />
 
       <div ref={listScrollRef} className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-left text-[13px]">

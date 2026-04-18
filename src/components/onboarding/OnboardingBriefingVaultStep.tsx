@@ -8,6 +8,7 @@ import {
   upsertBriefingVaultSeed,
 } from "@/lib/onboardingBriefingVault.ts";
 import { obIdentityGlassInput, obMotionShell } from "@/components/onboarding/onboardingVisuals.ts";
+import { useRegisterOnboardingBriefingHeader } from "@/components/onboarding/OnboardingBriefingHeaderContext.tsx";
 
 /**
  * Rotating typewriter hints — slightly faster keystroke cadence than Identity (70ms vs 88ms per char).
@@ -160,6 +161,10 @@ export function OnboardingBriefingVaultStep({
   const [stageIndex, setStageIndex] = useState(0);
   const activeCard = VAULT_CARDS[stageIndex]!;
   const activeCardRef = useRef<HTMLDivElement>(null);
+  useRegisterOnboardingBriefingHeader(
+    "Vault",
+    `${stageIndex + 1} of ${VAULT_CARDS.length}`,
+  );
 
   const facts = useMemo(
     () => parseBriefingVaultFactsFromSeeds(payload.knowledge_seeds),
@@ -216,33 +221,8 @@ export function OnboardingBriefingVaultStep({
           exit="exit"
           variants={vaultSceneMotion}
         >
-          <div className="question-header mx-auto mb-2 flex w-full max-w-2xl shrink-0 flex-wrap items-center justify-between gap-2 text-left sm:mb-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">Vault</p>
-              <p className="mt-1 text-[12px] text-white/45">
-                {stageIndex + 1} of {VAULT_CARDS.length}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5" aria-hidden="true">
-                {VAULT_CARDS.map((card, i) => (
-                  <span
-                    key={card.factKey}
-                    className={cn(
-                      "h-2 w-2 rounded-full transition-colors",
-                      i === stageIndex ? "bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.12)]" : "bg-white/25",
-                    )}
-                  />
-                ))}
-              </div>
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/50">
-                {stageIndex + 1} of {VAULT_CARDS.length}
-              </span>
-            </div>
-          </div>
-
           <motion.p
-            className="mx-auto max-w-2xl shrink-0 text-[12px] leading-relaxed text-white/65 sm:text-[13px]"
+            className="mx-auto max-w-2xl shrink-0 text-pretty text-[12px] leading-relaxed text-white/65 sm:text-[13px]"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, ease: VAULT_CINEMATIC_EASE }}
@@ -252,7 +232,7 @@ export function OnboardingBriefingVaultStep({
             itself.
           </motion.p>
           <motion.p
-            className="mx-auto mt-2 max-w-2xl shrink-0 text-[11px] leading-relaxed text-white/45"
+            className="mx-auto mt-2 max-w-2xl shrink-0 text-pretty text-[11px] leading-relaxed text-white/45"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12, ease: VAULT_CINEMATIC_EASE }}
@@ -261,7 +241,7 @@ export function OnboardingBriefingVaultStep({
           </motion.p>
 
           <motion.h1
-            className="mx-auto mt-5 max-w-[34rem] shrink-0 font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:mt-6 sm:text-[clamp(1.65rem,4.2vw,2.55rem)]"
+            className="mx-auto mt-5 max-w-[38rem] shrink-0 text-balance font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:mt-6 sm:text-[clamp(1.65rem,4.2vw,2.55rem)]"
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.75, delay: 0.22, ease: VAULT_CINEMATIC_EASE }}
@@ -270,7 +250,7 @@ export function OnboardingBriefingVaultStep({
           </motion.h1>
 
           <motion.p
-            className="mx-auto mt-2 max-w-xl shrink-0 text-[12px] leading-snug text-white/72 sm:mt-3 sm:text-[13px]"
+            className="mx-auto mt-2 max-w-xl shrink-0 text-pretty text-[13px] leading-relaxed text-white/75 sm:mt-3 sm:text-[14px]"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, delay: 0.38, ease: VAULT_CINEMATIC_EASE }}

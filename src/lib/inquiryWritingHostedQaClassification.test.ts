@@ -6,6 +6,9 @@ import {
   summarizeInstructionHistory,
 } from "./inquiryWritingHostedQaClassification.ts";
 
+const PENDING_PLACEHOLDER =
+  "Reply draft pending — generated text will replace this when the writer runs successfully.";
+
 describe("inquiryWritingHostedQaClassification", () => {
   it("classifies runtime_failure when no draft", () => {
     const r = classifyInquiryWritingQaDraft({
@@ -87,7 +90,7 @@ describe("inquiryWritingHostedQaClassification", () => {
   it("classifies stub_fallback when only orchestrator step", () => {
     const r = classifyInquiryWritingQaDraft({
       draftFound: true,
-      body: "[Orchestrator draft — clientOrchestratorV1 QA path]\nAction:",
+      body: PENDING_PLACEHOLDER,
       instructionHistory: [{ step: "client_orchestrator_v1" }],
       settleTimedOut: true,
     });
@@ -113,7 +116,8 @@ describe("inquiryWritingHostedQaClassification", () => {
     expect(s.orchestratorDraftRewriteSettled).toBe(true);
   });
 
-  it("bodyLooksLikeOrchestratorStub matches A2 header", () => {
+  it("bodyLooksLikeOrchestratorStub matches pending placeholder and legacy A2 header", () => {
+    expect(bodyLooksLikeOrchestratorStub(PENDING_PLACEHOLDER)).toBe(true);
     expect(bodyLooksLikeOrchestratorStub("[Orchestrator draft — clientOrchestratorV1 QA path]\n")).toBe(true);
     expect(bodyHasOutputAuditorRestoredMarker("x [V3 output auditor] y")).toBe(true);
   });

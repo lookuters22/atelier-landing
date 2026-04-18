@@ -1,3 +1,7 @@
+/**
+ * Client-side email HTML for the sandboxed `EmailHtmlIframe` (Slice 4: remote `<img>` http(s) allowed;
+ * script/iframe/embed/etc. remain forbidden; `on*` handlers extended in `FORBID_ATTR`).
+ */
 import createDOMPurify from "dompurify";
 
 let purifySingleton: ReturnType<typeof createDOMPurify> | null = null;
@@ -19,27 +23,30 @@ function getPurify(): ReturnType<typeof createDOMPurify> {
 const URI_REG =
   /^(?:(?:https?|mailto|tel|cid|callto|sms|xmpp|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i;
 
-function isRemoteHttpUrl(value: string): boolean {
-  const t = value.trim();
-  return /^https?:\/\//i.test(t);
-}
-
 let hooksInstalled = false;
 function ensureEmailSanitizerHooks(purify: ReturnType<typeof createDOMPurify>): void {
   if (hooksInstalled) return;
   hooksInstalled = true;
-  purify.addHook("uponSanitizeAttribute", (node, data) => {
-    const tag = node.nodeName?.toLowerCase() ?? "";
-    const name = data.attrName?.toLowerCase() ?? "";
-    const val = typeof data.attrValue === "string" ? data.attrValue : "";
-    if (
-      (name === "src" || name === "srcset" || name === "poster" || name === "data") &&
-      isRemoteHttpUrl(val)
-    ) {
-      if (tag === "img" || tag === "video" || tag === "audio" || tag === "source" || tag === "track") {
-        data.keepAttr = false;
-      }
-    }
+  /**
+   * Gmail-like email viewing: allow remote http(s) images in `<img src>` / `srcset` inside the sandboxed
+   * iframe. Other media (`video`, `audio`, …) stay forbidden via `FORBID_TAGS`; dangerous active content
+   * stays blocked via `FORBID_ATTR` and default DOMPurify behavior.
+   */
+  purify.addHook("afterSanitizeAttributes", (node: Element) => {
+    if (node.nodeName?.toLowerCase() !== "a") return;
+    const el = node;
+    const href = el.getAttribute("href");
+    if (!href || typeof href !== "string") return;
+    const t = href.trim();
+    /** Open web URLs in a new tab so the app shell is not navigated; skip `mailto:` / `tel:` / etc. */
+    const isHttpLike = /^https?:\/\//i.test(t) || /^\/\//.test(t);
+    if (!isHttpLike) return;
+    if (!el.hasAttribute("target")) el.setAttribute("target", "_blank");
+    const rel = el.getAttribute("rel")?.trim() ?? "";
+    const parts = new Set(rel.split(/\s+/).filter(Boolean));
+    parts.add("noopener");
+    parts.add("noreferrer");
+    el.setAttribute("rel", [...parts].join(" "));
   });
 }
 
@@ -63,7 +70,23 @@ const PURIFY_IFRAME: import("dompurify").Config = {
     "source",
     "track",
   ],
-  FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover"],
+  FORBID_ATTR: [
+    "onerror",
+    "onload",
+    "onclick",
+    "onmouseover",
+    "onmouseenter",
+    "onmouseleave",
+    "onmousedown",
+    "onmouseup",
+    "onfocus",
+    "onblur",
+    "oninput",
+    "onkeyup",
+    "onkeydown",
+    "onchange",
+    "onsubmit",
+  ],
 };
 
 /**

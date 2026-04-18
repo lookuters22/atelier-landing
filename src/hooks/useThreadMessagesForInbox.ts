@@ -12,6 +12,8 @@ import {
   parseGmailImportBodyHtmlSanitized,
   parseGmailImportRenderHtmlRef,
 } from "../lib/gmailImportMessageMetadata";
+import { tryExtractRenderableHtmlFromMessageRawPayload } from "../lib/gmailRenderPayload";
+
 type MessageRow = {
   id: string;
   body: string;
@@ -19,6 +21,7 @@ type MessageRow = {
   direction: "in" | "out";
   sent_at: string;
   metadata: unknown;
+  raw_payload: unknown | null;
   provider_message_id: string | null;
   message_attachments: ChatAttachmentRow[] | null;
 };
@@ -31,7 +34,7 @@ export async function fetchThreadMessagesForInbox(threadId: string): Promise<Mes
   const { data, error: qErr } = await supabase
     .from("messages")
     .select(
-      "id, body, sender, direction, sent_at, metadata, provider_message_id, message_attachments ( id, source_url, storage_path, mime_type, metadata )",
+      "id, body, sender, direction, sent_at, metadata, raw_payload, provider_message_id, message_attachments ( id, source_url, storage_path, mime_type, metadata )",
     )
     .eq("thread_id", threadId)
     .order("sent_at", { ascending: true });
@@ -53,6 +56,15 @@ export function useThreadMessagesForInbox(threadId: string | null) {
 
   const rows = useMemo(() => q.data ?? [], [q.data]);
 
+  /** One decode per message per rows snapshot — same values used for display + storage-fetch skip. */
+  const htmlFromRenderPayloadByMessageId = useMemo(() => {
+    const m: Record<string, string | null> = {};
+    for (const r of rows) {
+      m[r.id] = tryExtractRenderableHtmlFromMessageRawPayload(r.raw_payload);
+    }
+    return m;
+  }, [rows]);
+
   useEffect(() => {
     setHtmlByMessageId({});
     if (rows.length === 0) return;
@@ -61,6 +73,7 @@ export function useThreadMessagesForInbox(threadId: string | null) {
     void (async () => {
       for (const r of rows) {
         if (cancelled) return;
+        if (htmlFromRenderPayloadByMessageId[r.id]) continue;
         const inline = parseGmailImportBodyHtmlSanitized(r.metadata);
         if (inline) continue;
         const ref = parseGmailImportRenderHtmlRef(r.metadata);
@@ -76,13 +89,14 @@ export function useThreadMessagesForInbox(threadId: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [rows]);
+  }, [rows, htmlFromRenderPayloadByMessageId]);
 
   const chatMessages: ChatMessage[] = useMemo(() => {
     return rows.map((r) => {
+      const fromRenderPayload = htmlFromRenderPayloadByMessageId[r.id] ?? null;
       const inlineHtml = parseGmailImportBodyHtmlSanitized(r.metadata);
       const lazyHtml = htmlByMessageId[r.id];
-      const bodyHtmlSanitized = lazyHtml ?? inlineHtml ?? null;
+      const bodyHtmlSanitized = fromRenderPayload ?? inlineHtml ?? lazyHtml ?? null;
       return {
         id: r.id,
         direction: r.direction,
@@ -93,7 +107,7 @@ export function useThreadMessagesForInbox(threadId: string | null) {
         time: formatInboxMessageTime(r.sent_at),
       };
     });
-  }, [rows, htmlByMessageId]);
+  }, [rows, htmlByMessageId, htmlFromRenderPayloadByMessageId]);
 
   let latestProviderMessageId: string | null = null;
   for (let i = rows.length - 1; i >= 0; i--) {

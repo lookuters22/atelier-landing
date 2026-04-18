@@ -1,8 +1,20 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { ChevronDown, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import {
+  ContextPaneRoot,
+  PaneCountBadge,
+  PaneHeaderStrip,
+  PaneScrollRegion,
+  PaneSearchInput,
+  PaneSecondaryActionLink,
+  PANE_INSPECTOR_STATUS_PILL,
+  PANE_LEFT_LIST_CARD_TITLE,
+  PANE_SCROLL_HELPER,
+  PANE_SCROLL_HELPER_PAD,
+  PANE_SECTION_COLLAPSIBLE_TRIGGER,
+} from "@/components/panes";
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -138,57 +150,52 @@ export function PipelineContextList() {
   ];
 
   return (
-    <div className="dashboard-context-pane flex h-full min-h-0 flex-col border-r border-border text-[13px] text-foreground">
-      <div className="shrink-0 space-y-2 p-3 pb-4">
-        <input
-          type="search"
-          placeholder="Search couples..."
+    <ContextPaneRoot>
+      <PaneHeaderStrip>
+        <PaneSearchInput
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="h-10 w-full rounded-xl border border-border bg-background px-3 text-[13px] text-foreground placeholder:text-muted-foreground shadow-sm outline-none transition focus:ring-1 focus:ring-ring"
+          onChange={setQuery}
+          placeholder="Search couples…"
           aria-label="Search couples"
         />
-        <Link
-          to="/weddings/new"
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 text-[13px] font-medium text-foreground shadow-sm transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
-        >
-          <Plus className="size-3.5" strokeWidth={2} />
+        <PaneSecondaryActionLink to="/weddings/new" icon={Plus}>
           Add wedding
-        </Link>
-      </div>
+        </PaneSecondaryActionLink>
+      </PaneHeaderStrip>
 
-      <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto p-2">
+      <PaneScrollRegion ref={listScrollRef}>
         {isLoading && (
-          <p className="px-2 py-3 text-[12px] text-muted-foreground">Loading weddings...</p>
+          <p className={cn(PANE_SCROLL_HELPER_PAD, PANE_SCROLL_HELPER)}>Loading weddings...</p>
         )}
         {error && (
-          <p className="px-2 py-3 text-[12px] text-destructive">Error: {error}</p>
+          <p className={cn(PANE_SCROLL_HELPER_PAD, "text-[12px] text-destructive")}>Error: {error}</p>
         )}
         {!isLoading && !error && (
           <div className="space-y-1">
             {sections.map(({ id, title }) => (
               <Collapsible key={id} defaultOpen>
-                <CollapsibleTrigger
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-foreground",
-                    "hover:bg-black/[0.04] data-[state=open]:bg-black/[0.03] dark:hover:bg-white/[0.06] dark:data-[state=open]:bg-white/[0.04] [&[data-state=open]_svg]:rotate-180",
-                  )}
-                >
-                  <span>
-                    {title}
-                    <span className="ml-1.5 font-normal text-muted-foreground">
-                      ({buckets[id].length})
-                    </span>
+                <CollapsibleTrigger className={PANE_SECTION_COLLAPSIBLE_TRIGGER}>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate">{title}</span>
+                    <PaneCountBadge>{buckets[id].length}</PaneCountBadge>
                   </span>
-                  <ChevronDown
-                    className="size-3.5 shrink-0 text-muted-foreground transition-transform"
-                    strokeWidth={2}
-                  />
+                  <span className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground">
+                    <ChevronRight
+                      className="absolute h-3.5 w-3.5 group-data-[state=open]:hidden"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    <ChevronDown
+                      className="absolute hidden h-3.5 w-3.5 group-data-[state=open]:block"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  </span>
                 </CollapsibleTrigger>
                 <AnimatedCollapsibleContent>
-                  <div className="space-y-0.5 pb-2 pl-1 pt-0.5">
+                  <div className="mt-0.5 space-y-0.5 pb-2">
                     {id === "archived" && buckets[id].length === 0 ? (
-                      <p className="px-2 py-2 text-[12px] text-muted-foreground">
+                      <p className={cn(PANE_SCROLL_HELPER_PAD, PANE_SCROLL_HELPER)}>
                         No archived weddings yet.
                       </p>
                     ) : (
@@ -202,26 +209,23 @@ export function PipelineContextList() {
                                 data-pipeline-wedding-row={w.id}
                                 onClick={() => selectWedding(w.id)}
                                 className={cn(
-                                  "box-border flex w-full flex-col gap-1 rounded-xl border border-transparent px-2.5 py-2 text-left transition-colors",
-                                  "hover:border-border hover:bg-background/80",
-                                  selected && "border-border bg-black/[0.04] dark:bg-white/[0.06]",
+                                  "box-border flex w-full flex-col gap-1 rounded-2xl border border-transparent px-3 py-2 text-left transition-colors",
+                                  "hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
+                                  selected && "bg-foreground/10",
                                 )}
                               >
-                                <span className="font-medium leading-tight text-foreground">
-                                  {w.couple_names}
-                                </span>
+                                <span className={PANE_LEFT_LIST_CARD_TITLE}>{w.couple_names}</span>
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span
                                     className={cn(
-                                      "inline-flex max-w-full truncate rounded-full border px-1.5 py-0.5 text-[11px] font-medium capitalize",
+                                      "inline-flex max-w-full truncate rounded-full border px-1.5 py-0.5",
+                                      PANE_INSPECTOR_STATUS_PILL,
                                       stageBadgeClass(w.stage),
                                     )}
                                   >
                                     {formatStageLabel(w.stage)}
                                   </span>
-                                  <span className="text-[12px] text-muted-foreground">
-                                    {formatWeddingPipelineShortDate(w)}
-                                  </span>
+                                  <span className={PANE_SCROLL_HELPER}>{formatWeddingPipelineShortDate(w)}</span>
                                 </div>
                               </button>
                             </ContextMenuTrigger>
@@ -249,7 +253,7 @@ export function PipelineContextList() {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </PaneScrollRegion>
+    </ContextPaneRoot>
   );
 }

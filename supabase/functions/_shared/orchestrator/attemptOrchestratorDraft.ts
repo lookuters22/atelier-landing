@@ -3,14 +3,15 @@
  * Safety: only `send_message` candidates may become drafts — matches approval/outbound as client-facing text.
  * No outbound sends, no CRM writes.
  *
- * **Body:** deterministic **stub** (`[Orchestrator draft — clientOrchestratorV1 QA path]`) from proposal + excerpts.
- * This is not a misconfiguration: A2 never called an LLM. For live client-facing prose, the Inngest worker runs
- * {@link maybeRewriteOrchestratorDraftWithPersona} after insert when `ANTHROPIC_API_KEY` is set (override with
- * `ORCHESTRATOR_CLIENT_V1_PERSONA_DRAFT_BODY=0` to keep the stub for parity harnesses).
+ * **`drafts.body` is always safe to display** as draft content (placeholder until persona succeeds, then
+ * client prose). Orchestrator diagnostics (action, rationale, inbound excerpt, policy snippets) live in
+ * `instruction_history` only — see the `client_orchestrator_v1` step fields.
  *
- * **V3 RBAC:** When `audience.clientVisibleForPrivateCommercialRedaction` is passed as true, the stub body is
- * line-redacted so planner-private commercial phrasing does not persist in drafts for client-visible runs
- * (no-persona path, persona-skipped path, stub restore).
+ * For live client-facing prose, the Inngest worker runs {@link maybeRewriteOrchestratorDraftWithPersona}
+ * after insert when `ANTHROPIC_API_KEY` is set (`ORCHESTRATOR_CLIENT_V1_PERSONA_DRAFT_BODY=0` disables rewrite).
+ *
+ * **V3 RBAC:** When `audience.clientVisibleForPrivateCommercialRedaction` is true, the placeholder is still
+ * passed through redaction (no-op for fixed copy) for consistency with other paths.
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type {
@@ -19,7 +20,10 @@ import type {
   OrchestratorProposalCandidate,
   PlaybookRuleContextRow,
 } from "../../../../src/types/decisionContext.types.ts";
-import { redactPlannerPrivateCommercialMultilineText } from "../context/applyAudiencePrivateCommercialRedaction.ts";
+import {
+  redactPlannerPrivateCommercialMultilineText,
+  redactPlannerPrivateCommercialText,
+} from "../context/applyAudiencePrivateCommercialRedaction.ts";
 import { ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION } from "../inngest.ts";
 
 export type OrchestratorStubDraftAudienceOptions = Pick<
@@ -28,6 +32,10 @@ export type OrchestratorStubDraftAudienceOptions = Pick<
 >;
 
 type OrchestratorRuntimeOutcome = "auto" | "draft" | "ask" | "block";
+
+/** Safe pending-draft copy only — must stay free of machine diagnostics (keep in sync with `src/lib/inquiryWritingHostedQaClassification.ts`). */
+export const ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER =
+  "Reply draft pending — generated text will replace this when the writer runs successfully." as const;
 
 /** `attemptOrchestratorDraft` skipReason when no `send_message` proposal is draftable (all blocked or absent). */
 export const ORCHESTRATOR_DRAFT_SKIP_NO_DRAFTABLE_CANDIDATE =
@@ -44,7 +52,7 @@ function selectSendMessageDraftableCandidate(
   );
 }
 
-function playbookExcerptsFromRules(rules: PlaybookRuleContextRow[], maxLines: number): string[] {
+export function playbookExcerptsFromRules(rules: PlaybookRuleContextRow[], maxLines: number): string[] {
   return rules
     .filter((r) => r.is_active !== false)
     .slice(0, maxLines)
@@ -55,52 +63,60 @@ function playbookExcerptsFromRules(rules: PlaybookRuleContextRow[], maxLines: nu
     });
 }
 
-/** Deterministic stub body (A2) — used to revert persona output when the V3 output auditor rejects the draft. */
-export function buildOrchestratorStubDraftBody(
+/** Operator-only metadata persisted on `instruction_history` (never concatenate into `drafts.body`). */
+export type OrchestratorA2DraftDiagnostics = {
+  orchestrator_rationale: string;
+  inbound_excerpt: string;
+  policy_context_excerpts: string[];
+  reply_channel: "email" | "web";
+  blockers_or_missing_facts: string[];
+};
+
+export function buildOrchestratorA2DraftDiagnostics(
   candidate: OrchestratorProposalCandidate,
   rawMessage: string,
   replyChannel: "email" | "web",
   playbookRules: PlaybookRuleContextRow[],
   audience?: OrchestratorStubDraftAudienceOptions | null,
+): OrchestratorA2DraftDiagnostics {
+  const base: OrchestratorA2DraftDiagnostics = {
+    orchestrator_rationale: candidate.rationale,
+    inbound_excerpt: rawMessage.trim().slice(0, 800),
+    policy_context_excerpts: playbookExcerptsFromRules(playbookRules, 3).map((ex) => ex.slice(0, 240)),
+    reply_channel: replyChannel,
+    blockers_or_missing_facts: [...candidate.blockers_or_missing_facts],
+  };
+  if (!audience?.clientVisibleForPrivateCommercialRedaction) {
+    return base;
+  }
+  return {
+    ...base,
+    orchestrator_rationale: redactPlannerPrivateCommercialText(base.orchestrator_rationale),
+    inbound_excerpt: redactPlannerPrivateCommercialMultilineText(base.inbound_excerpt),
+    policy_context_excerpts: base.policy_context_excerpts.map((ex) => redactPlannerPrivateCommercialText(ex)),
+  };
+}
+
+/**
+ * Client-safe placeholder body until persona runs (or when persona restores after audit failure).
+ * Does not include action keys, rationale, or policy text.
+ */
+export function buildOrchestratorStubDraftBody(
+  _candidate: OrchestratorProposalCandidate,
+  _rawMessage: string,
+  _replyChannel: "email" | "web",
+  _playbookRules: PlaybookRuleContextRow[],
+  audience?: OrchestratorStubDraftAudienceOptions | null,
 ): string {
-  const excerpts = playbookExcerptsFromRules(playbookRules, 3);
-  const raw = buildDraftBody(candidate, rawMessage, replyChannel, excerpts);
+  void _candidate;
+  void _rawMessage;
+  void _replyChannel;
+  void _playbookRules;
+  const raw = ORCHESTRATOR_PENDING_DRAFT_BODY_PLACEHOLDER;
   if (audience?.clientVisibleForPrivateCommercialRedaction) {
     return redactPlannerPrivateCommercialMultilineText(raw);
   }
   return raw;
-}
-
-function buildDraftBody(
-  candidate: OrchestratorProposalCandidate,
-  rawMessage: string,
-  replyChannel: "email" | "web",
-  playbookExcerpts: string[],
-): string {
-  const lines: string[] = [
-    "[Orchestrator draft — clientOrchestratorV1 QA path]",
-    `Action: ${candidate.action_family} (${candidate.action_key})`,
-    `Channel: ${replyChannel}`,
-    "",
-    `Rationale: ${candidate.rationale}`,
-    "",
-    "Inbound (excerpt):",
-    rawMessage.trim().slice(0, 800),
-  ];
-  if (playbookExcerpts.length > 0) {
-    lines.push("", "Policy context (excerpt):");
-    for (const ex of playbookExcerpts) {
-      lines.push(`— ${ex.slice(0, 240)}`);
-    }
-  }
-  if (candidate.blockers_or_missing_facts.length > 0) {
-    lines.push("", `Open notes: ${candidate.blockers_or_missing_facts.join("; ")}`);
-  }
-  lines.push(
-    "",
-    "This text is a pending-approval draft only. It must not be sent without operator approval.",
-  );
-  return lines.join("\n");
 }
 
 export type AttemptOrchestratorDraftParams = {
@@ -190,6 +206,13 @@ export async function attemptOrchestratorDraft(
   }
 
   const body = buildOrchestratorStubDraftBody(chosen, rawMessage, replyChannel, playbookRules, params.audience);
+  const diagnostics = buildOrchestratorA2DraftDiagnostics(
+    chosen,
+    rawMessage,
+    replyChannel,
+    playbookRules,
+    params.audience,
+  );
 
   const { data, error } = await supabase
     .from("drafts")
@@ -207,6 +230,7 @@ export async function attemptOrchestratorDraft(
           action_family: chosen.action_family,
           action_key: chosen.action_key,
           playbook_rule_ids: chosen.playbook_rule_ids ?? null,
+          ...diagnostics,
         },
       ],
     })

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type RefObject } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { scrollPipelineWeddingRowIntoView } from "../../lib/pipelineWeddingListNavigation";
 import {
@@ -13,6 +13,8 @@ import {
   type WeddingThreadMessage,
 } from "../../data/weddingThreads";
 import { ConversationFeed, type ChatMessage } from "../chat/ConversationFeed";
+import type { GmailThreadInlineReplyDockHandle } from "../modes/inbox/GmailThreadInlineReplyDock";
+import { InboxReplyActions } from "../modes/inbox/InboxReplyActions";
 
 function mapToChatMessage(msg: WeddingThreadMessage): ChatMessage {
   return {
@@ -42,6 +44,7 @@ export function TimelineTab({
   editDraftInComposer,
   draftDefault,
   gmailInlineReplyDock,
+  gmailDockRef,
   /** Drives bottom-of-feed hint/skeleton so Gmail and legacy paths never flash the wrong UI. */
   replyComposerMode = "legacy",
 }: {
@@ -62,6 +65,7 @@ export function TimelineTab({
   draftDefault: string;
   /** Inbox-style Gmail reply (replaces chat footer for Gmail-imported threads). */
   gmailInlineReplyDock?: ReactNode;
+  gmailDockRef?: RefObject<GmailThreadInlineReplyDockHandle | null>;
   replyComposerMode?: "gmail" | "legacy" | "pending";
 }) {
   const earlier = useMemo(() => earlierMessages.map(mapToChatMessage), [earlierMessages]);
@@ -106,6 +110,20 @@ export function TimelineTab({
 
   const showLegacyNoDraftHint =
     !showDraft && replyComposerMode === "legacy" && !gmailInlineReplyDock;
+
+  const gmailPerMessageFooter = useMemo(
+    () =>
+      replyComposerMode === "gmail" && gmailDockRef
+        ? () => (
+            <InboxReplyActions
+              onReply={() => gmailDockRef.current?.openReply()}
+              onForward={() => gmailDockRef.current?.openForward()}
+              variant="inline"
+            />
+          )
+        : undefined,
+    [replyComposerMode, gmailDockRef],
+  );
 
   const draftSlot = (
     <>
@@ -255,6 +273,7 @@ export function TimelineTab({
         onToggle={toggleMessage}
         getFoldKey={(msg) => messageFoldKey(threadId, msg.id)}
         bottomSlot={draftSlot}
+        messageFooter={gmailPerMessageFooter}
       />
     </div>
   );

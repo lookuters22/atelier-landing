@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { WeddingDetailSkeleton } from "../components/DashboardSkeleton";
@@ -6,7 +6,10 @@ import { WEDDING_THREAD_DRAFT_DEFAULT } from "../data/weddingThreads";
 import { MotionTabContent } from "../components/motion-primitives";
 import { getTravelForWedding } from "../data/weddingTravel";
 import { InlineReplyFooter } from "../components/wedding-detail/InlineReplyFooter";
-import { GmailThreadInlineReplyDock } from "../components/modes/inbox/GmailThreadInlineReplyDock";
+import {
+  GmailThreadInlineReplyDock,
+  type GmailThreadInlineReplyDockHandle,
+} from "../components/modes/inbox/GmailThreadInlineReplyDock";
 import { OtherWeddingsCard } from "../components/wedding-detail/OtherWeddingsCard";
 import { StoryNotesCard } from "../components/wedding-detail/StoryNotesCard";
 import { TimelineTab } from "../components/wedding-detail/TimelineTab";
@@ -100,12 +103,16 @@ export function WeddingDetailInner({
     onAfterMessageSent: threadState.refreshActiveThreadMessages,
   });
 
+  const gmailDockRef = useRef<GmailThreadInlineReplyDockHandle>(null);
   const gmailDock =
     threadState.replyComposerMode === "gmail" && threadState.activeThread ? (
       <GmailThreadInlineReplyDock
+        ref={gmailDockRef}
         threadId={threadState.activeThread.id}
         threadTitle={threadState.activeThread.title}
         hasGmailImport
+        inlineMessageLayout
+        suppressIdleReplyActions
         afterSuccessfulSend={async () => {
           fireDataChanged("inbox");
           threadState.refreshActiveThreadMessages();
@@ -166,6 +173,7 @@ export function WeddingDetailInner({
                 editDraftInComposer={composerState.editDraftInComposer}
                 draftDefault={threadState.draftDefault ?? DRAFT_DEFAULT}
                 gmailInlineReplyDock={gmailDock}
+                gmailDockRef={gmailDockRef}
                 replyComposerMode={threadState.replyComposerMode}
               />
             </MotionTabContent>

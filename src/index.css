@@ -68,9 +68,10 @@ html, body {
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+  /* Studio + Inbox: PPNeueMontreal (Book 450) — single stack for html, body, .font-dashboard */
   --font-sans: "PPNeueMontreal", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "SimplonMono", ui-monospace, SFMono-Regular, monospace;
-  --font-dashboard: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-dashboard: var(--font-sans);
   --font-dashboard-mono: "Geist Mono", "Roboto Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* --- Base tokens: dark defaults (dashboard-first) --- */
@@ -156,7 +157,8 @@ html, body {
   body {
     @apply text-ink m-0 min-h-screen;
     background: var(--color-background, #0a0a0a);
-    font-family: 'PPNeueMontreal', sans-serif;
+    /* Same stack as html / @theme --font-sans (PPNeueMontreal-first) */
+    font-family: var(--font-sans);
     font-weight: 450;
     -webkit-user-select: none;
     user-select: none;
@@ -219,9 +221,6 @@ html, body {
   .font-weak { font-weight: 300 !important; }
   .font-normal { font-weight: 450 !important; }
   .font-bold { font-weight: 700 !important; }
-
-  /* Dashboard resets: Geist uses standard CSS weight scale */
-  .font-dashboard .font-normal { font-weight: 400 !important; }
 }
 
 /* Pending-approval draft: marching dashes (SVG stroke) */
@@ -237,6 +236,142 @@ html, body {
     stroke-dashoffset: 0;
     animation: pending-draft-march 0.85s linear infinite;
   }
+
+  /*
+   * Onboarding step 3 (offer components) packs many subsections into a
+   * scrollable region. Scrollbars are globally hidden, so a soft fade at
+   * top + bottom is the only "scroll for more" affordance — quiet, native
+   * to the cinematic onboarding language.
+   */
+  .scope-offer-scroll {
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 18px),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 14px,
+      #000 calc(100% - 18px),
+      transparent 100%
+    );
+    scroll-padding-top: 8px;
+    scroll-padding-bottom: 12px;
+  }
+}
+
+/*
+ * Editorial selector ("visual focus") primitive — shared by
+ * `SelectorFocusList` and `SelectorFocusColumns`.
+ *
+ * The "dim-others" behavior is pure CSS (`:has()`): as soon as any row in
+ * the list is selected, hovered, or keyboard-focused, every other row
+ * fades to 0.3 so the user's attention lands on the active item — the
+ * classic Apple Music / editorial focus trick. The dot indicator on the
+ * left fades in only for the selected row.
+ */
+.selector-focus-row {
+  transition:
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.selector-focus-row .selector-focus-indicator {
+  opacity: 0;
+}
+.selector-focus-row:hover .selector-focus-indicator,
+.selector-focus-row:focus-visible .selector-focus-indicator {
+  opacity: 0.55;
+}
+.selector-focus-row[data-selected="true"] .selector-focus-indicator {
+  opacity: 1;
+}
+
+/*
+ * "Dim non-focused siblings" — when any row inside a shared
+ * `.selector-focus-list` is selected / hovered / focused, the other rows
+ * fade to 0.3 so attention stays locked on the active one. Applies to
+ * both row and chip (editorial text-fx) variants.
+ */
+.selector-focus-list:has(.selector-focus-row[data-selected="true"])
+  .selector-focus-row:not([data-selected="true"]):not(:hover):not(:focus-visible),
+.selector-focus-list:has(.selector-focus-row:hover)
+  .selector-focus-row:not(:hover):not([data-selected="true"]):not(:focus-visible),
+.selector-focus-list:has(.selector-focus-row:focus-visible)
+  .selector-focus-row:not(:focus-visible):not([data-selected="true"]):not(:hover) {
+  opacity: 0.3;
+}
+
+/*
+ * Chip variant (editorial text-fx) — the underline ink stroke under a
+ * label. On hover/focus it plays a single "draw-in, sweep-out" cycle and
+ * then stays invisible, even while the pointer is still over the label.
+ * Selected rows have NO underline — selection reads purely from the
+ * label itself (brighter color, medium weight, subtle glow).
+ *
+ *   - `.chip-underline` is positioned by the component (absolute, pinned
+ *     to the bottom of the label span). Width is set by the label's own
+ *     box because the component wraps the label in an inline-block, so
+ *     the stroke matches the text's natural length instead of the whole
+ *     column width.
+ *   - The default frame is `scaleX(0)` with origin-left so no stroke is
+ *     visible until we trigger.
+ *   - Hover/focus re-applies the animation each time the state is
+ *     entered, which replays the sweep from scratch.
+ */
+.chip-underline {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+.selector-focus-row:hover .chip-underline,
+.selector-focus-row:focus-visible .chip-underline {
+  animation: chip-underline-sweep 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes chip-underline-sweep {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left center;
+  }
+  48% {
+    transform: scaleX(1);
+    transform-origin: left center;
+  }
+  52% {
+    transform: scaleX(1);
+    transform-origin: right center;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selector-focus-row,
+  .selector-focus-row .selector-focus-indicator {
+    transition: none;
+  }
+  .selector-focus-row:hover .chip-underline,
+  .selector-focus-row:focus-visible .chip-underline {
+    animation: none;
+  }
+}
+
+/*
+ * Offerings (Step 3) — vertical accordion menu.
+ *
+ * We intentionally carry NO background, border, or gradient on the category
+ * sections themselves. Structure comes from:
+ *   - a 1px hairline divider between rows (`.offerings-category` border)
+ *   - the chevron + "selected" count pill on each collapsed row
+ *   - the chip grid that reveals below when a category is expanded
+ */
+.offerings-category {
+  position: relative;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -776,7 +911,9 @@ html, body {
    Landing page stays warm/light via :root tokens.
    ========================================================== */
 .font-dashboard {
-  font-weight: 400;
+  font-family: var(--font-dashboard);
+  /* Match body book weight (450) — legacy Inbox inherited this */
+  font-weight: 450;
   font-size: 14px;
   line-height: 1.4286;
   letter-spacing: -0.011em;
@@ -1085,11 +1222,13 @@ html, body {
 }
 
 .font-dashboard .dashboard-context-pane {
+  font-family: var(--font-dashboard);
   background: #f6f8fc;
   color: #1c1c1e;
 }
 
 .font-dashboard .dashboard-inspector-pane {
+  font-family: var(--font-dashboard);
   background: #ffffff;
   color: #1c1c1e;
 }
@@ -1102,6 +1241,93 @@ html, body {
 .dark .font-dashboard .dashboard-inspector-pane {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+.font-dashboard .dashboard-context-pane button,
+.font-dashboard .dashboard-context-pane input,
+.font-dashboard .dashboard-context-pane select,
+.font-dashboard .dashboard-context-pane textarea,
+.font-dashboard .dashboard-inspector-pane button,
+.font-dashboard .dashboard-inspector-pane input,
+.font-dashboard .dashboard-inspector-pane select,
+.font-dashboard .dashboard-inspector-pane textarea {
+  font-family: inherit;
+}
+
+/*
+  Radix Dialog portals to document.body (outside .font-dashboard), so bg-background / bg-primary
+  resolve to :root’s dark defaults. Re-anchor tokens + surface to match .dashboard-context-pane.
+*/
+[data-slot="dialog-content"].dashboard-context-dialog-surface {
+  font-family: var(--font-dashboard);
+  border-radius: 18px;
+  background: #f6f8fc;
+  color: #1c1c1e;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
+  --color-background: #ffffff;
+  --color-foreground: #1c1c1e;
+  --color-card: #ffffff;
+  --color-card-foreground: #1c1c1e;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1c1c1e;
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f5f5f5;
+  --color-secondary-foreground: #1c1c1e;
+  --color-muted: #f5f5f5;
+  --color-muted-foreground: #6b6b6b;
+  --color-accent: rgba(0, 0, 0, 0.04);
+  --color-accent-foreground: #1c1c1e;
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-border: #e5e5e5;
+  --color-input: #f0f0f0;
+  --color-ring: #2563eb;
+}
+
+[data-slot="dialog-content"].dashboard-context-dialog-surface [data-slot="dialog-close"] {
+  color: #6b6b6b;
+}
+
+[data-slot="dialog-content"].dashboard-context-dialog-surface [data-slot="dialog-close"]:hover {
+  color: #1c1c1e;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Chrome autofill can override input background; keep light fields consistent with inbox search. */
+[data-slot="dialog-content"].dashboard-context-dialog-surface input:-webkit-autofill,
+[data-slot="dialog-content"].dashboard-context-dialog-surface textarea:-webkit-autofill {
+  -webkit-text-fill-color: #3c4043;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+}
+
+html:not(.light) [data-slot="dialog-content"].dashboard-context-dialog-surface {
+  background: hsl(var(--sidebar-background));
+  color: hsl(var(--foreground));
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-soft, 0 2px 4px -1px #00000014);
+  --color-background: hsl(240 3% 11.8%);
+  --color-foreground: hsl(240 20% 97%);
+  --color-card: hsl(240 2% 17.6%);
+  --color-card-foreground: hsl(240 20% 97%);
+  --color-popover: hsl(240 2% 17.6%);
+  --color-popover-foreground: hsl(240 20% 97%);
+  --color-primary: #0169cc;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: hsl(240 3% 11.8%);
+  --color-secondary-foreground: hsl(240 20% 97%);
+  --color-muted: hsl(240 3% 11.8%);
+  --color-muted-foreground: hsl(240 3% 64%);
+  --color-accent: rgba(255, 255, 255, 0.06);
+  --color-accent-foreground: hsl(240 20% 97%);
+  --color-destructive: #f85149;
+  --color-destructive-foreground: hsl(240 20% 97%);
+  --color-border: hsl(240 2% 22.4%);
+  --color-input: hsl(240 3% 11.8%);
+  --color-ring: #0169cc;
 }
 
 /* Compact sidebar content */

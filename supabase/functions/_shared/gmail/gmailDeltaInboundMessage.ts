@@ -3,6 +3,7 @@
  */
 import { preferredCanonicalBody, type GmailPayloadPart } from "./gmailMessageBody.ts";
 import { walkGmailPayloadForMaterialization } from "./gmailMimeAttachments.ts";
+import { buildSizeCappedGmailRenderPayloadV1 } from "./gmailRenderPayloadMaterialize.ts";
 import type { GmailFullThreadMessage } from "./gmailThreads.ts";
 import { buildGmailRoutingSignalsFromMessage } from "./gmailRoutingSignals.ts";
 import { GMAIL_SENT_LABEL_ID } from "./gmailWatchHistory.ts";
@@ -76,6 +77,7 @@ export function extractInboundFieldsFromGmailMessage(
 
   const payload = msg.payload as GmailPayloadPart | undefined;
   const walked = walkGmailPayloadForMaterialization(payload);
+  const htmlTrim = walked.html?.trim() ?? "";
   const canonical = preferredCanonicalBody(walked.plain, walked.html);
   const body = canonical.length > 0 ? canonical : fallbackBody(msg.snippet);
 
@@ -92,9 +94,15 @@ export function extractInboundFieldsFromGmailMessage(
     },
   };
 
+  const renderPayload = buildSizeCappedGmailRenderPayloadV1({
+    gmailMessageId: msg.id,
+    gmailThreadId: gmailThreadId,
+    plain: walked.plain,
+    html: htmlTrim.length > 0 ? htmlTrim : null,
+    rawAttachmentCandidates: walked.raw,
+  });
   const raw_payload: Record<string, unknown> = {
-    gmail_message_id: msg.id,
-    gmail_thread_id: gmailThreadId,
+    ...renderPayload,
     snippet: msg.snippet ?? null,
   };
 

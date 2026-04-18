@@ -9,6 +9,10 @@ if (typeof (globalThis as unknown as { Deno?: unknown }).Deno === "undefined") {
 }
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("../inngest.ts", () => ({
+  ORCHESTRATOR_CLIENT_V1_SCHEMA_VERSION: 1,
+}));
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { DecisionContext } from "../../../../src/types/decisionContext.types.ts";
 import { emptyCrmSnapshot } from "../../../../src/types/crmSnapshot.types.ts";
@@ -176,11 +180,18 @@ describe("maybeRewriteOrchestratorDraftWithPersona — persona structured output
     );
 
     const body = capture.lastUpdate?.body as string | undefined;
-    expect(body).toContain("[PERSONA DRAFT FAILED — operator review required]");
-    expect(body).toContain("[Orchestrator draft");
+    expect(body).toBe(
+      "Reply draft pending — generated text will replace this when the writer runs successfully.",
+    );
+    expect(body).not.toContain("PERSONA DRAFT FAILED");
+    expect(body).not.toContain("Action:");
+    expect(body).not.toContain("Rationale:");
 
     const hist = capture.lastUpdate?.instruction_history as unknown[] | undefined;
     expect(hist?.length).toBe(2);
+    const fail = hist?.[0] as Record<string, unknown>;
+    expect(fail?.failed).toBe(true);
+    expect(String(fail?.operator_notice ?? "")).toContain("Automated client-facing rewrite did not complete");
     const audit = hist?.[1] as Record<string, unknown>;
     expect(audit?.step).toBe("v3_persona_structured_output_escalation");
     expect(audit?.escalation_id).toBe("esc-mock-1");
@@ -214,5 +225,36 @@ describe("maybeRewriteOrchestratorDraftWithPersona — persona structured output
     );
     const audit = (capture.lastUpdate?.instruction_history as unknown[])?.[1] as Record<string, unknown>;
     expect(audit?.escalation_id).toBeNull();
+  });
+});
+
+describe("maybeRewriteOrchestratorDraftWithPersona — persona disabled", () => {
+  beforeEach(() => {
+    draftPersonaMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns early without persona so A2 safe placeholder body is unchanged (no scaffolding added)", async () => {
+    vi.stubEnv("ORCHESTRATOR_CLIENT_V1_PERSONA_DRAFT_BODY", "0");
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    const capture = { lastUpdate: null as Record<string, unknown> | null };
+    const supabase = buildSupabase(capture);
+
+    const result = await maybeRewriteOrchestratorDraftWithPersona(supabase, {
+      decisionContext: baseDc("t-persist"),
+      draftAttempt: draftAttempt(),
+      rawMessage: "Thanks — the timeline works for us.",
+      playbookRules: [],
+      photographerId: "p1",
+      replyChannel: "email",
+      threadId: "t-persist",
+    });
+
+    expect(result).toEqual({ applied: false, reason: "persona_writer_disabled_or_no_api_key" });
+    expect(draftPersonaMock).not.toHaveBeenCalled();
+    expect(capture.lastUpdate).toBeNull();
   });
 });

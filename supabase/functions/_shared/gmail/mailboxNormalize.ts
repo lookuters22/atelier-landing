@@ -60,3 +60,86 @@ export function normalizeMailboxForComparison(email: string): string {
 export function mailboxesAreSameMailbox(a: string, b: string): boolean {
   return normalizeMailboxForComparison(a) === normalizeMailboxForComparison(b);
 }
+
+/**
+ * System / bulk / marketing local-part denylist. Mirrors `src/lib/mailboxNormalize.ts`
+ * and must be kept in sync with `src/lib/inboundSuppressionClassifier.ts`.
+ */
+const SYSTEM_LOCAL_DENY: ReadonlySet<string> = new Set([
+  "noreply",
+  "no-reply",
+  "donotreply",
+  "do-not-reply",
+  "mailer-daemon",
+  "postmaster",
+  "bounce",
+  "bounces",
+  "notifications",
+  "notification",
+  "notify",
+  "alerts",
+  "alert",
+  "automated",
+  "system",
+  "campaign",
+  "campaigns",
+  "newsletter",
+  "newsletters",
+  "marketing",
+  "promo",
+  "promos",
+  "promotion",
+  "promotions",
+  "offers",
+  "deals",
+  "mailers",
+  "mailer",
+  "digest",
+  "updates",
+  "announce",
+  "announcements",
+]);
+
+const SYSTEM_LOCAL_TOKEN_DENY: ReadonlySet<string> = new Set([
+  "noreply",
+  "no-reply",
+  "donotreply",
+  "do-not-reply",
+  "campaign",
+  "campaigns",
+  "newsletter",
+  "newsletters",
+  "marketing",
+  "promo",
+  "promos",
+  "promotion",
+  "promotions",
+  "offers",
+  "deals",
+  "mailers",
+  "mailer",
+  "digest",
+  "notifications",
+  "notification",
+  "alerts",
+  "alert",
+  "updates",
+]);
+
+/**
+ * Heuristic: automated / no-reply / marketing local parts. Keep parity with
+ * `src/lib/mailboxNormalize.ts#isLikelyNonReplyableSystemLocalPart`.
+ */
+export function isLikelyNonReplyableSystemLocalPart(localPart: string): boolean {
+  const base = localPart.split("+")[0]?.toLowerCase() ?? "";
+  if (!base) return true;
+  if (SYSTEM_LOCAL_DENY.has(base)) return true;
+  if (base.startsWith("no-reply") || base.startsWith("noreply")) return true;
+  if (base.includes("donotreply")) return true;
+
+  const tokens = base.split(/[.+_\-]/g).filter((t) => t.length > 0);
+  for (const t of tokens) {
+    if (SYSTEM_LOCAL_TOKEN_DENY.has(t)) return true;
+  }
+  return false;
+}

@@ -20,6 +20,11 @@ import type {
   OnboardingPlaybookSeed,
   PlaybookRuleInsert,
 } from "./onboardingV4Payload.ts";
+import {
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_DEFAULT_V1,
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_ESCALATION_V1,
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_V1,
+} from "./onboardingRuntimeOwnership.ts";
 
 export type { SchedulingActionPermissionMatrix };
 
@@ -66,10 +71,18 @@ export function buildDefaultDiscountQuotePlaybookRule(
     topic: "pricing",
     decision_mode: "ask_first",
     instruction: DISCOUNT_QUOTE_DEFAULT_INSTRUCTION,
-    source_type: "onboarding_default",
+    source_type: PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_DEFAULT_V1,
     confidence_label: "explicit",
     is_active: true,
   };
+}
+
+/** Legacy editor payloads may still store `source_type: "onboarding"` — map to owned cohort tag. */
+function normalizeExplicitSeedSourceType(raw: string | undefined): string {
+  if (raw === undefined || raw === "onboarding") {
+    return PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_V1;
+  }
+  return raw;
 }
 
 function mapSeedToInsert(
@@ -84,7 +97,7 @@ function mapSeedToInsert(
     topic: s.topic,
     decision_mode: s.decision_mode,
     instruction: s.instruction,
-    source_type: s.source_type ?? "onboarding",
+    source_type: normalizeExplicitSeedSourceType(s.source_type),
     confidence_label: s.confidence_label ?? "explicit",
     is_active: s.is_active ?? true,
   };
@@ -119,7 +132,7 @@ function escalationToGlobalRule(
     topic: "escalation",
     decision_mode: "auto",
     instruction: escalationPreferencesToPlaybookInstruction(c),
-    source_type: "onboarding",
+    source_type: PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_ESCALATION_V1,
     confidence_label: "explicit",
     is_active: true,
   };

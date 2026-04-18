@@ -1,14 +1,21 @@
 /**
- * End-of-thread ghost actions before opening the inline Gmail-style composer.
+ * Reply / Forward before opening the inline Gmail-style composer.
+ * `feed`: detached footer spacing; `inline`: inside an expanded message row (parent supplies top border).
  */
 interface InboxReplyActionsProps {
   onReply: () => void;
   onForward: () => void;
+  variant?: "feed" | "inline";
 }
 
-export function InboxReplyActions({ onReply, onForward }: InboxReplyActionsProps) {
+export function InboxReplyActions({ onReply, onForward, variant = "feed" }: InboxReplyActionsProps) {
+  const wrap =
+    variant === "inline"
+      ? "flex flex-wrap items-center gap-3 px-0 pt-0"
+      : /* Feed: ConversationFeed uses divide-y before this row — no second border-t */
+        "mx-5 flex flex-wrap items-center gap-3 pt-4";
   return (
-    <div className="mx-5 flex flex-wrap items-center gap-3 border-t border-border/60 pt-4">
+    <div className={wrap}>
       <button
         type="button"
         onClick={onReply}

@@ -552,7 +552,10 @@ async function main(): Promise<void> {
     instructionHistorySteps: c.observed.audienceSignalsFromRun.instructionHistorySteps,
     draftLooksLikeStubOnly:
       typeof c.observed.draft?.bodyExcerpt === "string" &&
-      c.observed.draft.bodyExcerpt.includes("[Orchestrator draft — clientOrchestratorV1 QA path]"),
+      (c.observed.draft.bodyExcerpt.includes(
+        "Reply draft pending — generated text will replace this when the writer runs successfully.",
+      ) ||
+        c.observed.draft.bodyExcerpt.includes("[Orchestrator draft — clientOrchestratorV1 QA path]")),
   }));
   const auditorStepsObservedInAnyCase = cases.some((c) =>
     c.observed.audienceSignalsFromRun.instructionHistorySteps.some((s) => s.startsWith("v3_output_auditor_")),

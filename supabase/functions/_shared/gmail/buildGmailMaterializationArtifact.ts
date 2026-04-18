@@ -35,6 +35,7 @@ import {
 import { logGmailPreparePersistHtmlFailedV1 } from "./gmailImportObservability.ts";
 import { logGmailMaterializeFallbackSubstepV1 } from "./gmailMaterializeFallbackSubstepObservability.ts";
 import { supabaseAdmin } from "../supabase.ts";
+import { buildSizeCappedGmailRenderPayloadV1 } from "./gmailRenderPayloadMaterialize.ts";
 
 export type GmailMaterializationPersistOptions = {
   photographerId: string;
@@ -66,6 +67,27 @@ export type GmailThreadFetchCache = Map<string, GmailThreadFetchCacheEntry>;
 function gmailThreadFetchCacheKey(connectedAccountId: string, rawProviderThreadId: string): string {
   return `${connectedAccountId}\u001f${rawProviderThreadId}`;
 }
+
+/**
+ * Suppression-relevant inbound headers persisted under
+ * `metadata.gmail_import.inbound_headers`.
+ *
+ * `from` is the canonical inbound sender identity needed by
+ * `classifyGmailImportCandidate` (sender local-part / domain heuristics)
+ * and by `messages.sender` so downstream draft suppression sees the real
+ * sender (not the photographer's mailbox).
+ */
+/**
+ * `GmailInboundHeadersV1` and `extractSuppressionRelevantInboundHeaders` live
+ * in their own pure module so unit tests can import them without dragging in
+ * the Deno-only `npm:` Supabase client. Re-exported here for backwards
+ * compatibility with existing `buildGmailMaterializationArtifact` callers.
+ */
+export {
+  extractSuppressionRelevantInboundHeaders,
+  type GmailInboundHeadersV1,
+} from "./inboundHeaderExtraction.ts";
+import { extractSuppressionRelevantInboundHeaders } from "./inboundHeaderExtraction.ts";
 
 /**
  * Full Gmail/network materialization (same work previously done only on approve click).
@@ -352,6 +374,17 @@ export async function computeGmailMaterializationBundle(
       });
     }
 
+    /**
+     * Suppression-relevant inbound headers — preserved verbatim so downstream
+     * consumers (suppression classifier, decision context, audit) can re-read
+     * the original `From` / list / auto-submitted signals after materialization.
+     *
+     * Only a tiny allow-listed slice is kept (NOT the full RFC822 header set)
+     * to bound metadata size. Anything missing is omitted; values are clipped
+     * to a sane upper bound.
+     */
+    const inboundHeaders = extractSuppressionRelevantInboundHeaders(latest.payload as GmailPayloadPart);
+
     const gmailImportBlock: Record<string, unknown> = {
       gmail_message_id: latest.id,
       had_plain: Boolean(plain?.trim()),
@@ -361,6 +394,7 @@ export async function computeGmailMaterializationBundle(
       asset_inline: assetInline,
       used_snippet_fallback: canonical.length === 0,
       attachment_pipeline: attachmentPipelineStats,
+      inbound_headers: inboundHeaders,
     };
 
     let metadata: Record<string, unknown> = { gmail_import: gmailImportBlock };
@@ -411,13 +445,18 @@ export async function computeGmailMaterializationBundle(
       });
     }
 
+    const raw_payload = buildSizeCappedGmailRenderPayloadV1({
+      gmailMessageId: latest.id,
+      gmailThreadId: rawProviderThreadId,
+      plain,
+      html: htmlTrim.length > 0 ? htmlTrim : null,
+      rawAttachmentCandidates: walked.raw,
+    });
+
     return {
       body,
       metadata,
-      raw_payload: {
-        gmail_message_id: latest.id,
-        gmail_thread_id: rawProviderThreadId,
-      },
+      raw_payload,
       gmailImport: {
         gmailMessageId: latest.id,
         accessToken: accessTokenForGmail,

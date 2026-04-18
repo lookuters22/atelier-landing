@@ -84,6 +84,90 @@ function headerFromMetadata(
   return h?.value?.trim() ?? null;
 }
 
+/** Max characters for the human-visible subject line (after `Re: `), excluding the prefix. */
+export const GMAIL_REPLY_SUBJECT_BODY_MAX = 200;
+/** Hard cap on full `Subject:` header value length (prefix + body). */
+export const GMAIL_REPLY_SUBJECT_LINE_MAX = 250;
+
+/**
+ * Normalize a reply Subject for Gmail threading: strip CR/LF, collapse whitespace,
+ * add a single `Re: ` when missing, collapse chained `Re:` prefixes, bound length.
+ * Empty input becomes `Re: (no subject)`.
+ */
+export function normalizeGmailReplySubject(raw: string | null | undefined): string {
+  let s = String(raw ?? "")
+    .replace(/\r|\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) {
+    return "Re: (no subject)".slice(0, GMAIL_REPLY_SUBJECT_LINE_MAX);
+  }
+  while (/^re:\s*/i.test(s)) {
+    s = s.replace(/^re:\s*/i, "").trim();
+  }
+  const body = (s || "(no subject)").slice(0, GMAIL_REPLY_SUBJECT_BODY_MAX);
+  const out = `Re: ${body}`;
+  return out.slice(0, GMAIL_REPLY_SUBJECT_LINE_MAX);
+}
+
+export type GmailReplySubjectPrecedence = "anchor" | "caller" | "thread" | "empty";
+
+/**
+ * Source of truth for reply Subject lines:
+ * 1. Anchor message `Subject` from Gmail metadata (when non-empty after trim)
+ * 2. Caller-provided subject (UI / legacy), when non-empty
+ * 3. `threads.title` fallback
+ * 4. Empty → normalizeGmailReplySubject("") → `Re: (no subject)`
+ *
+ * Anchor wins over caller so local `threads.title` drift cannot fork Gmail threading.
+ */
+export function resolveGmailReplySubjectLine(opts: {
+  anchorSubjectFromGmail: string | null | undefined;
+  callerSubject: string;
+  threadTitle: string | null | undefined;
+}): { subject: string; precedence: GmailReplySubjectPrecedence } {
+  const anchor = String(opts.anchorSubjectFromGmail ?? "")
+    .replace(/\r|\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (anchor) {
+    return { subject: normalizeGmailReplySubject(anchor), precedence: "anchor" };
+  }
+  const caller = String(opts.callerSubject ?? "")
+    .replace(/\r|\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (caller) {
+    return { subject: normalizeGmailReplySubject(caller), precedence: "caller" };
+  }
+  const title = String(opts.threadTitle ?? "")
+    .replace(/\r|\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (title) {
+    return { subject: normalizeGmailReplySubject(title), precedence: "thread" };
+  }
+  return { subject: normalizeGmailReplySubject(""), precedence: "empty" };
+}
+
+/** Pure parse of Gmail `format=metadata` payload — unit-tested; used by `getGmailMessageRfc822ReplyHeaders`. */
+export function parseGmailMetadataReplyHeaders(payload: {
+  headers?: { name?: string; value?: string }[];
+} | null | undefined): {
+  messageIdRfc: string | null;
+  references: string | null;
+  inReplyTo: string | null;
+  subject: string | null;
+} {
+  const headers = payload?.headers;
+  return {
+    messageIdRfc: headerFromMetadata(headers, "Message-ID"),
+    references: headerFromMetadata(headers, "References"),
+    inReplyTo: headerFromMetadata(headers, "In-Reply-To"),
+    subject: headerFromMetadata(headers, "Subject"),
+  };
+}
+
 export async function getGmailMessageHeaderMessageId(
   accessToken: string,
   gmailMessageId: string,
@@ -103,7 +187,7 @@ export async function getGmailMessageHeaderMessageId(
   return headerFromMetadata(headers, "Message-ID");
 }
 
-/** Message-ID, In-Reply-To, References from anchor message for reply threading. */
+/** Message-ID, In-Reply-To, References, Subject from anchor message for reply threading. */
 export async function getGmailMessageRfc822ReplyHeaders(
   accessToken: string,
   gmailMessageId: string,
@@ -111,28 +195,25 @@ export async function getGmailMessageRfc822ReplyHeaders(
   messageIdRfc: string | null;
   references: string | null;
   inReplyTo: string | null;
+  subject: string | null;
 }> {
   const u = new URL(`${GMAIL_BASE}/messages/${encodeURIComponent(gmailMessageId)}`);
   u.searchParams.set("format", "metadata");
   u.searchParams.append("metadataHeaders", "Message-ID");
   u.searchParams.append("metadataHeaders", "References");
   u.searchParams.append("metadataHeaders", "In-Reply-To");
+  u.searchParams.append("metadataHeaders", "Subject");
   const res = await fetchWithTimeout(u.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
     timeoutMs: GMAIL_HTTP_TIMEOUT_MS,
   });
   if (!res.ok) {
-    return { messageIdRfc: null, references: null, inReplyTo: null };
+    return { messageIdRfc: null, references: null, inReplyTo: null, subject: null };
   }
   const json = (await res.json()) as {
     payload?: { headers?: { name?: string; value?: string }[] };
   };
-  const headers = json.payload?.headers;
-  return {
-    messageIdRfc: headerFromMetadata(headers, "Message-ID"),
-    references: headerFromMetadata(headers, "References"),
-    inReplyTo: headerFromMetadata(headers, "In-Reply-To"),
-  };
+  return parseGmailMetadataReplyHeaders(json.payload);
 }
 
 /**

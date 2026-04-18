@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { PaneInspectorSectionTitle, PANE_INSPECTOR_IDLE_LIST_CARD, PANE_INSPECTOR_SECONDARY } from "@/components/panes";
 import { supabase } from "../../lib/supabase";
 
 const STORAGE_KEY = (id: string) => `atelier.weddingDetail.${id}`;
@@ -61,17 +63,15 @@ export function ProjectStoryAndNotes({ projectId }: { projectId: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-background p-5">
-        <p className="text-[12px] text-muted-foreground">Loading story&hellip;</p>
+      <div className={cn(PANE_INSPECTOR_IDLE_LIST_CARD)}>
+        <p className={PANE_INSPECTOR_SECONDARY}>Loading story&hellip;</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border bg-background p-5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Story so far
-      </p>
+    <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
+      <PaneInspectorSectionTitle className="mb-0">Story so far</PaneInspectorSectionTitle>
       <p className="mt-3 text-[13px] leading-relaxed text-foreground">
         {story || "No AI summary generated yet."}
       </p>
@@ -85,11 +85,8 @@ export function ProjectStoryAndNotes({ projectId }: { projectId: string }) {
       </button>
 
       <div className="mt-5 border-t border-border pt-4">
-        <label
-          htmlFor={`project-notes-${projectId}`}
-          className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
-        >
-          My notes
+        <label htmlFor={`project-notes-${projectId}`}>
+          <PaneInspectorSectionTitle className="mb-0">My notes</PaneInspectorSectionTitle>
         </label>
         <textarea
           id={`project-notes-${projectId}`}
@@ -99,7 +96,7 @@ export function ProjectStoryAndNotes({ projectId }: { projectId: string }) {
           placeholder="Private notes for your studio \u2014 not shared with clients."
           className="mt-2 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/50"
         />
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
+        <p className={cn("mt-1.5", PANE_INSPECTOR_SECONDARY, "text-[11px]")}>
           Saved automatically in this browser.
         </p>
       </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { EscalationResolutionPanel } from "../../escalations/EscalationResolutionPanel";
 import { useAuth } from "../../../context/AuthContext";
@@ -78,44 +78,46 @@ export type GmailThreadInlineReplyDockProps = {
     latestProviderMessageIdFromHistory: string | null;
     historyLoading: boolean;
   };
+  /**
+   * When true, spacing matches the thread message column (inside `ConversationFeed` last row) instead of a feed footer.
+   */
+  inlineMessageLayout?: boolean;
+  /**
+   * When true, idle Reply | Forward is not rendered here — use per-message actions + `ref.openReply()` / `openForward()`.
+   */
+  suppressIdleReplyActions?: boolean;
+};
+
+export type GmailThreadInlineReplyDockHandle = {
+  openReply: () => void;
+  openForward: () => void;
 };
 
 /**
  * Shared Gmail inline reply (reply / forward / compose) used by Inbox thread detail and Pipeline timeline
  * for Gmail-imported threads — same UX as inbox.
  */
-export function GmailThreadInlineReplyDock({
-  threadId,
-  threadTitle,
-  hasGmailImport,
-  latestProviderMessageIdHint = null,
-  aiRoutingMetadata,
-  afterSuccessfulSend,
-  conversationPreload,
-}: GmailThreadInlineReplyDockProps) {
-  return (
-    <GmailThreadInlineReplyDockInner
-      key={threadId}
-      threadId={threadId}
-      threadTitle={threadTitle}
-      hasGmailImport={hasGmailImport}
-      latestProviderMessageIdHint={latestProviderMessageIdHint}
-      aiRoutingMetadata={aiRoutingMetadata}
-      afterSuccessfulSend={afterSuccessfulSend}
-      conversationPreload={conversationPreload}
-    />
-  );
-}
+export const GmailThreadInlineReplyDock = forwardRef<GmailThreadInlineReplyDockHandle, GmailThreadInlineReplyDockProps>(
+  function GmailThreadInlineReplyDock(props, ref) {
+    return <GmailThreadInlineReplyDockInner ref={ref} key={props.threadId} {...props} />;
+  },
+);
 
-function GmailThreadInlineReplyDockInner({
-  threadId,
-  threadTitle,
-  hasGmailImport,
-  latestProviderMessageIdHint,
-  aiRoutingMetadata,
-  afterSuccessfulSend,
-  conversationPreload,
-}: GmailThreadInlineReplyDockProps) {
+const GmailThreadInlineReplyDockInner = forwardRef<GmailThreadInlineReplyDockHandle, GmailThreadInlineReplyDockProps>(
+  function GmailThreadInlineReplyDockInner(
+    {
+      threadId,
+      threadTitle,
+      hasGmailImport,
+      latestProviderMessageIdHint = null,
+      aiRoutingMetadata,
+      afterSuccessfulSend,
+      conversationPreload,
+      inlineMessageLayout = false,
+      suppressIdleReplyActions = false,
+    },
+    ref,
+  ) {
   const { photographerId } = useAuth();
   const { googleAccount } = useGoogleConnectedAccount(photographerId ?? null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -146,6 +148,15 @@ function GmailThreadInlineReplyDockInner({
   const [showCc, setShowCc] = useState(seed.draft.showCc);
   const [showBcc, setShowBcc] = useState(seed.draft.showBcc);
   const [lastAutoReplyTo, setLastAutoReplyTo] = useState<string | null>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      openReply: () => setComposeMode("reply"),
+      openForward: () => setComposeMode("forward"),
+    }),
+    [],
+  );
 
   /* Sync reply "To" with best replyable external participant (same behavior as legacy InboxThreadDetailPane). */
   useEffect(() => {
@@ -322,10 +333,12 @@ function GmailThreadInlineReplyDockInner({
     afterSuccessfulSend,
   ]);
 
+  const gutter = inlineMessageLayout ? "px-0" : "mx-5";
+
   return (
     <>
       {aiRoutingMetadata ? (
-        <div className="mx-5 mb-2 rounded-lg border border-border bg-accent/50 p-3">
+        <div className={`${gutter} mb-2 rounded-lg border border-border bg-accent/50 p-3`}>
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">AI Routing</p>
           <p className="text-[12px] text-muted-foreground">
             Intent: {aiRoutingMetadata.classified_intent} &middot;{" "}
@@ -336,7 +349,7 @@ function GmailThreadInlineReplyDockInner({
       ) : null}
 
       {escalationId ? (
-        <div className="mx-5 mb-3">
+        <div className={`${gutter} mb-3`}>
           <EscalationResolutionPanel
             escalationId={escalationId}
             onResolved={() => {
@@ -354,7 +367,13 @@ function GmailThreadInlineReplyDockInner({
       ) : null}
 
       {composeMode === "idle" ? (
-        <InboxReplyActions onReply={() => setComposeMode("reply")} onForward={() => setComposeMode("forward")} />
+        suppressIdleReplyActions ? null : (
+          <InboxReplyActions
+            onReply={() => setComposeMode("reply")}
+            onForward={() => setComposeMode("forward")}
+            variant={inlineMessageLayout ? "inline" : "feed"}
+          />
+        )
       ) : (
         <>
           {sendError ? (
@@ -367,6 +386,7 @@ function GmailThreadInlineReplyDockInner({
             </p>
           ) : null}
           <InboxInlineReplyComposer
+            layout={inlineMessageLayout ? "message" : "feed"}
             variant={composeMode === "forward" ? "forward" : "reply"}
             threadId={threadId}
             to={to}
@@ -391,4 +411,5 @@ function GmailThreadInlineReplyDockInner({
       )}
     </>
   );
-}
+  },
+);

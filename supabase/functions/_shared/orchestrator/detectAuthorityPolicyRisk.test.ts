@@ -3,6 +3,7 @@ import {
   detectAmbiguousApprovalAuthorityRisk,
   detectAuthorityPolicyRisk,
   detectCommercialTermsAuthorityRisk,
+  matchesInquiryBookingProgressInformationalTurn,
 } from "./detectAuthorityPolicyRisk.ts";
 import { ORCHESTRATOR_AP1_ESCALATION_REASON_CODES } from "../../../../src/types/decisionContext.types.ts";
 import type {
@@ -296,5 +297,53 @@ describe("detectAuthorityPolicyRisk", () => {
       audience: EMPTY_AUDIENCE_MULTI,
     });
     expect(r.hit).toBe(false);
+  });
+
+  it("snippet-only bulk discount does not commercial-escalate planner when current turn is booking-progress", () => {
+    const r = detectCommercialTermsAuthorityRisk(
+      "We've locked Sept 12 — what are the next steps to officially book you? Are 24h sneak peeks included? Does a destination fee apply for Belgrade Fortress? Could we do a brief call Thursday?",
+      "Earlier: Can we get a bulk discount for 500 extra photos?",
+      planner(),
+    );
+    expect(r.hit).toBe(false);
+  });
+
+  it("snippet 'for the couple' does not create ambiguous approval when confirm is only in current fee ask", () => {
+    const r = detectAmbiguousApprovalAuthorityRisk(
+      "Can you confirm whether a destination fee applies for our venue?",
+      "Thanks again for working with us for the couple's September wedding.",
+      planner(),
+    );
+    expect(r.hit).toBe(false);
+  });
+
+  it("binding deposit message still hits ambiguous approval for planner (current turn only)", () => {
+    const r = detectAmbiguousApprovalAuthorityRisk(
+      "On behalf of the couple, please proceed with the deposit.",
+      "Some unrelated old thread text.",
+      planner(),
+    );
+    expect(r.hit).toBe(true);
+  });
+});
+
+describe("matchesInquiryBookingProgressInformationalTurn", () => {
+  it("true for next steps / inclusions / fee / call shapes", () => {
+    expect(
+      matchesInquiryBookingProgressInformationalTurn(
+        "What are the next steps to officially book you? Is the sneak peek included?",
+      ),
+    ).toBe(true);
+    expect(
+      matchesInquiryBookingProgressInformationalTurn(
+        "Is there a destination fee for Belgrade Fortress? Can we jump on a quick call Thursday?",
+      ),
+    ).toBe(true);
+  });
+
+  it("false when commitment-level language is on the same turn", () => {
+    expect(matchesInquiryBookingProgressInformationalTurn("Can we get a bulk discount on the package?")).toBe(
+      false,
+    );
   });
 });

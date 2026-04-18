@@ -2,10 +2,10 @@ import { useMemo, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import type { OnboardingPayloadV4 } from "@/lib/onboardingV4Payload.ts";
 import {
-  DELIVERABLE_LABELS,
-  GEOGRAPHY_LABELS,
-  OFFERED_SERVICE_LABELS,
+  CORE_SERVICE_LABELS,
+  OFFER_COMPONENT_LABELS,
   OUT_OF_SCOPE_ACTION_LABELS,
+  SPECIALIZATION_LABELS,
   TRAVEL_LABELS,
   parseLanguageSupportCodes,
   resolveBusinessScopeDeterministic,
@@ -42,6 +42,7 @@ import {
 import { scopeSectorGlassPillBase } from "@/components/onboarding/SectorDonutBubbleField.tsx";
 import { obMotionShell } from "@/components/onboarding/onboardingVisuals.ts";
 import { cn } from "@/lib/utils";
+import { useRegisterOnboardingBriefingHeader } from "@/components/onboarding/OnboardingBriefingHeaderContext.tsx";
 
 const REVIEW_CINEMATIC_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
@@ -166,6 +167,7 @@ export function OnboardingBriefingReviewStep({
   onSaveAndExit,
   saving,
 }: OnboardingBriefingReviewStepProps) {
+  useRegisterOnboardingBriefingHeader("Final review");
   const id = payload.settings_identity;
   const scope = useMemo(
     () => resolveBusinessScopeDeterministic(payload.business_scope_deterministic),
@@ -215,25 +217,13 @@ export function OnboardingBriefingReviewStep({
 
   const voiceToneLabel = useMemo(() => toneLabelFromFacts(voiceFacts), [voiceFacts]);
 
-  const offeredServicesLine =
-    scope.offered_services.length > 0
-      ? scope.offered_services.map((s) => OFFERED_SERVICE_LABELS[s]).join(", ")
-      : null;
-
-  const deliverablesLine =
-    scope.allowed_deliverables.length > 0
-      ? scope.allowed_deliverables.map((d) => DELIVERABLE_LABELS[d]).join(", ")
-      : null;
+  const coreServicesHasAny = scope.core_services.length > 0;
+  const specializationsHasAny = scope.specializations.length > 0;
+  const offerComponentsHasAny = scope.offer_components.length > 0;
 
   const languagesLine =
     langCodes.length > 0 ? langCodes.map((c) => c.toUpperCase()).join(", ") : null;
 
-  const blockedLine =
-    scope.geography.blocked_regions && scope.geography.blocked_regions.length > 0
-      ? scope.geography.blocked_regions.join(", ")
-      : null;
-
-  const geoLabel = GEOGRAPHY_LABELS[scope.geography.mode];
   const travelLabel = TRAVEL_LABELS[scope.travel_policy_mode];
   const leadServiceLabel = OUT_OF_SCOPE_ACTION_LABELS[scope.lead_acceptance.when_service_not_offered];
   const leadGeoLabel = OUT_OF_SCOPE_ACTION_LABELS[scope.lead_acceptance.when_geography_not_in_scope];
@@ -243,27 +233,40 @@ export function OnboardingBriefingReviewStep({
     [payload.business_scope_extensions],
   );
 
-  const additionalServicesReviewLine = useMemo(() => {
-    const cs = scopeExt.custom_services;
-    if (!cs?.length) return null;
-    return cs
+  const customSpecializations = useMemo(
+    () => scopeExt.custom_specializations ?? [],
+    [scopeExt],
+  );
+  const customOfferComponents = useMemo(
+    () => scopeExt.custom_offer_components ?? [],
+    [scopeExt],
+  );
+
+  const additionalSpecializationsReviewLine = useMemo(() => {
+    if (!customSpecializations.length) return null;
+    return customSpecializations
       .map((s) => {
         const hint =
-          s.behaves_like_service_type != null
-            ? ` (closest to: ${OFFERED_SERVICE_LABELS[s.behaves_like_service_type]})`
+          s.behaves_like != null
+            ? ` (closest to: ${SPECIALIZATION_LABELS[s.behaves_like]})`
             : "";
         return `${s.label}${hint}`;
       })
       .join("; ");
+  }, [customSpecializations]);
+
+  const serviceAreasReviewLine = useMemo(() => {
+    const areas = scopeExt.service_areas;
+    if (!areas?.length) return null;
+    return areas.map((a) => a.label).join(", ");
   }, [scopeExt]);
 
-  const geographyNotesReviewLine = useMemo(() => {
-    const g = scopeExt.custom_geography_labels;
-    if (!g?.length) return null;
-    return g
-      .map((x) => `${x.kind === "included" ? "Included" : "Excluded"}: ${x.label}`)
-      .join("; ");
-  }, [scopeExt]);
+  const baseLocationReviewLine = useMemo(() => {
+    const base = payload.settings_identity.base_location;
+    if (!base) return null;
+    const country = base.country_code ? ` · ${base.country_code}` : "";
+    return `${base.label}${country}`;
+  }, [payload.settings_identity.base_location]);
 
   const travelConstraintsReviewLine = useMemo(() => {
     const t = scopeExt.travel_constraints;
@@ -271,19 +274,18 @@ export function OnboardingBriefingReviewStep({
     return t.join("; ");
   }, [scopeExt]);
 
-  const additionalDeliverablesReviewLine = useMemo(() => {
-    const cd = scopeExt.custom_deliverables;
-    if (!cd?.length) return null;
-    return cd
+  const additionalOfferComponentsReviewLine = useMemo(() => {
+    if (!customOfferComponents.length) return null;
+    return customOfferComponents
       .map((s) => {
         const hint =
-          s.behaves_like_deliverable != null
-            ? ` (closest to: ${DELIVERABLE_LABELS[s.behaves_like_deliverable]})`
+          s.behaves_like != null
+            ? ` (closest to: ${OFFER_COMPONENT_LABELS[s.behaves_like]})`
             : "";
         return `${s.label}${hint}`;
       })
       .join("; ");
-  }, [scopeExt]);
+  }, [customOfferComponents]);
 
   function jump(step: "identity" | "scope" | "voice" | "authority" | "vault") {
     onJumpToStep?.(step);
@@ -318,11 +320,10 @@ export function OnboardingBriefingReviewStep({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: REVIEW_CINEMATIC_EASE }}
       >
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">Final review</p>
-        <h1 className="mx-auto mt-2 max-w-[34rem] font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:text-[clamp(1.65rem,4.2vw,2.55rem)]">
+        <h1 className="mx-auto max-w-[38rem] text-balance font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:text-[clamp(1.65rem,4.2vw,2.55rem)]">
           Read this like Ana&apos;s studio dossier.
         </h1>
-        <p className="mx-auto mt-3 max-w-2xl text-[12px] leading-relaxed text-white/72 sm:text-[13px]">
+        <p className="mx-auto mt-3 max-w-2xl text-pretty text-[12px] leading-relaxed text-white/72 sm:text-[13px]">
           One step — scroll the dossier below, then initialize when you are ready. This is the last calm checkpoint before
           the briefing is marked complete and carried into Today.
         </p>
@@ -367,66 +368,88 @@ export function OnboardingBriefingReviewStep({
         >
           {scopeNote}
           <div className="flex flex-col gap-3">
-            <GlassDetails title="Services, deliverables & languages" defaultOpen>
-              {offeredServicesLine ? (
+            <GlassDetails title="Services, specializations & offer" defaultOpen>
+              {coreServicesHasAny ? (
                 <div className="mb-3">
-                  <p className={fieldKicker}>Offered services</p>
+                  <p className={fieldKicker}>Core services</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {scope.offered_services.map((s) => (
+                    {scope.core_services.map((s) => (
                       <span key={s} className={glassPillReadOnly}>
-                        {OFFERED_SERVICE_LABELS[s]}
+                        {CORE_SERVICE_LABELS[s]}
                       </span>
                     ))}
                   </div>
                 </div>
               ) : (
-                <CinematicReviewRow label="Offered services" value={NOT_SET} muted />
+                <CinematicReviewRow label="Core services" value={NOT_SET} muted />
               )}
-              {deliverablesLine ? (
+              {specializationsHasAny ? (
                 <div className="mb-3">
-                  <p className={fieldKicker}>Deliverables</p>
+                  <p className={fieldKicker}>Specializations</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {scope.allowed_deliverables.map((d) => (
-                      <span key={d} className={glassPillReadOnly}>
-                        {DELIVERABLE_LABELS[d]}
+                    {scope.specializations.map((s) => (
+                      <span key={s} className={glassPillReadOnly}>
+                        {SPECIALIZATION_LABELS[s]}
                       </span>
                     ))}
                   </div>
                 </div>
               ) : (
-                <CinematicReviewRow label="Deliverables" value={NOT_SET} muted />
+                <CinematicReviewRow label="Specializations" value={NOT_SET} muted />
+              )}
+              {offerComponentsHasAny ? (
+                <div className="mb-3">
+                  <p className={fieldKicker}>Offer components</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {scope.offer_components.map((o) => (
+                      <span key={o} className={glassPillReadOnly}>
+                        {OFFER_COMPONENT_LABELS[o]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <CinematicReviewRow label="Offer components" value={NOT_SET} muted />
               )}
               <CinematicReviewRow
                 label="Language support"
                 value={languagesLine ?? NOT_SET}
                 muted={!languagesLine}
               />
-              {additionalServicesReviewLine ? (
-                <CinematicReviewRow label="Additional services" value={additionalServicesReviewLine} muted />
+              {additionalSpecializationsReviewLine ? (
+                <CinematicReviewRow
+                  label="Additional specializations"
+                  value={additionalSpecializationsReviewLine}
+                  muted
+                />
               ) : null}
-              {additionalDeliverablesReviewLine ? (
-                <CinematicReviewRow label="Additional deliverables" value={additionalDeliverablesReviewLine} muted />
+              {additionalOfferComponentsReviewLine ? (
+                <CinematicReviewRow
+                  label="Additional offer components"
+                  value={additionalOfferComponentsReviewLine}
+                  muted
+                />
               ) : null}
             </GlassDetails>
-            <GlassDetails title="Geography & travel">
+            <GlassDetails title="Service areas & travel">
               <CinematicReviewRow
-                label="Geography"
-                value={formatReviewDecision(geoLabel, hasExplicitScopeSnapshot)}
-                muted={!hasExplicitScopeSnapshot}
+                label="Based in"
+                value={baseLocationReviewLine ?? NOT_SET}
+                muted={!baseLocationReviewLine}
               />
               <CinematicReviewRow
-                label="Blocked regions"
-                value={hasExplicitScopeSnapshot ? blockedLine ?? "None listed" : blockedLine ?? NOT_SET}
-                muted={!blockedLine && !hasExplicitScopeSnapshot}
+                label="Service areas"
+                value={
+                  serviceAreasReviewLine ??
+                  (hasExplicitScopeSnapshot ? "None selected" : NOT_SET)
+                }
+                muted={!serviceAreasReviewLine && !hasExplicitScopeSnapshot}
               />
               <CinematicReviewRow
                 label="Travel policy"
                 value={formatReviewDecision(travelLabel, hasExplicitScopeSnapshot)}
                 muted={!hasExplicitScopeSnapshot}
               />
-              {geographyNotesReviewLine ? (
-                <CinematicReviewRow label="Geography notes" value={geographyNotesReviewLine} muted />
-              ) : null}
               {travelConstraintsReviewLine ? (
                 <CinematicReviewRow label="Travel constraints" value={travelConstraintsReviewLine} muted />
               ) : null}
@@ -438,7 +461,7 @@ export function OnboardingBriefingReviewStep({
                 muted={!hasExplicitScopeSnapshot}
               />
               <CinematicReviewRow
-                label="When a lead is outside your geography"
+                label="When a lead is outside your service areas"
                 value={formatReviewDecision(leadGeoLabel, hasExplicitScopeSnapshot)}
                 muted={!hasExplicitScopeSnapshot}
               />

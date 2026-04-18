@@ -11,6 +11,7 @@ import {
   type IdentityMicroflowFieldId,
 } from "@/components/onboarding/onboardingIdentityMicroflow.ts";
 import { cn } from "@/lib/utils";
+import { useRegisterOnboardingBriefingHeader } from "@/components/onboarding/OnboardingBriefingHeaderContext.tsx";
 
 /** Cinematic identity — physics-based easing (fade & glide). */
 const CINEMATIC_TEXT_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -373,10 +374,10 @@ export function OnboardingBriefingIdentityStep({
       settings_identity: { ...prev.settings_identity, timezone: detected },
     }));
   }, [activeField.id, id.timezone, updatePayload]);
-  const answeredCount = IDENTITY_MICROFLOW_FIELDS.reduce((count, field) => {
-    const value = getVal(field.id)?.trim();
-    return value ? count + 1 : count;
-  }, 0);
+  useRegisterOnboardingBriefingHeader(
+    "Identity",
+    `${activeIndex + 1} of ${total}`,
+  );
 
   function handleAdvance() {
     if (activeIndex < last) {
@@ -388,47 +389,23 @@ export function OnboardingBriefingIdentityStep({
   }
 
   return (
-    <div className="cinematic-onboarding relative flex min-h-[min(82vh,880px)] w-full max-w-4xl flex-col items-center justify-center px-4 text-center sm:px-8">
+    <div className="cinematic-onboarding relative mx-auto flex h-full min-h-0 w-full max-w-4xl flex-1 flex-col items-stretch px-4 pb-3 pt-1 text-center sm:px-8 sm:pb-4 sm:pt-2">
       <AnimatePresence mode="wait">
         <motion.div
           key={activeField.id}
           ref={identityStepRef}
           role="group"
           aria-labelledby={`identity-prompt-${activeField.id}`}
-          className="overlay-content flex w-full flex-col items-center"
+          className="overlay-content flex h-full min-h-0 w-full flex-1 flex-col items-stretch"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, y: -12 }}
           transition={{ duration: 0.28, ease: obMotionShell.ease }}
         >
-          <div className="question-header mb-10 flex w-full max-w-2xl flex-wrap items-center justify-between gap-3 text-left sm:mb-12">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">Identity</p>
-              <p className="mt-1 text-[12px] text-white/45">{answeredCount} answered so far</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5" aria-hidden="true">
-                {IDENTITY_MICROFLOW_FIELDS.map((field, i) => (
-                  <span
-                    key={field.id}
-                    className={cn(
-                      "h-2 w-2 rounded-full transition-colors",
-                      i === activeIndex
-                        ? "bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.12)]"
-                        : "bg-white/25",
-                    )}
-                  />
-                ))}
-              </div>
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/50">
-                {activeIndex + 1} of {total}
-              </span>
-            </div>
-          </div>
-
+          <div className="flex w-full min-h-0 flex-1 flex-col items-center justify-center">
           <motion.h1
             id={`identity-prompt-${activeField.id}`}
-            className="max-w-[34rem] font-serif text-[clamp(1.65rem,4.2vw,2.55rem)] font-normal leading-[1.08] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)]"
+            className="max-w-[38rem] text-balance font-serif text-[clamp(1.65rem,4.2vw,2.55rem)] font-normal leading-[1.08] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)]"
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: CINEMATIC_TEXT_EASE }}
@@ -437,7 +414,7 @@ export function OnboardingBriefingIdentityStep({
           </motion.h1>
 
           <motion.p
-            className="mt-4 max-w-xl text-[13px] leading-relaxed text-white/72 sm:mt-5 sm:text-[14px]"
+            className="mt-4 max-w-xl text-pretty text-[13px] leading-relaxed text-white/72 sm:mt-5 sm:text-[14px]"
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.28, ease: CINEMATIC_TEXT_EASE }}
@@ -484,6 +461,7 @@ export function OnboardingBriefingIdentityStep({
               {activeIndex < last ? "Next" : "Continue"}
             </button>
           </motion.div>
+          </div>
         </motion.div>
       </AnimatePresence>
     </div>

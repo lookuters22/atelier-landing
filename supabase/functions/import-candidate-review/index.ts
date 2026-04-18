@@ -11,7 +11,6 @@
  * A3: A single-row `approve` (unfiled) enqueues `import/gmail.single_candidate_approve.v1` — materialization
  * is not done on the Edge request. Rows with `materialized_thread_id` already set still finalize synchronously (fast).
  */
-import { createGmailLabelImportWedding } from "../_shared/gmail/gmailImportMaterialize.ts";
 import { executeSingleImportCandidateApprove } from "../_shared/gmail/executeSingleImportCandidateApprove.ts";
 import {
   GMAIL_LABEL_GROUP_APPROVE_V1_EVENT,
@@ -300,21 +299,22 @@ Deno.serve(async (req) => {
         return jsonWithLog({ error: "no_pending_candidates_in_group" }, 400);
       }
 
-      const w = await createGmailLabelImportWedding(supabaseAdmin, {
-        photographerId,
-        labelName: group.source_label_name as string,
-        now,
-      });
-      if ("error" in w) {
-        return jsonWithLog({ error: w.error }, 500);
-      }
-      const weddingId = w.weddingId;
-
+      /**
+       * G5+ suppression: do NOT pre-create the batch inquiry wedding here.
+       * If every candidate in this group is promotional / system / non-client
+       * (Promotions / Newsletters labels, OTA blasts, do-not-reply notifications),
+       * creating the wedding now would leave a fake inquiry-stage shell in CRM
+       * even after every candidate is suppressed.
+       *
+       * The async worker (`processGmailLabelGroupApproval`) lazily creates the
+       * wedding the first time it encounters a non-suppressed candidate. If
+       * none exists, no wedding is ever created.
+       */
       const { error: upG } = await supabaseAdmin
         .from("gmail_label_import_groups")
         .update({
           status: "approving",
-          materialized_wedding_id: weddingId,
+          materialized_wedding_id: null,
           approval_total_candidates: total,
           approval_processed_count: 0,
           approval_approved_count: 0,
@@ -360,12 +360,15 @@ Deno.serve(async (req) => {
         photographer_id: photographerId,
         gmail_label_import_group_id: groupId,
         total_candidates: total,
-        wedding_id: weddingId,
+        /**
+         * Wedding is created lazily by the worker. Absence here is the
+         * deliberate signal that no inquiry shell exists yet for this batch.
+         */
       });
       return jsonWithLog({
         ok: true as const,
         action: "approved_group_queued" as const,
-        weddingId,
+        weddingId: null,
         gmailLabelImportGroupId: groupId,
         totalCandidates: total,
         message:

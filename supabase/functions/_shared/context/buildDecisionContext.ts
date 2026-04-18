@@ -14,6 +14,8 @@ import {
   type ThreadParticipantAudienceRow,
 } from "../../../../src/types/decisionContext.types.ts";
 import { applyAudiencePrivateCommercialRedaction } from "./applyAudiencePrivateCommercialRedaction.ts";
+import { fetchLatestInboundSuppressionVerdict as _fetchLatestInboundSuppressionVerdictImpl } from "./fetchLatestInboundSuppressionVerdict.ts";
+import type { InboundSuppressionClassification } from "../../../../src/lib/inboundSuppressionClassifier.ts";
 import {
   applyVisibilityClassOverride,
   resolveAudienceVisibility,
@@ -423,6 +425,7 @@ async function loadAudienceSnapshot(
       broadcastRisk: "unknown",
       recipientCount: 0,
       approvalContactPersonIds,
+      inboundSuppression: null,
       ...DEFAULT_VISIBILITY,
     };
     return {
@@ -453,6 +456,7 @@ async function loadAudienceSnapshot(
       broadcastRisk: "unknown",
       recipientCount: 0,
       approvalContactPersonIds,
+      inboundSuppression: null,
       ...DEFAULT_VISIBILITY,
     };
     return {
@@ -510,14 +514,33 @@ async function loadAudienceSnapshot(
     weddingPeopleByPersonId,
   );
 
+  /**
+   * Inbound suppression — latest inbound message on this thread is classified
+   * against the shared promo/system/non-client heuristics. When suppressed we:
+   *   1) populate `inboundSuppression` so orchestrator proposal logic can block
+   *      `send_message` and route only `operator_notification_routing`;
+   *   2) upgrade `broadcastRisk` to `"high"` so `inferLikelyOutcome` folds into
+   *      the existing auto→block rails (no new enum, no orchestrator refactor).
+   */
+  const inboundSuppression = await _fetchLatestInboundSuppressionVerdictImpl(
+    supabase,
+    photographerId,
+    threadId,
+    recipientCount,
+  );
+  const broadcastRisk: DecisionAudienceSnapshot["broadcastRisk"] = inboundSuppression?.suppressed
+    ? "high"
+    : "unknown";
+
   const audience: DecisionAudienceSnapshot = {
     threadParticipants,
     agencyCcLock,
-    broadcastRisk: "unknown",
+    broadcastRisk,
     recipientCount,
     approvalContactPersonIds,
     visibilityClass,
     clientVisibleForPrivateCommercialRedaction,
+    inboundSuppression,
   };
 
   const inboundSenderAuthority = await resolveInboundSenderAuthorityForAudienceLoad(
@@ -559,6 +582,24 @@ async function fetchApprovalContactPersonIds(
   const ids = (data ?? []).map((r) => r.person_id as string);
   return [...new Set(ids)];
 }
+
+/**
+ * Pulls the newest inbound message on the thread (by `sent_at`) and runs
+ * `classifyInboundSuppression`. Returns `null` when:
+ *   - no inbound message exists yet, or
+ *   - the DB call fails (conservative — we never want this helper to block
+ *     decision context from building).
+ *
+ * Subject proxy uses `threads.title` because `messages` has no subject column;
+ * Gmail import sets the thread title from the RFC822 `Subject` header, and the
+ * classifier only needs subject-level promo tokens (unsubscribe, "X% off"),
+ * which the thread title still carries.
+ */
+/**
+ * Re-exported via the standalone module so unit tests can hit the helper
+ * without dragging in the entire decision-context graph (and its npm:* deps).
+ */
+export { fetchLatestInboundSuppressionVerdict } from "./fetchLatestInboundSuppressionVerdict.ts";
 
 async function fetchAgencyCcLock(
   supabase: SupabaseClient,

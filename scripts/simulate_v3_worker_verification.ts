@@ -731,9 +731,13 @@ async function fetchArtifactsSinceInbound(
 function classifyDraft(d: { body: string; instruction_history: unknown }): string {
   const h = JSON.stringify(d.instruction_history ?? "");
   if (h.includes("persona_agent")) return "persona";
+  const b = String(d.body ?? "");
   if (
     h.includes("client_orchestrator_v1") ||
-    String(d.body ?? "").includes("[Orchestrator draft — clientOrchestratorV1 QA path]")
+    b.includes("[Orchestrator draft — clientOrchestratorV1 QA path]") ||
+    b.includes(
+      "Reply draft pending — generated text will replace this when the writer runs successfully.",
+    )
   ) {
     return "orchestrator";
   }

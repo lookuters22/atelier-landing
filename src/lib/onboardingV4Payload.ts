@@ -17,21 +17,22 @@
  */
 import type { Json } from "../types/database.types.ts";
 import type { PhotographerSettings } from "../types/photographerSettings.types.ts";
+import type { StudioBaseLocation } from "./studioBaseLocation.ts";
 import type { EscalationPreferencesCapture } from "./onboardingCaptureEscalationPreferences.ts";
 import type { SchedulingActionPermissionMatrix } from "./onboardingActionPermissionMatrixScheduling.ts";
 import {
   buildStudioBusinessProfileJsonFromBusinessScope,
-  type BusinessScopeDeterministicV1,
+  type BusinessScopeDeterministicV2,
 } from "./onboardingBusinessScopeDeterministic.ts";
 
-export type { BusinessScopeDeterministicV1 } from "./onboardingBusinessScopeDeterministic.ts";
+export type { BusinessScopeDeterministicV2 } from "./onboardingBusinessScopeDeterministic.ts";
 import {
   businessScopeExtensionsToJson,
   resolveBusinessScopeExtensions,
-  type BusinessScopeExtensionsV1,
+  type BusinessScopeExtensionsV2,
 } from "./onboardingBusinessScopeExtensions.ts";
 
-export type { BusinessScopeExtensionsV1 } from "./onboardingBusinessScopeExtensions.ts";
+export type { BusinessScopeExtensionsV2 } from "./onboardingBusinessScopeExtensions.ts";
 import { buildKnowledgeBaseSeedInsertsFromOnboarding } from "./onboardingKnowledgeBaseStructured.ts";
 
 export type {
@@ -39,6 +40,16 @@ export type {
   OnboardingKnowledgeSeed,
 } from "./onboardingKnowledgeBaseStructured.ts";
 import { buildPlaybookRuleInsertsFromOnboarding } from "./onboardingStoragePlaybookRules.ts";
+export {
+  KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_KEY,
+  KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_VALUE,
+  ONBOARDING_BRIEFING_V1,
+  ONBOARDING_OWNED_PLAYBOOK_RULE_SOURCE_TYPES,
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_DEFAULT_V1,
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_ESCALATION_V1,
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_MATRIX_V1,
+  PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_V1,
+} from "./onboardingRuntimeOwnership.ts";
 import { mergePhotographerSettings } from "./photographerSettings.ts";
 
 // ── Payload (logical onboarding form output) ─────────────────────
@@ -52,6 +63,14 @@ export type OnboardingSettingsIdentity = {
   currency?: string;
   whatsapp_number?: string;
   admin_mobile_number?: string;
+  /**
+   * Studio's physical home base (where the business operates out of).
+   * Captured on the service-areas onboarding step — the operator picks
+   * their base *first*, then the same screen flips to "where do you want
+   * to show up?". Persisted at `photographers.settings.base_location`
+   * via the settings patch. `null` means "explicitly cleared".
+   */
+  base_location?: StudioBaseLocation | null;
 };
 
 /** Versions / completion markers written to settings JSONB. */
@@ -67,6 +86,8 @@ export type OnboardingSettingsMeta = {
  * Arrays/objects are stored as-is; runtime validates shape over time.
  */
 export type OnboardingStudioScope = {
+  /** v2 — NEW: what the studio sells at the production level. */
+  core_services?: Json;
   service_types?: Json;
   service_availability?: Json;
   geographic_scope?: Json;
@@ -87,7 +108,10 @@ export type OnboardingPlaybookSeed = {
   topic: string;
   decision_mode: "auto" | "draft_only" | "ask_first" | "forbidden";
   instruction: string;
-  /** Stored as `source_type`; default onboarding */
+  /**
+   * Stored as `playbook_rules.source_type`.
+   * When omitted, mapping uses `PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_V1` (`onboarding_briefing_v1`).
+   */
   source_type?: string;
   confidence_label?: string;
   is_active?: boolean;
@@ -107,15 +131,16 @@ export type OnboardingPayloadV4 = {
    */
   scheduling_action_permission_matrix?: SchedulingActionPermissionMatrix;
   /**
-   * Step 4E — when set, overrides loose `studio_scope` JSON for service/geography/travel/
-   * lead acceptance/deliverables with deterministic structures (see helper module).
+   * Step 4E — when set, overrides loose `studio_scope` JSON for
+   * core_services / specializations / offer_components / geography / travel /
+   * lead acceptance with deterministic structures (see helper module).
    */
-  business_scope_deterministic?: BusinessScopeDeterministicV1;
+  business_scope_deterministic?: BusinessScopeDeterministicV2;
   /**
    * Custom labels / notes beyond fixed enums — maps to `studio_business_profiles.extensions`.
    * Does not add new canonical runtime branches; see `onboardingBusinessScopeExtensions.ts`.
    */
-  business_scope_extensions?: BusinessScopeExtensionsV1;
+  business_scope_extensions?: BusinessScopeExtensionsV2;
   knowledge_seeds?: OnboardingKnowledgeSeed[];
 };
 
@@ -128,6 +153,8 @@ const EMPTY_OBJECT: Json = {};
 
 export type StudioBusinessProfileInsert = {
   photographer_id: string;
+  /** v2 — what the studio sells at the production level (photo/video/hybrid/content_creation). */
+  core_services: Json;
   service_types: Json;
   service_availability: Json;
   geographic_scope: Json;
@@ -138,7 +165,7 @@ export type StudioBusinessProfileInsert = {
   lead_acceptance_rules: Json;
   language_support: Json;
   team_structure: Json;
-  /** `BusinessScopeExtensionsV1` JSON — UI/review/hydration; not deterministic scope branching. */
+  /** `BusinessScopeExtensionsV2` JSON — UI/review/hydration; not deterministic scope branching. */
   extensions: Json;
   source_type: string;
 };
@@ -207,6 +234,9 @@ export function mapOnboardingPayloadToStorage(
   if (id.admin_mobile_number !== undefined) {
     settingsPatch.admin_mobile_number = id.admin_mobile_number;
   }
+  if (id.base_location !== undefined) {
+    settingsPatch.base_location = id.base_location;
+  }
 
   const meta = payload.settings_meta;
   if (meta?.onboarding_completed_at !== undefined) {
@@ -228,6 +258,7 @@ export function mapOnboardingPayloadToStorage(
 
   const studioBusinessProfile: StudioBusinessProfileInsert = {
     photographer_id: photographerId,
+    core_services: bsSlice?.core_services ?? jsonOr(sc.core_services, EMPTY_ARRAY),
     service_types: bsSlice?.service_types ?? jsonOr(sc.service_types, EMPTY_ARRAY),
     service_availability: jsonOr(sc.service_availability, EMPTY_OBJECT),
     geographic_scope:

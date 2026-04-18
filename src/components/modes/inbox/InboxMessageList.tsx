@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "../../../context/AuthContext";
 import { useUnfiledInbox } from "../../../hooks/useUnfiledInbox";
 import { useGoogleConnectedAccount } from "../../../hooks/useInboxGmailLabels";
@@ -14,6 +13,7 @@ import {
 import { deriveVisibleInboxThreads } from "../../../lib/inboxVisibleThreads";
 import { useInboxThreadMessagesPrefetch } from "../../../hooks/useInboxThreadMessagesPrefetch";
 import { useInboxMode } from "./InboxModeContext";
+import { InboxListSelectionToolbar } from "./InboxListSelectionToolbar";
 import { InboxListTabs } from "./InboxListTabs";
 import { InboxMessageRow } from "./InboxMessageRow";
 
@@ -35,6 +35,7 @@ export function InboxMessageList() {
     deleteThread,
     gmailInboxModify,
     providerMessageIdColumnUnavailable,
+    refetch,
   } = useUnfiledInbox();
   const { photographerId, isLoading: authLoading } = useAuth();
   const { googleAccount } = useGoogleConnectedAccount(photographerId ?? null);
@@ -43,6 +44,9 @@ export function InboxMessageList() {
   const { prefetchThreadMessages, scheduleHoverPrefetch, cancelHoverPrefetch } = useInboxThreadMessagesPrefetch();
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [refreshing, setRefreshing] = useState(false);
 
   const derived = useMemo(
     () =>
@@ -62,26 +66,6 @@ export function InboxMessageList() {
   const selectedThreadId = selection.kind === "thread" ? selection.thread.id : null;
 
   const listScrollRef = useRef<HTMLDivElement>(null);
-
-  const goPrevThread = useCallback(() => {
-    const id = adjacentWeddingIdInOrderedList(orderedThreadIds, selectedThreadId, -1);
-    if (!id) return;
-    const t = visibleThreads.find((x) => x.id === id);
-    if (t) {
-      void prefetchThreadMessages(t.id);
-      selectThread(t);
-    }
-  }, [orderedThreadIds, prefetchThreadMessages, selectedThreadId, visibleThreads, selectThread]);
-
-  const goNextThread = useCallback(() => {
-    const id = adjacentWeddingIdInOrderedList(orderedThreadIds, selectedThreadId, 1);
-    if (!id) return;
-    const t = visibleThreads.find((x) => x.id === id);
-    if (t) {
-      void prefetchThreadMessages(t.id);
-      selectThread(t);
-    }
-  }, [orderedThreadIds, prefetchThreadMessages, selectedThreadId, visibleThreads, selectThread]);
 
   useEffect(() => {
     if (orderedThreadIds.length < 2) return;
@@ -116,6 +100,34 @@ export function InboxMessageList() {
     () => weddingQueuePosition(orderedThreadIds, selectedThreadId),
     [orderedThreadIds, selectedThreadId],
   );
+
+  useEffect(() => {
+    const allowed = new Set(visibleThreads.map((t) => t.id));
+    setSelectedIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (allowed.has(id)) next.add(id);
+      }
+      if (next.size === prev.size && [...prev].every((id) => next.has(id))) return prev;
+      return next;
+    });
+  }, [visibleThreads]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  const countLabel = useMemo(() => {
+    if (threadQueuePosition && orderedThreadIds.length >= 2) {
+      return `${threadQueuePosition.current} / ${threadQueuePosition.total} in view`;
+    }
+    return `${visibleThreads.length} in view`;
+  }, [threadQueuePosition, orderedThreadIds.length, visibleThreads.length]);
 
   const handleDelete = useCallback(
     async (threadId: string) => {
@@ -166,34 +178,17 @@ export function InboxMessageList() {
         </p>
       ) : null}
 
-      {!threadsLoading && orderedThreadIds.length >= 2 ? (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2 text-[11px] text-muted-foreground">
-          <span>
-            {threadQueuePosition
-              ? `${threadQueuePosition.current} / ${threadQueuePosition.total} in view`
-              : `${visibleThreads.length} in view`}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              title="Previous thread (Alt+↑)"
-              aria-label="Previous thread in list"
-              onClick={goPrevThread}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"
-            >
-              <ChevronUp className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </button>
-            <button
-              type="button"
-              title="Next thread (Alt+↓)"
-              aria-label="Next thread in list"
-              onClick={goNextThread}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"
-            >
-              <ChevronDown className="h-4 w-4" strokeWidth={2} aria-hidden />
-            </button>
-          </div>
-        </div>
+      {!threadsLoading && !weddingsLoading && !derived.gmailLabelFilterUnsupported ? (
+        <InboxListSelectionToolbar
+          visibleThreads={visibleThreads}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          countLabel={countLabel}
+          onDeleteSelected={() => void handleBulkDelete()}
+          bulkDeleting={bulkDeleting}
+        />
       ) : null}
 
       <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto">
@@ -237,6 +232,15 @@ export function InboxMessageList() {
                   key={t.id}
                   thread={t}
                   selected={selection.kind === "thread" && selection.thread.id === t.id}
+                  bulkSelected={selectedIds.has(t.id)}
+                  onBulkToggle={() => {
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(t.id)) next.delete(t.id);
+                      else next.add(t.id);
+                      return next;
+                    });
+                  }}
                   onSelect={() => {
                     void prefetchThreadMessages(t.id);
                     selectThread(t);

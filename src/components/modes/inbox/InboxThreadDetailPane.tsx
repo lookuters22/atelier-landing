@@ -53,7 +53,7 @@ function InboxThreadDetailContent({ thread }: { thread: UnfiledThread }) {
         </button>
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold text-foreground">{thread.title}</h2>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">{thread.sender || "Unknown sender"}</p>
+          <p className="mt-1 text-[13px] text-muted-foreground">{thread.sender || "Unknown sender"}</p>
         </div>
       </div>
 
@@ -71,7 +71,7 @@ function InboxThreadDetailContent({ thread }: { thread: UnfiledThread }) {
         defaultExpanded={(m) => m.id === lastMessageId}
         onToggle={toggleMessageRow}
         emptyText={historyLoading ? "Loading conversation…" : "No messages in this thread yet."}
-        bottomSlot={
+        lastMessageFooter={
           <GmailThreadInlineReplyDock
             threadId={thread.id}
             threadTitle={thread.title}
@@ -86,6 +86,7 @@ function InboxThreadDetailContent({ thread }: { thread: UnfiledThread }) {
               latestProviderMessageIdFromHistory,
               historyLoading,
             }}
+            inlineMessageLayout
           />
         }
       />

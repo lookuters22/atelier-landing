@@ -5,6 +5,10 @@
  * embedding-friendly deterministic text. DATABASE_SCHEMA §5.14.
  */
 import type { Json } from "../types/database.types.ts";
+import {
+  KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_KEY,
+  KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_VALUE,
+} from "./onboardingRuntimeOwnership.ts";
 
 export const ONBOARDING_KB_METADATA_KEY = "onboarding_kb_v1" as const;
 
@@ -80,6 +84,7 @@ function knowledgeSeedToRow(
     const content = renderStructuredKnowledgeContent(k.structured);
     const metadata = mergeMetadata(k.metadata, {
       [ONBOARDING_KB_METADATA_KEY]: k.structured as unknown as Json,
+      [KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_KEY]: KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_VALUE,
     });
     return {
       photographer_id: photographerId,
@@ -92,11 +97,14 @@ function knowledgeSeedToRow(
   if (typeof k.content === "string") {
     const trimmed = k.content.trim();
     if (trimmed.length > 0) {
+      const metadata = mergeMetadata(k.metadata, {
+        [KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_KEY]: KNOWLEDGE_BASE_METADATA_ONBOARDING_SOURCE_VALUE,
+      });
       return {
         photographer_id: photographerId,
         document_type: k.document_type,
         content: trimmed,
-        metadata: jsonOr(k.metadata, EMPTY_OBJECT),
+        metadata,
       };
     }
   }

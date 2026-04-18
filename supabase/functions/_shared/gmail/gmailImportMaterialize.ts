@@ -1,12 +1,22 @@
 /**
  * G2/G3/G5: Materialize one staged `import_candidate` into canonical thread + message (+ attachments).
  * Shared by single approve (unfiled) and grouped approve (wedding-scoped).
+ *
+ * Suppression guard:
+ *   Before CRM-linking a grouped candidate to its batch `weddingId`, the loaded
+ *   body + subject + Gmail source label are passed through
+ *   `classifyGmailImportCandidate`. When the candidate is promotional / system
+ *   / non-client, the row STILL lands in canonical inbox (operator visibility
+ *   preserved) but `weddingId` is forced to `null` so the batch-created inquiry
+ *   wedding does not swallow the thread. The suppression verdict + reasons are
+ *   persisted in `ai_routing_metadata.suppression` for audit.
  */
 import {
   type GmailAccountTokenCache,
   type GmailThreadFetchCache,
   computeGmailMaterializationBundle,
 } from "./buildGmailMaterializationArtifact.ts";
+import { classifyGmailImportCandidate } from "../suppression/classifyGmailImportCandidate.ts";
 import { parseGmailImportRenderHtmlRefFromMetadata } from "./gmailPersistRenderArtifact.ts";
 import { importGmailAttachmentsForMessage } from "./gmailImportAttachments.ts";
 import type { GmailAttachmentCandidate } from "./gmailMimeAttachments.ts";
@@ -90,6 +100,14 @@ async function recordGmailSecondaryFailuresWithBacklog(
 export function gmailExternalThreadKey(rawProviderThreadId: string): string {
   return `gmail:${rawProviderThreadId}`;
 }
+
+/**
+ * Inbound-From extraction lives in its own pure module so unit tests can
+ * import it without dragging in the Deno `npm:@supabase/...` client.
+ * Re-exported here for backwards compatibility with existing callers.
+ */
+export { readInboundFromHeader } from "./readInboundFromHeader.ts";
+import { readInboundFromHeader } from "./readInboundFromHeader.ts";
 
 export type ApproveMaterialization = {
   body: string;
@@ -181,6 +199,14 @@ export type MaterializeGmailImportCandidateResult =
       /** True when new thread path: `complete_gmail_import_materialize_new_thread` approved the candidate. */
       finalizedCore: boolean;
       messageId?: string;
+      /**
+       * True when the inbound suppression classifier flagged this candidate
+       * as promo / system / non-client. Grouped approval still wants this
+       * signal so it does not force-attach the thread to the batch wedding.
+       */
+      suppressed?: boolean;
+      /** Machine-readable suppression verdict when `suppressed === true`. */
+      suppressionVerdict?: string;
     }
   | { error: string };
 
@@ -259,8 +285,6 @@ export async function materializeGmailImportCandidate(
     .eq("id", connectedAccountId)
     .maybeSingle();
 
-  const senderLabel = (acct?.email as string | undefined)?.trim() || "Gmail";
-
     const title =
       typeof subject === "string" && subject.trim().length > 0
         ? subject.trim().slice(0, 500)
@@ -275,6 +299,52 @@ export async function materializeGmailImportCandidate(
       usedPreparedArtifact,
     } = await loadGmailImportForApprove(row, { gmailAccountTokenCache, gmailThreadFetchCache });
 
+    /**
+     * Real inbound `From` lives in `metadata.gmail_import.inbound_headers.from`
+     * (persisted by `extractSuppressionRelevantInboundHeaders` during bundle
+     * compute). Fall back to the connected-account mailbox only when no header
+     * is recoverable — that is the photographer's own address and is wrong as
+     * an inbound sender, but better than `"Gmail"` for legacy / fallback rows.
+     */
+    const inboundFromHeader = readInboundFromHeader(msgMeta);
+    const senderLabel =
+      inboundFromHeader?.trim() ||
+      (acct?.email as string | undefined)?.trim() ||
+      "Gmail";
+
+    /**
+     * Suppression guard — DO NOT CRM-link promo / system / non-client threads to
+     * the batch-created inquiry wedding. Thread still materializes (canonical
+     * inbox visibility preserved) but `effectiveWeddingId` drops to null so
+     * grouped label imports cannot auto-create inquiry-stage weddings for
+     * newsletters / OTA blasts / automated notifications.
+     *
+     * IMPORTANT: feed the REAL inbound `From` (not the photographer mailbox)
+     * to the classifier so sender local-part / domain heuristics actually fire
+     * for OTA / marketing senders like `email.campaign@sg.booking.com`.
+     */
+    const suppressionClassification = classifyGmailImportCandidate({
+      senderRaw: inboundFromHeader ?? senderLabel,
+      subject: typeof subject === "string" ? subject : null,
+      snippet: typeof row.snippet === "string" ? row.snippet : null,
+      body: bodyText,
+      sourceLabelName,
+    });
+    const suppressed = suppressionClassification.suppressed;
+    const effectiveWeddingId = suppressed ? null : weddingId;
+    const suppressionMetadata = suppressed
+      ? {
+          suppression: {
+            verdict: suppressionClassification.verdict,
+            reasons: suppressionClassification.reasons,
+            confidence: suppressionClassification.confidence,
+            at: now,
+            origin: "gmail_import_materialize",
+            original_grouped_wedding_id: weddingId,
+          },
+        }
+      : {};
+
     const provenance = {
       source: "gmail_label_import" as const,
       import_candidate_id: importCandidateId,
@@ -286,6 +356,7 @@ export async function materializeGmailImportCandidate(
         ? { gmail_label_import_group_id: gmailLabelImportGroupId }
         : {}),
       ...(materializedWeddingId ? { materialized_wedding_id: materializedWeddingId } : {}),
+      ...suppressionMetadata,
     };
 
     const importProvenance: Record<string, unknown> = {
@@ -306,7 +377,7 @@ export async function materializeGmailImportCandidate(
         p_connected_account_id: connectedAccountId,
         p_external_thread_key: externalKey,
         p_thread_title: title,
-        p_thread_wedding_id: weddingId,
+        p_thread_wedding_id: effectiveWeddingId,
         p_last_activity_at: now,
         p_ai_routing_metadata: provenance,
         p_message_body: bodyText,
@@ -574,6 +645,12 @@ export async function materializeGmailImportCandidate(
       needsThreadWeddingIdUpdate: false,
       finalizedCore: true,
       messageId: msgInserted.id as string,
+      ...(suppressed
+        ? {
+            suppressed: true,
+            suppressionVerdict: suppressionClassification.verdict,
+          }
+        : {}),
     };
 }
 

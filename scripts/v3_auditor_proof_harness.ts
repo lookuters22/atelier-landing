@@ -550,9 +550,13 @@ async function main(): Promise<void> {
 
     const parsed = draft ? parseInstructionHistory(draft.instruction_history) : parseInstructionHistory(null);
     const body = draft?.body ?? "";
+    const pendingPlaceholder =
+      "Reply draft pending — generated text will replace this when the writer runs successfully.";
+    const legacyStub = "[Orchestrator draft — clientOrchestratorV1 QA path]";
+    const looksLikePendingOrLegacy = body.includes(pendingPlaceholder) || body.includes(legacyStub);
     const isStubFallback =
-      body.includes("[Orchestrator draft — clientOrchestratorV1 QA path]") &&
-      body.includes("[V3 output auditor] Persona draft rejected");
+      looksLikePendingOrLegacy &&
+      (body.includes("[V3 output auditor]") || (parsed.auditorStepFound && parsed.auditPassed === false));
 
     const auditorEscalations = wait.artifacts.escalations.filter(
       (e) => e.reason_code === "v3_output_auditor_ungrounded_commercial",

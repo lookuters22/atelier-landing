@@ -162,10 +162,13 @@ while (Date.now() < deadline) {
     .order("created_at", { ascending: false })
     .limit(10);
   if (dErr) throw dErr;
-  const marker = "[Orchestrator draft — clientOrchestratorV1 QA path]";
-  found = (drafts ?? []).find(
-    (d) => String(d.body ?? "").includes(marker) && String(d.body ?? "").includes(proofToken),
-  );
+  const pending =
+    "Reply draft pending — generated text will replace this when the writer runs successfully.";
+  const legacy = "[Orchestrator draft — clientOrchestratorV1 QA path]";
+  found = (drafts ?? []).find((d) => {
+    const b = String(d.body ?? "");
+    return (b.includes(pending) || b.includes(legacy)) && b.includes(proofToken);
+  });
   if (found) {
     console.log("Found orchestrator draft:", JSON.stringify(found, null, 2));
     break;

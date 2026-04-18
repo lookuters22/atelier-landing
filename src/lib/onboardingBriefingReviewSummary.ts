@@ -5,7 +5,7 @@ import type { SchedulingActionKey } from "./onboardingActionPermissionMatrixSche
 import type { SchedulingActionPermissionMatrix } from "./onboardingActionPermissionMatrixScheduling.ts";
 import { SCHEDULING_DECISION_CHIP_OPTIONS } from "./onboardingBriefingAuthorityScheduling.ts";
 import { BUSINESS_SCOPE_JSON_SCHEMA_VERSION } from "./onboardingBusinessScopeDeterministic.ts";
-import type { BusinessScopeDeterministicV1 } from "./onboardingBusinessScopeDeterministic.ts";
+import type { BusinessScopeDeterministicV2 } from "./onboardingBusinessScopeDeterministic.ts";
 import type { NonSchedulingAuthorityActionKey } from "./onboardingBriefingAuthorityPlaybook.ts";
 
 /** Plain-language chip labels for `decision_mode` (matches Authority step). */
@@ -42,7 +42,7 @@ export function isIdentitySectionEmpty(id: OnboardingSettingsIdentity): boolean 
 
 /** True when `business_scope_deterministic` was saved with the expected schema version. */
 export function hasExplicitBusinessScopeSnapshot(
-  raw: BusinessScopeDeterministicV1 | undefined,
+  raw: BusinessScopeDeterministicV2 | undefined,
 ): boolean {
   return Boolean(raw && raw.schema_version === BUSINESS_SCOPE_JSON_SCHEMA_VERSION);
 }

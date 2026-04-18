@@ -9,6 +9,7 @@ import {
   parseBriefingVoiceFactsFromSeeds,
   upsertBriefingVoiceSeed,
 } from "@/lib/onboardingBriefingVoiceUi.ts";
+import { useRegisterOnboardingBriefingHeader } from "@/components/onboarding/OnboardingBriefingHeaderContext.tsx";
 import { ScopeSectorCluster } from "@/components/onboarding/ScopeSectorCluster.tsx";
 import { scopeSectorGlassPillBase } from "@/components/onboarding/SectorDonutBubbleField.tsx";
 import { obMotionShell } from "@/components/onboarding/onboardingVisuals.ts";
@@ -32,13 +33,13 @@ const VOICE_STAGE_COPY: Record<VoiceStage, { kicker: string; title: string; hint
   tone: {
     kicker: "Voice",
     title: "Which emotional voice should Ana naturally fall into?",
-    hint: "Pick the primary tone first. The deterministic preview updates so it feels immediate.",
+    hint: "How should your studio sound when it speaks to clients? Pick the tone people should feel in every reply.",
     nextLabel: "Next",
   },
   language: {
     kicker: "Voice",
     title: "What phrases and standard lines should shape the final wording?",
-    hint: "Keep this concise. These are reusable language controls, not a full writing panel.",
+    hint: "A few signature phrases you actually use in real replies. They’ll quietly shape how Ana writes — they don’t have to be long.",
     nextLabel: "Continue",
   },
 };
@@ -92,6 +93,10 @@ export function OnboardingBriefingVoiceStep({
   const [stageIndex, setStageIndex] = useState(0);
   const stage = STAGES[stageIndex]!;
   const copy = VOICE_STAGE_COPY[stage];
+  useRegisterOnboardingBriefingHeader(
+    copy.kicker,
+    `${stageIndex + 1} of ${STAGES.length}`,
+  );
   const navDelay = navRevealDelayForVoiceStage(stage);
   const activeCardRef = useRef<HTMLDivElement>(null);
 
@@ -150,33 +155,8 @@ export function OnboardingBriefingVoiceStep({
           exit="exit"
           variants={voiceSceneMotion}
         >
-          <div className="question-header mx-auto mb-2 flex w-full max-w-2xl shrink-0 flex-wrap items-center justify-between gap-2 text-left sm:mb-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">{copy.kicker}</p>
-              <p className="mt-1 text-[12px] text-white/45">
-                {stageIndex + 1} of {STAGES.length}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5" aria-hidden="true">
-                {STAGES.map((s, i) => (
-                  <span
-                    key={s}
-                    className={cn(
-                      "h-2 w-2 rounded-full transition-colors",
-                      i === stageIndex ? "bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.12)]" : "bg-white/25",
-                    )}
-                  />
-                ))}
-              </div>
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/50">
-                {stageIndex + 1} of {STAGES.length}
-              </span>
-            </div>
-          </div>
-
           <motion.h1
-            className="mx-auto max-w-[34rem] shrink-0 font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:text-[clamp(1.65rem,4.2vw,2.55rem)]"
+            className="mx-auto max-w-[38rem] shrink-0 text-balance font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:text-[clamp(1.65rem,4.2vw,2.55rem)]"
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: VOICE_CINEMATIC_EASE }}
@@ -185,7 +165,7 @@ export function OnboardingBriefingVoiceStep({
           </motion.h1>
 
           <motion.p
-            className="mx-auto mt-2 max-w-xl shrink-0 text-[12px] leading-snug text-white/72 sm:mt-3 sm:text-[13px]"
+            className="mx-auto mt-2 max-w-xl shrink-0 text-pretty text-[13px] leading-relaxed text-white/75 sm:mt-3 sm:text-[14px]"
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.28, ease: VOICE_CINEMATIC_EASE }}

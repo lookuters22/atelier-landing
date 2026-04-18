@@ -1,12 +1,19 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { SectorDonutBubbleField } from "@/components/onboarding/SectorDonutBubbleField.tsx";
-import type { SectorDonutLayoutOptions } from "@/lib/onboardingScopeRadialScatter.ts";
+import type {
+  BubbleSizeBucket,
+  SectorDonutLayoutOptions,
+} from "@/lib/onboardingScopeRadialScatter.ts";
 import { cn } from "@/lib/utils";
 
-/** Same outer shell as `ServicesRadialPebbleCluster` — one consistent field for every scope step. */
+/**
+ * Outer shell for every scope step.
+ * Wider than tall so the force-packed cluster settles into a horizontal
+ * ellipse instead of a circle that eats into the question header / nav row.
+ */
 export const SCOPE_SECTOR_FIELD_SHELL_CLASS =
-  "relative mx-auto w-full max-w-[min(36rem,100%)] overflow-visible py-2 min-h-[min(18rem,38vh)] h-[min(23rem,min(44vh,420px))] sm:min-h-[20rem] sm:h-[min(25rem,min(46vh,440px))]";
+  "relative mx-auto w-full max-w-[min(50rem,100%)] overflow-visible py-1 min-h-[16rem] h-[min(20rem,min(38vh,360px))] sm:min-h-[18rem] sm:h-[min(22rem,min(42vh,380px))]";
 
 export type ScopeSectorClusterProps<T extends string> = {
   itemIds: readonly T[];
@@ -22,6 +29,23 @@ export type ScopeSectorClusterProps<T extends string> = {
   staggerStepMs?: number;
   bubbleMarginClassName?: string;
   orbitLayout?: SectorDonutLayoutOptions;
+  getSizeBucket?: (id: T, index: number) => BubbleSizeBucket;
+  getIsCenterAnchored?: (id: T, index: number) => boolean;
+  /**
+   * Optional per-bubble slot renderer. Returning non-null replaces the
+   * default pill for that bubble while keeping the physics body — used by
+   * the services stage to turn the "+ Your own" bubble into an inline input.
+   */
+  renderItemSlot?: (id: T, index: number) => ReactNode | null | undefined;
+  /**
+   * Optional per-bubble tint. See `SectorDonutBubbleField#getBubbleTint`.
+   * Only the services stage opts in; neutral stages leave it undefined so
+   * the classic dark-glass pills render unchanged.
+   */
+  getBubbleTint?: (
+    id: T,
+    index: number,
+  ) => { primary: string; secondary?: string } | null | undefined;
 } & Omit<ComponentPropsWithoutRef<"div">, "children">;
 
 export function ScopeSectorCluster<T extends string>({
@@ -38,6 +62,10 @@ export function ScopeSectorCluster<T extends string>({
   staggerStepMs,
   bubbleMarginClassName,
   orbitLayout,
+  getSizeBucket,
+  getIsCenterAnchored,
+  renderItemSlot,
+  getBubbleTint,
   className,
   ...divProps
 }: ScopeSectorClusterProps<T>) {
@@ -77,6 +105,10 @@ export function ScopeSectorCluster<T extends string>({
         staggerStepMs={staggerStepMs}
         bubbleMarginClassName={bubbleMarginClassName}
         orbitLayout={orbitLayout}
+        getSizeBucket={getSizeBucket}
+        getIsCenterAnchored={getIsCenterAnchored}
+        renderItemSlot={renderItemSlot}
+        getBubbleTint={getBubbleTint}
       />
     </div>
   );

@@ -13,6 +13,11 @@ import {
 import { logGmailGroupApproveWorkerV1 } from "../../_shared/gmail/gmailImportObservability.ts";
 import { finalizeApprovedImportCandidate } from "../../_shared/gmail/finalizeGmailImportCandidateApproved.ts";
 import { materializeGmailImportCandidate } from "../../_shared/gmail/gmailImportMaterialize.ts";
+import {
+  ensureBatchWeddingForGroup,
+  type LazyWeddingState,
+} from "../../_shared/gmail/gmailLabelImportLazyWedding.ts";
+import { backpatchLazyGroupedImportWeddingLink } from "../../_shared/gmail/backpatchLazyGroupedImportWeddingLink.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { logA4WorkerOpLatencyV1 } from "../../_shared/workerOpLatencyObservability.ts";
 
@@ -32,6 +37,7 @@ type GroupRow = {
   photographer_id: string;
   status: string;
   materialized_wedding_id: string | null;
+  source_label_name: string | null;
   approval_total_candidates: number;
   approval_processed_count: number;
   approval_approved_count: number;
@@ -50,7 +56,7 @@ async function fetchGroup(groupId: string): Promise<GroupRow | null> {
   const { data, error } = await supabaseAdmin
     .from("gmail_label_import_groups")
     .select(
-      "id, photographer_id, status, materialized_wedding_id, approval_total_candidates, approval_processed_count, approval_approved_count, approval_failed_count",
+      "id, photographer_id, status, materialized_wedding_id, source_label_name, approval_total_candidates, approval_processed_count, approval_approved_count, approval_failed_count",
     )
     .eq("id", groupId)
     .maybeSingle();
@@ -151,9 +157,9 @@ async function finalizeGroupTerminalStatus(groupId: string): Promise<void> {
 async function processChunk(params: {
   photographerId: string;
   groupId: string;
-  weddingId: string;
+  lazyWedding: LazyWeddingState;
 }): Promise<{ emptyQueue: boolean }> {
-  const { photographerId, groupId, weddingId } = params;
+  const { photographerId, groupId, lazyWedding } = params;
   const now = new Date().toISOString();
 
   const { data: rows, error } = await supabaseAdmin
@@ -190,13 +196,22 @@ async function processChunk(params: {
     const row = cand as Record<string, unknown>;
     const cid = row.id as string;
 
+    /**
+     * Pass the current lazyWedding id (may be null on the very first
+     * non-suppressed candidate). Suppressed rows always materialize with
+     * `weddingId: null` regardless. Non-suppressed rows that arrive before
+     * lazy creation get `null` here and are backpatched to the lazyWedding id
+     * immediately after creation below.
+     */
+    const passWeddingId = lazyWedding.weddingId;
+
     const result = await materializeGmailImportCandidate(supabaseAdmin, {
       photographerId,
       importCandidateId: cid,
       row,
-      weddingId,
+      weddingId: passWeddingId,
       gmailLabelImportGroupId: groupId,
-      materializedWeddingId: weddingId,
+      materializedWeddingId: passWeddingId,
       now,
       gmailAccountTokenCache,
       gmailThreadFetchCache,
@@ -217,12 +232,72 @@ async function processChunk(params: {
     }
 
     const threadId = result.threadId;
+    const suppressed = result.suppressed === true;
+
+    /**
+     * Lazy batch-wedding creation — only the first non-suppressed candidate
+     * triggers `createGmailLabelImportWedding`. If every candidate is
+     * suppressed, no wedding is ever created and CRM stays clean.
+     */
+    if (!suppressed && !lazyWedding.weddingId) {
+      const ensure = await ensureBatchWeddingForGroup(supabaseAdmin, groupId, photographerId, lazyWedding, now);
+      if ("error" in ensure) {
+        await supabaseAdmin
+          .from("import_candidates")
+          .update({
+            import_approval_error: ensure.error.slice(0, 2000),
+            updated_at: now,
+          })
+          .eq("id", cid)
+          .eq("photographer_id", photographerId);
+        await persistChunkFailureBump(groupId, counterState, cid, ensure.error);
+        continue;
+      }
+
+      /**
+       * The just-materialized thread was created with `wedding_id: null` and
+       * its `ai_routing_metadata` / `import_provenance` JSON has no
+       * `materialized_wedding_id` (because `materializedWeddingId` was null
+       * inside `materializeGmailImportCandidate`). Backpatch all three so the
+       * relational link, the thread provenance JSON, and the candidate
+       * provenance JSON agree on the lazy wedding id. Suppressed candidates
+       * never reach this branch.
+       */
+      if (result.finalizedCore) {
+        const bp = await backpatchLazyGroupedImportWeddingLink({
+          supabaseAdmin,
+          photographerId,
+          threadId,
+          importCandidateId: cid,
+          groupId,
+          weddingId: ensure.weddingId,
+        });
+        if (!bp.ok) {
+          await supabaseAdmin
+            .from("import_candidates")
+            .update({
+              import_approval_error: bp.error.slice(0, 2000),
+              updated_at: now,
+            })
+            .eq("id", cid)
+            .eq("photographer_id", photographerId);
+          await persistChunkFailureBump(groupId, counterState, cid, bp.error);
+          continue;
+        }
+      }
+    }
 
     if (result.finalizedCore) {
       await persistChunkSuccessBump(groupId, counterState);
       continue;
     }
 
+    /**
+     * Suppressed rows must not CRM-link to the batch-created inquiry wedding
+     * even on the reuse-thread path; we keep canonical inbox visibility via
+     * the thread itself, but `threadWeddingId` drops to null and the provenance
+     * records why.
+     */
     const finErr = await finalizeApprovedImportCandidate(supabaseAdmin, {
       importCandidateId: cid,
       photographerId,
@@ -230,11 +305,28 @@ async function processChunk(params: {
       row,
       now,
       extraProvenance: {
-        materialized_wedding_id: weddingId,
+        ...(lazyWedding.weddingId ? { materialized_wedding_id: lazyWedding.weddingId } : {}),
         gmail_label_import_group_id: groupId,
+        ...(suppressed
+          ? {
+              suppression: {
+                verdict: result.suppressionVerdict ?? "promotional_or_marketing",
+                origin: "gmail_import_grouped_reuse",
+                at: now,
+                ...(lazyWedding.weddingId
+                  ? { original_grouped_wedding_id: lazyWedding.weddingId }
+                  : {}),
+              },
+            }
+          : {}),
       },
       clearImportApprovalError: true,
-      threadWeddingId: result.needsThreadWeddingIdUpdate ? weddingId : null,
+      threadWeddingId:
+        suppressed
+          ? null
+          : result.needsThreadWeddingIdUpdate
+          ? lazyWedding.weddingId
+          : null,
     });
 
     if (finErr) {
@@ -310,15 +402,13 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
         });
         return { ok: false as const, reason: "not_approving" as const, status: g.status };
       }
-      if (!g.materialized_wedding_id) {
-        logA4WorkerOpLatencyV1({
-          ...base,
-          ok: false,
-          duration_ms: Date.now() - t0,
-          outcome: "missing_wedding",
-        });
-        return { ok: false as const, reason: "missing_wedding" as const };
-      }
+      /**
+       * Wedding may legitimately be null on first run — it is created lazily
+       * by the chunk loop the first time a non-suppressed candidate appears.
+       * Retry runs after partial approval may already have it set; either is
+       * valid. The `missing_wedding` guard from the earlier eager-creation
+       * design has been removed.
+       */
       logA4WorkerOpLatencyV1({
         ...base,
         ok: true,
@@ -328,7 +418,8 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
       });
       return {
         ok: true as const,
-        weddingId: g.materialized_wedding_id as string,
+        weddingId: (g.materialized_wedding_id as string | null) ?? null,
+        labelName: (g.source_label_name as string | null) ?? null,
         total: g.approval_total_candidates,
       };
     });
@@ -343,7 +434,15 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
       return { ok: false as const, skipped: guard };
     }
 
-    const weddingId = guard.weddingId;
+    /**
+     * Mutable per-run lazy-wedding state. Initialised from whatever the group
+     * row holds (null on fresh approve_group, set after first non-suppressed
+     * candidate or on retry of a partially-approved group).
+     */
+    const lazyWedding: LazyWeddingState = {
+      weddingId: guard.weddingId,
+      labelName: guard.labelName,
+    };
 
     let chunkIndex = 0;
 
@@ -351,7 +450,7 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
       const idx = chunkIndex;
       const r = await step.run(`chunk-${chunkIndex}`, async () => {
         const t0 = Date.now();
-        const out = await processChunk({ photographerId, groupId, weddingId });
+        const out = await processChunk({ photographerId, groupId, lazyWedding });
         logA4WorkerOpLatencyV1({
           worker: WORKER_ID,
           action: "chunk",
@@ -514,7 +613,7 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
     return {
       ok: true as const,
       groupId,
-      weddingId,
+      weddingId: lazyWedding.weddingId,
       chunks: chunkIndex + 1,
     };
   },

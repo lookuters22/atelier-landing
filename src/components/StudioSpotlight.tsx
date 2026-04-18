@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/command";
 import { useAuth } from "@/context/AuthContext";
 import { useWeddings } from "@/hooks/useWeddings";
-import { CONTACTS_DIRECTORY } from "@/data/contactsDirectory";
+import { useDirectoryPeople } from "@/hooks/useDirectoryPeople";
 import { openAnaWithQuery } from "./SupportAssistantWidget";
 
 const OPEN_SPOTLIGHT_EVENT = "studio-spotlight:open";
@@ -72,6 +72,7 @@ export function StudioSpotlight() {
   const navigate = useNavigate();
   const { photographerId } = useAuth();
   const { data: weddings } = useWeddings(photographerId ?? "");
+  const { contacts: directoryContacts } = useDirectoryPeople(photographerId);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -139,13 +140,15 @@ export function StudioSpotlight() {
   const filteredContacts = useMemo(() => {
     if (isAnaScoped || debouncedQuery.length < 2) return [];
     const q = debouncedQuery.toLowerCase();
-    return CONTACTS_DIRECTORY.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.role.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q),
-    ).slice(0, 6);
-  }, [debouncedQuery, isAnaScoped]);
+    return directoryContacts
+      .filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.role.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q),
+      )
+      .slice(0, 6);
+  }, [debouncedQuery, isAnaScoped, directoryContacts]);
 
   return (
     <CommandDialog

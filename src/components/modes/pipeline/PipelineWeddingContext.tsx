@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
 import { WEDDING_THREAD_DRAFT_DEFAULT } from "../../../data/weddingThreads";
 import { MotionTabContent } from "../../../components/motion-primitives";
@@ -27,7 +27,7 @@ import { mapRowToEntry } from "../../../pages/WeddingDetailPage";
 import type { WeddingEntry } from "../../../data/weddingCatalog";
 import { EscalationResolutionPanel } from "../../escalations/EscalationResolutionPanel";
 import { fireDataChanged } from "../../../lib/events";
-import { GmailThreadInlineReplyDock } from "../inbox/GmailThreadInlineReplyDock";
+import { GmailThreadInlineReplyDock, type GmailThreadInlineReplyDockHandle } from "../inbox/GmailThreadInlineReplyDock";
 import { usePipelineMode } from "./PipelineModeContext";
 import { PipelineUrlHydrator } from "./PipelineUrlHydrator";
 
@@ -227,12 +227,16 @@ export function PipelineTimelinePane() {
     detailState,
   } = state;
 
+  const gmailDockRef = useRef<GmailThreadInlineReplyDockHandle>(null);
   const gmailDock =
     threadState.replyComposerMode === "gmail" && threadState.activeThread ? (
       <GmailThreadInlineReplyDock
+        ref={gmailDockRef}
         threadId={threadState.activeThread.id}
         threadTitle={threadState.activeThread.title}
         hasGmailImport
+        inlineMessageLayout
+        suppressIdleReplyActions
         afterSuccessfulSend={async () => {
           fireDataChanged("inbox");
           threadState.refreshActiveThreadMessages();
@@ -289,6 +293,7 @@ export function PipelineTimelinePane() {
                 editDraftInComposer={composerState.editDraftInComposer}
                 draftDefault={threadState.draftDefault ?? DRAFT_DEFAULT}
                 gmailInlineReplyDock={gmailDock}
+                gmailDockRef={gmailDockRef}
                 replyComposerMode={threadState.replyComposerMode}
               />
             </MotionTabContent>
@@ -366,7 +371,7 @@ export function PipelineSidebarCards() {
   const { weddingId, entry, detailState, setTabAndUrl } = state;
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-5">
       {photographerId ? (
         <WeddingManualControlsCard weddingId={weddingId} photographerId={photographerId} />
       ) : null}

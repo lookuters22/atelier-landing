@@ -219,8 +219,13 @@ function heuristicToneVerdict(body: string): { verdict: string; notes: string } 
   if (t.length < 40) {
     return { verdict: "too_short_or_empty", notes: "Draft unexpectedly short." };
   }
-  if (/^\[Orchestrator draft — clientOrchestratorV1 QA path\]/m.test(t) && t.length < 500) {
-    return { verdict: "likely_stub_only", notes: "Stub header with little follow-on prose." };
+  const pendingStub =
+    "Reply draft pending — generated text will replace this when the writer runs successfully.";
+  if (
+    (t.includes(pendingStub) || /^\[Orchestrator draft — clientOrchestratorV1 QA path\]/m.test(t)) &&
+    t.length < 500
+  ) {
+    return { verdict: "likely_stub_only", notes: "Orchestrator pending placeholder or legacy stub — little follow-on prose." };
   }
   if (/\[Studio Name\]|\[studio name\]/i.test(t)) {
     return {

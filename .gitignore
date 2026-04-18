@@ -26,6 +26,9 @@ dist-ssr
 *.sln
 *.sw?
 
+# Service area dataset build (GeoNames zip is ephemeral)
+public/serviceAreaPicker/_cities15000.zip
+
 # Local scratch / old scaffolds
 _tmp/
 _wd.py

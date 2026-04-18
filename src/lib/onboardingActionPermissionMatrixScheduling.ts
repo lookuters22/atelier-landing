@@ -10,6 +10,7 @@ import type {
   OnboardingPlaybookSeed,
   PlaybookRuleInsert,
 } from "./onboardingV4Payload.ts";
+import { PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_MATRIX_V1 } from "./onboardingRuntimeOwnership.ts";
 
 /** Four runtime-resolvable modes (matches `playbook_rules.decision_mode`). */
 export type ActionPermissionDecisionMode =
@@ -81,7 +82,7 @@ export function schedulingActionPermissionMatrixToPlaybookRules(
         action_key,
         decision_mode,
       }),
-      source_type: "onboarding_matrix",
+      source_type: PLAYBOOK_RULE_SOURCE_ONBOARDING_BRIEFING_MATRIX_V1,
       confidence_label: "explicit",
       is_active: true,
     } satisfies PlaybookRuleInsert;

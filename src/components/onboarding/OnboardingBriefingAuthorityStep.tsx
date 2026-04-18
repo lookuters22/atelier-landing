@@ -29,6 +29,7 @@ import type { EscalationBatchingPreference, EscalationImmediateTopicKey } from "
 import { scopeSectorGlassPillBase, scopeSectorGlassPillOn } from "@/components/onboarding/SectorDonutBubbleField.tsx";
 import { obMotionShell } from "@/components/onboarding/onboardingVisuals.ts";
 import { cn } from "@/lib/utils";
+import { useRegisterOnboardingBriefingHeader } from "@/components/onboarding/OnboardingBriefingHeaderContext.tsx";
 
 type AuthorityStage =
   | { kind: "scheduling" }
@@ -105,6 +106,10 @@ export function OnboardingBriefingAuthorityStep({
   const stage = stages[stageIndex]!;
   const navDelay = navRevealDelayForAuthorityStage(stage);
   const activeCardRef = useRef<HTMLDivElement>(null);
+  useRegisterOnboardingBriefingHeader(
+    "Authority",
+    `${stageIndex + 1} of ${stages.length}`,
+  );
 
   const matrix = useMemo(
     () => resolveSchedulingActionPermissionMatrix(payload.scheduling_action_permission_matrix),
@@ -198,18 +203,18 @@ export function OnboardingBriefingAuthorityStep({
     if (stage.kind === "scheduling") {
       return {
         title: "Which scheduling actions can Ana decide without stopping the flow?",
-        hint: "Start with calendar authority. This is usually the first policy area people feel operationally.",
+        hint: "How much can Ana do with your calendar without checking in first? Pick what feels safe — you can tighten or loosen any of this later.",
       };
     }
     if (stage.kind === "group" && activeGroup) {
       return {
         title: activeGroup.title,
-        hint: "Choose the autonomy level for this group only, then we move on to the next board.",
+        hint: "How much should Ana handle on her own in this area? Set it where you’d be comfortable if you were on a slow week.",
       };
     }
     return {
       title: "When Ana escalates, what should hit you immediately?",
-      hint: "Finish with routing so urgent topics feel obvious and everything else follows a clean batching rule.",
+      hint: "When Ana flags something for you, how should it reach you? Decide what’s urgent enough to interrupt — everything else will batch quietly.",
     };
   })();
 
@@ -227,33 +232,8 @@ export function OnboardingBriefingAuthorityStep({
           exit="exit"
           variants={authoritySceneMotion}
         >
-          <div className="question-header mx-auto mb-2 flex w-full max-w-2xl shrink-0 flex-wrap items-center justify-between gap-2 text-left sm:mb-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">Authority</p>
-              <p className="mt-1 text-[12px] text-white/45">
-                {stageIndex + 1} of {stages.length}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5" aria-hidden="true">
-                {stages.map((_, i) => (
-                  <span
-                    key={i}
-                    className={cn(
-                      "h-2 w-2 rounded-full transition-colors",
-                      i === stageIndex ? "bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.12)]" : "bg-white/25",
-                    )}
-                  />
-                ))}
-              </div>
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-white/50">
-                {stageIndex + 1} of {stages.length}
-              </span>
-            </div>
-          </div>
-
           <motion.h1
-            className="mx-auto max-w-[34rem] shrink-0 font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:text-[clamp(1.65rem,4.2vw,2.55rem)]"
+            className="mx-auto max-w-[38rem] shrink-0 text-balance font-serif text-[clamp(1.35rem,3.8vw,2.35rem)] font-normal leading-[1.1] tracking-tight text-white drop-shadow-[0_4px_32px_rgba(0,0,0,0.55)] sm:text-[clamp(1.65rem,4.2vw,2.55rem)]"
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: AUTHORITY_CINEMATIC_EASE }}
@@ -262,7 +242,7 @@ export function OnboardingBriefingAuthorityStep({
           </motion.h1>
 
           <motion.p
-            className="mx-auto mt-2 max-w-xl shrink-0 text-[12px] leading-snug text-white/72 sm:mt-3 sm:text-[13px]"
+            className="mx-auto mt-2 max-w-xl shrink-0 text-pretty text-[13px] leading-relaxed text-white/75 sm:mt-3 sm:text-[14px]"
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.28, ease: AUTHORITY_CINEMATIC_EASE }}
