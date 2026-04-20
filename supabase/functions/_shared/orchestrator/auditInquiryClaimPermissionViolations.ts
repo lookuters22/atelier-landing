@@ -187,6 +187,23 @@ const BOOKING_NEXT_STEP_SOFT_CTA: RegExp[] = [
   /\blet me (?:know|get) (?:a )?time (?:on|for) your calendar\b/i,
 ];
 
+/**
+ * Soft proactive steer toward a live call or “conversation” as the next move — blocked for `explore` and `defer`
+ * (`rank <= 1`). Distinct from {@link BOOKING_NEXT_STEP_SOFT_CTA}: phrasing like “Would a call work…” or
+ * “best way forward would be a conversation” previously slipped past auditors.
+ */
+const BOOKING_NEXT_STEP_PROACTIVE_LIVE_STEER_EXPLORE: RegExp[] = [
+  /\bwould a call work\b/i,
+  /\bwould you be open to (?:a )?call\b/i,
+  /\b(?:the )?best way forward would be (?:a )?conversation\b/i,
+  /\b(?:the )?best way forward would be (?:a )?call\b/i,
+  /\bwe can talk through this on a call\b/i,
+  /\blet(?:'s| us) connect over a call\b/i,
+  /\bhave a conversation about your (?:day|wedding)\b/i,
+  /\b(?:I(?:'d| would) )?love to learn more over a conversation\b/i,
+  /\bhop on (?:a )?(?:quick |brief )?call\b/i,
+];
+
 function unitMatchesAny(unit: string, patterns: RegExp[]): boolean {
   return patterns.some((re) => re.test(unit));
 }
@@ -224,6 +241,20 @@ function bookingNextStepSoftCtaUnit(unit: string): boolean {
   return unitMatchesAny(unit, BOOKING_NEXT_STEP_SOFT_CTA);
 }
 
+function bookingNextStepProactiveLiveSteerUnit(unit: string): boolean {
+  if (
+    /\bcontinue (?:the |our )?conversation (?:here|over email|in (?:this )?thread)\b/i.test(unit) ||
+    /\b(?:happy to |glad to )?(?:continue|keep) (?:the )?(?:conversation|thread) here\b/i.test(unit)
+  ) {
+    return false;
+  }
+  /** Run before {@link bookingNextStepExploreFriendlyUnit}: hedge patterns like `walk through` must not
+   * whitewash “best way forward would be a conversation…”. */
+  if (unitMatchesAny(unit, BOOKING_NEXT_STEP_PROACTIVE_LIVE_STEER_EXPLORE)) return true;
+  if (bookingNextStepExploreFriendlyUnit(unit)) return false;
+  return false;
+}
+
 function bookingNextStepViolates(text: string, level: InquiryClaimPermissionLevel): boolean {
   const r = RANK[level];
   if (r >= 3) return false;
@@ -232,6 +263,7 @@ function bookingNextStepViolates(text: string, level: InquiryClaimPermissionLeve
     if (bookingNextStepConcreteUnit(unit)) return true;
     if (bookingNextStepSettledHabitUnit(unit)) return true;
     if (r <= 1 && bookingNextStepSoftCtaUnit(unit)) return true;
+    if (r <= 1 && bookingNextStepProactiveLiveSteerUnit(unit)) return true;
   }
   return false;
 }

@@ -17,7 +17,12 @@ import {
   PERSONA_FACTS_UNVERIFIED_CLAIMS_SECTION_TITLE,
 } from "./maybeRewriteOrchestratorDraftWithPersona.ts";
 import { buildInquiryClaimPermissions, INQUIRY_CLAIM_PERMISSIONS_SECTION_TITLE } from "./buildInquiryClaimPermissions.ts";
-import { deriveInquiryReplyPlan, INQUIRY_REPLY_STRATEGY_SECTION_TITLE } from "./deriveInquiryReplyPlan.ts";
+import {
+  deriveInquiryReplyPlan,
+  INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER,
+  INQUIRY_REPLY_STRATEGY_SECTION_TITLE,
+} from "./deriveInquiryReplyPlan.ts";
+import { PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER } from "../prompts/personaNoCallPushRealization.ts";
 import type { BudgetStatementInjectionPlan } from "./budgetStatementInjection.ts";
 
 const minimalSendMessageCandidate: OrchestratorProposalCandidate = {
@@ -286,7 +291,9 @@ describe("buildOrchestratorFactsForPersonaWriter — grounding + continuity + br
       }),
     );
     expect(facts).toContain("cta_intensity: none");
-    expect(facts).toContain("cta_intensity_none");
+    expect(facts).toContain(INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER);
+    expect(facts).toContain(PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER);
+    expect(facts).not.toContain("cta_intensity_none — email-first");
     expect(facts).not.toContain("inquiry_turn: consultation_first_cta_call");
   });
 });

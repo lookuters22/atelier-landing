@@ -3,6 +3,9 @@ import {
   buildPersonaAntiBrochureConstraintsSection,
   PERSONA_ABSTRACT_LUXURY_VOICE_SUBSTRING,
   PERSONA_ANTI_BROCHURE_SECTION_TITLE,
+  PERSONA_EMAIL_PARAGRAPH_LAYOUT_SUBSTRING,
+  PERSONA_INBOX_ACK_FOLLOWUP_SUBSTRING,
+  PERSONA_ANTI_AESTHETIC_MIRROR_SUBSTRING,
   PERSONA_BUDGET_DIRECT_FROM_OPENER_SUBSTRING,
   PERSONA_BUDGET_NO_TRANSITION_SUBSTRING,
   PERSONA_BUDGET_OVERRIDE_SECTION_MARKER,
@@ -62,5 +65,32 @@ describe("buildPersonaAntiBrochureConstraintsSection", () => {
     expect(s).toContain("resonates with");
     expect(s).toContain("genuinely excited");
     expect(s).toContain("the best next step would be");
+    expect(s).toContain("emotionally grounded");
+    expect(s).toContain("naturally editorial");
+    expect(s).toContain("shape … a proposal around");
+    expect(s).toContain("how you're imagining the day");
+  });
+
+  it("requires email_draft_lines paragraph layout — greeting not merged with intro", () => {
+    const s = buildPersonaAntiBrochureConstraintsSection();
+    expect(s).toContain(PERSONA_EMAIL_PARAGRAPH_LAYOUT_SUBSTRING);
+    expect(s).toContain("Hi Name, My name is Ana");
+    expect(s).toContain("email_draft_lines");
+  });
+
+  it("discourages compliment inflation and literary follow-ups (final inbox polish)", () => {
+    const s = buildPersonaAntiBrochureConstraintsSection();
+    expect(s).toContain(PERSONA_INBOX_ACK_FOLLOWUP_SUBSTRING);
+    expect(s).toContain("beautiful way to describe");
+    expect(s).toContain("feel like in your minds");
+    expect(s).toMatch(/plain follow-up micro-anchors/i);
+  });
+
+  it("bans aesthetic mirror-writing — no polished paraphrase of client adjectives (anti-AI echo)", () => {
+    const s = buildPersonaAntiBrochureConstraintsSection();
+    expect(s).toContain(PERSONA_ANTI_AESTHETIC_MIRROR_SUBSTRING);
+    expect(s).toMatch(/chains of their aesthetic adjectives/i);
+    expect(s).toMatch(/colon summaries/i);
+    expect(s).toMatch(/elegant, natural, calm, editorial/i);
   });
 });

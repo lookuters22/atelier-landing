@@ -7,6 +7,10 @@ import {
   PERSONA_SOFT_CALL_REALIZATION_SECTION_MARKER,
 } from "../prompts/personaConsultationFirstRealization.ts";
 import {
+  buildNoCallPushEmailFirstUserHintBlock,
+  PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER,
+} from "../prompts/personaNoCallPushRealization.ts";
+import {
   buildWeakAvailabilityInquiryUserHintBlock,
   PERSONA_WEAK_AVAILABILITY_REALIZATION_SECTION_MARKER,
 } from "../prompts/personaWeakAvailabilityRealization.ts";
@@ -14,6 +18,7 @@ import { BUDGET_STATEMENT_PLACEHOLDER } from "../orchestrator/budgetStatementInj
 import {
   INQUIRY_REPLY_BOOKING_PROCESS_FORBIDDEN_MARKER,
   INQUIRY_REPLY_CONSULTATION_FIRST_CALL_MARKER,
+  INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER,
   INQUIRY_REPLY_SOFT_CALL_CTA_MARKER,
   INQUIRY_REPLY_STRATEGY_SECTION_TITLE,
   INQUIRY_REPLY_WEAK_AVAILABILITY_ONLY_MARKER,
@@ -138,8 +143,9 @@ const SUBMIT_PERSONA_DRAFT_TOOL = {
   name: SUBMIT_PERSONA_DRAFT_TOOL_NAME,
   description:
     "Submit the client-facing email and the deterministic committed_terms audit contract. " +
-    "Use one string per paragraph in email_draft_lines (each array element is one paragraph; newlines inside a paragraph are allowed). " +
-    "The runtime joins elements with blank lines for the final body.",
+    "Use **one string per paragraph** in email_draft_lines. The runtime joins array elements with **blank lines**—so to get a real-email look, you **must** use **multiple elements** when the greeting, intro, and body are separate paragraphs. " +
+    "**First-touch default:** element 0 = greeting line only (e.g. \"Hi Elena & Marco,\"); element 1 = Ana intro (e.g. \"My name is Ana, and I'm the client manager at …\"); then short body paragraphs—**never** put \"Hi …, My name is Ana\" in a single element. " +
+    "Newlines inside one element are collapsed to spaces—do not rely on line breaks inside a string for layout.",
   input_schema: {
     type: "object",
     properties: {
@@ -147,7 +153,8 @@ const SUBMIT_PERSONA_DRAFT_TOOL = {
         type: "array",
         items: { type: "string" },
         minItems: 1,
-        description: "Each string is one paragraph; minimum one paragraph.",
+        description:
+          "Each string is one email paragraph. For first-touch: [0] greeting line alone, [1] intro line(s), then substance—do not merge greeting + intro into one string.",
       },
       committed_terms: {
         type: "object",
@@ -198,11 +205,14 @@ export function buildPersonaSystemPrompt(boundary: PersonaWriterInputBoundary): 
     PERSONA_STRICT_STUDIO_BUSINESS_RULES,
     "",
     "You are Ana — the studio’s **client manager** on email: simple, direct, lightly warm, **operational** (scheduling, files, payments, clear answers). Sound like the real human who runs the inbox—not a chatbot, abstract luxury brand voice, or generic CRM assistant. Factual and policy constraints below always govern what you may claim.",
+    "**Anti-mirroring:** Do **not** chain the client’s own aesthetic descriptors (elegant, natural, editorial…) into a polished summary, or restate their \"vibe\" in back-to-back sentences. Acknowledge briefly, then give substance, a constraint, or **one** practical question—not a reflective echo of their wording.",
     "**Voice precedence:** (1) Grounding / verified truth in the user message. (2) **CRITICAL STYLE CONSTRAINTS**—bans abstract luxury and generic-AI filler; keeps unverified-offering discipline. (3) **Style examples** next—real operator cadence (see `docs/v3/ANA_OPERATOR_VOICE_PRECEDENCE.md`). (4) If the user message includes a **briefing_voice_v1** excerpt, use it only when it **fits** (2) and (3); never let onboarding wording override real operator tone or facts.",
     "",
     buildPersonaStyleExamplesPromptSection().trimEnd(),
     "",
     buildPersonaAntiBrochureConstraintsSection().trimEnd(),
+    "",
+    `No-call-push inquiry: when the approved facts include ${INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER}, follow ${PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER} in the user message—email-first; do not steer to a call or “conversation” as the best next move unless the client already asked to talk live.`,
     "",
     `Consultation / call CTA inquiry: when the approved facts include a soft-call marker, follow ${PERSONA_SOFT_CALL_REALIZATION_SECTION_MARKER} in the user message (call as optional only). When they include ${PERSONA_CONSULTATION_FIRST_REALIZATION_SECTION_MARKER} (direct call CTA), that block tightens prose—human invitation, not stacked booking template; do not quote the [INQUIRY_ONBOARDING] example verbatim.`,
     "",
@@ -236,12 +246,15 @@ export function buildPersonaUserMessage(approvedFactualOutput: string): string {
   ].join("\n");
 }
 
-const STRUCTURED_OUTPUT_SUFFIX = [
+/** Appended to persona user message; exported for formatting-regression tests. */
+export const PERSONA_STRUCTURED_OUTPUT_FORMAT_SUFFIX = [
   "",
   "=== OUTPUT FORMAT (mandatory) ===",
   `Call the tool \`${SUBMIT_PERSONA_DRAFT_TOOL_NAME}\` exactly once with your draft.`,
   "Do **not** rely on writing a raw JSON object in freeform assistant text — that path is brittle (illegal control characters break JSON.parse). The tool passes structured input safely.",
-  "Put each paragraph as a separate string in email_draft_lines (one paragraph per array element). The runtime joins them with blank lines for the final email body.",
+  "**Paragraph layout:** Each `email_draft_lines` entry is one paragraph; the runtime joins entries with a blank line. For a normal first-touch reply use **at least 3–4 entries**: (1) `Hi [Names],` **only** — same string must not also contain \"My name is Ana\"; (2) one short intro paragraph (Ana + role + studio); (3–4) one or two short body paragraphs (thanks + answer in plain words); optional last line `Ana`.",
+  "Do **not** cram greeting + intro + thanks + aesthetic commentary into one paragraph string—that reads like AI polish and hides the blank line after the greeting.",
+  "Do **not** fill the body with **adjective-stacking** mirrors of the inbound (lists of their style words, \"aligned with what you told us:\" + a recap of their descriptors). Prefer short acknowledgment → useful content → at most one plain follow-up question.",
   "committed_terms must honestly reflect the audit contract: package_names, deposit_percentage (0–100 or null), travel_miles_included (miles or null).",
 ].join("\n");
 
@@ -484,19 +497,26 @@ export async function draftPersonaStructuredResponse(
           "This turn is **availability-only** per strategy: **booking_process_words: forbidden** — do not write retainer/deposit/contract-sequence/%/payment-milestone language or a heavy consultation-plus-booking funnel; confirm availability in plain language and use at most one light generic next step.",
         ].join("\n")
       : "";
-  const consultationFirstVoiceHint = orchestratorFacts.includes(INQUIRY_REPLY_SOFT_CALL_CTA_MARKER)
-    ? buildSoftCallInquiryUserHintBlock()
-    : orchestratorFacts.includes(INQUIRY_REPLY_CONSULTATION_FIRST_CALL_MARKER)
-      ? buildConsultationFirstInquiryUserHintBlock()
-      : "";
+  const noCallPushVoiceHint = orchestratorFacts.includes(INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER)
+    ? buildNoCallPushEmailFirstUserHintBlock()
+    : "";
+  const consultationFirstVoiceHint =
+    orchestratorFacts.includes(INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER)
+      ? ""
+      : orchestratorFacts.includes(INQUIRY_REPLY_SOFT_CALL_CTA_MARKER)
+        ? buildSoftCallInquiryUserHintBlock()
+        : orchestratorFacts.includes(INQUIRY_REPLY_CONSULTATION_FIRST_CALL_MARKER)
+          ? buildConsultationFirstInquiryUserHintBlock()
+          : "";
   const factsForModel = truncatePersonaOrchestratorFactsForModel(orchestratorFacts);
   const userText =
     buildPersonaUserMessage(factsForModel) +
     budgetSlotHint +
     inquiryStrategyHint +
     availabilityBookingRestrictionHint +
+    noCallPushVoiceHint +
     consultationFirstVoiceHint +
-    STRUCTURED_OUTPUT_SUFFIX;
+    PERSONA_STRUCTURED_OUTPUT_FORMAT_SUFFIX;
 
   const data = await runPersonaAnthropicMessages(apiKey, system, userText, 2048, {
     tools: [SUBMIT_PERSONA_DRAFT_TOOL],

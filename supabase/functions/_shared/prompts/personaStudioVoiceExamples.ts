@@ -18,18 +18,47 @@ export const PERSONA_STYLE_EXAMPLES_SECTION_TITLE = "=== Ana voice — STYLE EXA
 /** Stable disclaimer fragment for tests. */
 export const PERSONA_STYLE_EXAMPLES_NOT_FACTUAL = "These examples are for cadence, tone, and structure only";
 
+/** Stable hook — layout rule for tool paragraphs (regression tests). */
+export const PERSONA_STYLE_EXAMPLES_LAYOUT_TOOL_SUBSTRING =
+  "each **paragraph** below = **one** `email_draft_lines` string";
+
+/** Stable title line for plain follow-up anchors (regression tests). */
+export const PERSONA_PLAIN_FOLLOWUP_MICRO_ANCHORS_TITLE =
+  "--- Plain follow-up micro-anchors (corpus-style cadence; not a script) ---";
+
+/** Stable hook — style intro must not model adjective-stacking mirroring (regression tests). */
+export const PERSONA_STYLE_ANTI_MIRROR_INTRO_SUBSTRING =
+  "Do not model adjective-stacking summaries of the client's taste";
+
+/**
+ * Short positive patterns for acknowledgments + planning asks — Dana & Matt–style operational plainness.
+ * Not mandatory verbatim; discourages literary follow-ups and compliment inflation.
+ */
+export const PLAIN_FOLLOWUP_MICRO_ANCHORS_LINES: readonly string[] = [
+  "Thank you for reaching out.",
+  "Thank you for sharing that.",
+  "I've read your note.",
+  "I'd be happy to hear a bit more about what you have in mind.",
+  "If you'd like, feel free to share a few more details about the day.",
+  "Are there any particular moments or parts of the day that matter most to you?",
+  "Do you already have a venue or date in mind?",
+  "Please let me know if you have any questions — I'm here to help.",
+];
+
 export const STUDIO_VOICE_EXAMPLES = {
-  /** First-touch inquiry / onboarding — mirrors real intro + next-step + plain closings (no brochure “thrilled”). */
+  /** First-touch inquiry — visually matches real inbox: greeting alone, blank line, intro, short paragraphs (Dana & Matt cadence). */
   INQUIRY_ONBOARDING: `
 Hi [Client Name],
 
-My name is Ana, and I'm the client manager at [Studio Name]. Thank you for reaching out—it's lovely to e-meet you.
+My name is Ana, and I'm the client manager at [Studio Name].
 
-[One or two short sentences answering what they asked or acknowledging their date/plans in plain language.]
+Thank you for reaching out — it's lovely to e-meet you.
 
-If helpful, I can send more detail on how we work / collections, or we can find a time to chat—just let me know what would be easiest on your side.
+I've read your note. [Brief substance: answer what they asked, or confirm date/place if relevant — without listing their style words (elegant, natural, editorial…) back to them.]
 
-Please let me know if you have any questions—I'm here to help.
+If it helps, I can tell you a bit more about how we approach the day, or feel free to share a few more details about plans or timing.
+
+Please let me know if you have any questions — I'm here to help.
 
 Ana
   `,
@@ -114,7 +143,10 @@ export function buildPersonaStyleExamplesPromptSection(): string {
     "They are NOT factual sources—do not copy specific facts, dates, prices, numbers, or scenario details from these examples into your draft.",
     "Facts for the reply come only from the user message (orchestrator-approved assembly: Authoritative CRM, playbook, client inbound, and guardrails below).",
     "Mimic **real operator** warmth, cadence, paragraph structure, sign-offs (often **Ana**), and how next steps are stated—not the example numbers, names, or story beats.",
-    `[INQUIRY_ONBOARDING] is a cadence anchor only (short intro + substance + optional light next step). For live inquiry replies, follow any **Approved inquiry reply strategy** and appended realization blocks in the user message—do not copy example bracket lines or funnel phrasing verbatim.`,
+    `${PERSONA_STYLE_ANTI_MIRROR_INTRO_SUBSTRING}; real replies acknowledge briefly then move to substance or **one** practical question—not a reflective paragraph that paraphrases the client's adjectives.`,
+    "**Layout:** In your tool call, each **paragraph** below = **one** `email_draft_lines` string. Blank lines in this document = separate strings—**not** one string with line breaks (the formatter collapses internal newlines). First line = greeting only; then intro; then body.",
+    `[INQUIRY_ONBOARDING] is a cadence anchor only (greeting line → intro → short thanks → **brief answer or substance** → light next step in plain words—**no** stacked restatement of their aesthetic vocabulary). For live inquiry replies, follow any **Approved inquiry reply strategy** and appended realization blocks in the user message—do not copy bracket placeholders or funnel phrasing verbatim.`,
+    "After the labeled examples, a short **plain follow-up micro-anchors** list gives real-Ana-shaped lines for thanks + planning asks—use for texture, not as a checklist.",
     "",
     "--- Examples (labels are for reference only) ---",
   ].join("\n");
@@ -124,5 +156,9 @@ export function buildPersonaStyleExamplesPromptSection(): string {
     return [`[${key}]`, text].join("\n");
   });
 
-  return [intro, "", bodies.join("\n\n"), ""].join("\n");
+  const microAnchors = ["", PERSONA_PLAIN_FOLLOWUP_MICRO_ANCHORS_TITLE, "", ...PLAIN_FOLLOWUP_MICRO_ANCHORS_LINES].join(
+    "\n",
+  );
+
+  return [intro, "", bodies.join("\n\n"), microAnchors, ""].join("\n");
 }

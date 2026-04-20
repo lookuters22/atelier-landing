@@ -20,6 +20,9 @@ const InvoiceSetupPage = lazy(() =>
 const LandingPage = lazy(() =>
   import("./pages/LandingPage/LandingPage").then((m) => ({ default: m.LandingPage })),
 );
+const LandingPage2 = lazy(() =>
+  import("./pages/LandingPage2/LandingPage2").then((m) => ({ default: m.LandingPage2 })),
+);
 
 function LazyFallback() {
   return (
@@ -46,6 +49,14 @@ export default function App() {
         element={
           <Suspense fallback={null}>
             <LandingPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="landing2"
+        element={
+          <Suspense fallback={null}>
+            <LandingPage2 />
           </Suspense>
         }
       />

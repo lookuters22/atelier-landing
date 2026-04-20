@@ -16,6 +16,7 @@ import {
   PERSONA_CONSULTATION_FIRST_REALIZATION_SECTION_MARKER,
   PERSONA_SOFT_CALL_REALIZATION_SECTION_MARKER,
 } from "../prompts/personaConsultationFirstRealization.ts";
+import { PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER } from "../prompts/personaNoCallPushRealization.ts";
 import { PERSONA_WEAK_AVAILABILITY_REALIZATION_SECTION_MARKER } from "../prompts/personaWeakAvailabilityRealization.ts";
 import { buildUnknownPolicySignals } from "./commercialPolicySignals.ts";
 import type { BudgetStatementInjectionPlan } from "./budgetStatementInjection.ts";
@@ -39,6 +40,9 @@ export const INQUIRY_REPLY_SOFT_CALL_CTA_MARKER = "inquiry_turn: consultation_ct
  * {@link PERSONA_WEAK_AVAILABILITY_REALIZATION_SECTION_MARKER} addendum in persona writer.
  */
 export const INQUIRY_REPLY_WEAK_AVAILABILITY_ONLY_MARKER = "inquiry_turn: weak_availability_only_no_booking_detail";
+
+/** Present when tenant `no_call_push` + no call CTA — triggers email-first realization addendum in persona writer. */
+export const INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER = "inquiry_turn: no_call_push_email_first";
 
 export function isWeakAvailabilityInquiryPlan(plan: InquiryReplyPlan): boolean {
   return (
@@ -310,7 +314,15 @@ export function buildInquiryReplyStrategyFactsSection(plan: InquiryReplyPlan): s
       );
     }
   }
-  if (plan.cta_intensity === "none" && plan.cta_type === "none") {
+  const noCallPushEmailFirst =
+    plan.inquiry_first_step_style_effective === "no_call_push" &&
+    plan.cta_type === "none" &&
+    plan.cta_intensity === "none";
+  if (noCallPushEmailFirst) {
+    lines.push(
+      `${INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER} — prose realization only: follow the appended block starting with ${PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER} in this user message (not policy facts).`,
+    );
+  } else if (plan.cta_intensity === "none" && plan.cta_type === "none") {
     lines.push(
       "cta_intensity_none — email-first: answer helpfully in prose; no proactive calendar booking steer or “brief call is the best next step” unless the client already asked to talk live.",
     );

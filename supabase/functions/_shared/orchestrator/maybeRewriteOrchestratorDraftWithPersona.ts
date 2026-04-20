@@ -26,15 +26,11 @@ import {
   redactPlannerPrivateCommercialText,
   redactPersonaWriterFactsBlockForAudience,
 } from "../context/applyAudiencePrivateCommercialRedaction.ts";
-import { auditDraftTerms, buildAuthoritativeCommercialContext } from "./auditDraftCommercialTerms.ts";
 import { auditPlannerPrivateLeakage } from "./auditPlannerPrivateLeakage.ts";
 import { buildUnknownPolicySignals } from "./commercialPolicySignals.ts";
 import { buildOrchestratorStubDraftBody } from "./attemptOrchestratorDraft.ts";
 import { recordV3OutputAuditorEscalation } from "./recordV3OutputAuditorEscalation.ts";
 import {
-  applyBudgetStatementPlaceholder,
-  auditBudgetStatementFinalEmail,
-  auditBudgetStatementPlaceholderPresent,
   buildBudgetStatementSlotFactsSection,
   hasBudgetStatementPlaceholder,
   planBudgetStatementInjection,
@@ -42,12 +38,13 @@ import {
   V3_PRICING_GUARDRAIL_BODY_MARKER,
   type BudgetStatementInjectionPlan,
 } from "./budgetStatementInjection.ts";
-import { auditAvailabilityRestrictedBookingProse } from "./availabilityInquiryBookingGuard.ts";
-import { auditInquiryClaimPermissionViolations } from "./auditInquiryClaimPermissionViolations.ts";
 import {
-  auditUnsupportedBusinessAssertions,
-  buildPersonaVerifiedGroundingBlob,
-} from "./auditUnsupportedBusinessAssertions.ts";
+  resolveOutputAuditorEscalationKind,
+  violationsAreEntirelyAutoRepairable,
+  type OutputAuditorEscalationKind,
+} from "./outputAuditorViolationSeverity.ts";
+import { applyDeterministicInquirySoftConfirmRepairPasses } from "./repairInquiryClaimSoftConfirmDrift.ts";
+import { runOrchestratorPersonaOutputAudits } from "./personaDraftOutputAudit.ts";
 import { buildInquiryClaimPermissions, formatClaimPermissionsForPersonaFacts } from "./buildInquiryClaimPermissions.ts";
 import { isFirstStudioOutboundOnThread } from "./personaFirstTouchContext.ts";
 import {
@@ -429,6 +426,23 @@ async function applyVerifiedMinimumPricingGuardrailBlock(
   };
 }
 
+function operatorNoticeForPersonaAuditorFailure(kind: OutputAuditorEscalationKind): string {
+  switch (kind) {
+    case "inquiry_claim_permission_failed":
+      return "Persona draft did not pass inquiry claim-permission review (after automatic softening when applicable) — body reset to pending placeholder. See violations in this history entry.";
+    case "grounding_review_failed":
+      return "Persona draft did not pass business-assertion grounding review — body reset to pending placeholder. See violations in this history entry.";
+    case "availability_claim_failed":
+      return "Persona draft did not pass availability / booking-process policy for this inquiry turn — body reset to pending placeholder. See violations in this history entry.";
+    case "commercial_grounding_failed":
+      return "Persona draft did not pass automated commercial / terms grounding review — body reset to pending placeholder. See violations in this history entry.";
+    case "persona_structured_output":
+      return "Persona writer structured output failed — body reset to pending placeholder.";
+    case "planner_private_leak":
+      return "Planner-private wording was not allowed for this audience — body reset to pending placeholder.";
+  }
+}
+
 export function shouldRewriteOrchestratorDraftWithPersona(): boolean {
   const explicit = Deno.env.get("ORCHESTRATOR_CLIENT_V1_PERSONA_DRAFT_BODY")?.trim().toLowerCase();
   if (explicit === "0" || explicit === "false") return false;
@@ -595,41 +609,46 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
   }
 
   const emailFromModel = structured.email_draft;
-  let emailDraft = emailFromModel;
-  const budgetViolations: string[] = [];
-  if (budgetPlan.mode === "inject") {
-    const missingSlot = auditBudgetStatementPlaceholderPresent(emailDraft);
-    if (missingSlot.length === 0) {
-      emailDraft = applyBudgetStatementPlaceholder(emailDraft, budgetPlan.approvedParagraph);
-    } else {
-      budgetViolations.push(...missingSlot);
-    }
-    budgetViolations.push(...auditBudgetStatementFinalEmail(emailDraft, budgetPlan));
-  }
-  structured = { ...structured, email_draft: emailDraft };
 
-  const authoritative = buildAuthoritativeCommercialContext(params.decisionContext, params.playbookRules);
-  const baseAudit = auditDraftTerms(structured.committed_terms, authoritative, structured.email_draft);
-  const availabilityViolations = auditAvailabilityRestrictedBookingProse(structured.email_draft, inquiryReplyPlan);
-  const verifiedGrounding = buildPersonaVerifiedGroundingBlob(
-    params.decisionContext,
-    params.playbookRules,
-    studioId,
-  );
-  const unsupportedAssertionViolations = auditUnsupportedBusinessAssertions(structured.email_draft, verifiedGrounding);
-  const inquiryClaimPermissionViolations = auditInquiryClaimPermissionViolations(
-    structured.email_draft,
+  const repairHistory: Record<string, unknown>[] = [];
+  let auditResult = runOrchestratorPersonaOutputAudits({
+    structured,
+    budgetPlan,
+    inquiryReplyPlan,
     inquiryClaimPermissions,
-  );
-  const mergedViolations = [
-    ...(baseAudit.isValid ? [] : baseAudit.violations),
-    ...budgetViolations,
-    ...availabilityViolations,
-    ...unsupportedAssertionViolations,
-    ...inquiryClaimPermissionViolations,
-  ];
+    decisionContext: params.decisionContext,
+    playbookRules: params.playbookRules,
+    studioIdentityExcerpt: studioId,
+  });
+
+  while (
+    auditResult.mergedViolations.length > 0 &&
+    violationsAreEntirelyAutoRepairable(auditResult.mergedViolations)
+  ) {
+    if (repairHistory.length >= 2) break;
+    const { text, changed } = applyDeterministicInquirySoftConfirmRepairPasses(auditResult.structured.email_draft, 2);
+    if (!changed) break;
+    repairHistory.push({
+      step: "v3_inquiry_claim_soft_confirm_deterministic_repair",
+      pass: repairHistory.length + 1,
+    });
+    auditResult = runOrchestratorPersonaOutputAudits({
+      structured: { ...auditResult.structured, email_draft: text },
+      budgetPlan,
+      inquiryReplyPlan,
+      inquiryClaimPermissions,
+      decisionContext: params.decisionContext,
+      playbookRules: params.playbookRules,
+      studioIdentityExcerpt: studioId,
+    });
+  }
+
+  structured = auditResult.structured;
+  const mergedViolations = auditResult.mergedViolations;
+  const unsupportedAssertionViolations = auditResult.unsupportedAssertionViolations;
+  const inquiryClaimPermissionViolations = auditResult.inquiryClaimPermissionViolations;
   const audit =
-    mergedViolations.length === 0 ? baseAudit : { isValid: false as const, violations: mergedViolations };
+    mergedViolations.length === 0 ? { isValid: true as const } : { isValid: false as const, violations: mergedViolations };
 
   const enforceClientSafeProse = params.decisionContext.audience.clientVisibleForPrivateCommercialRedaction;
   const leakAudit = auditPlannerPrivateLeakage(structured.email_draft, enforceClientSafeProse);
@@ -679,6 +698,8 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
       params.decisionContext.audience,
     );
 
+    const escalationKind = resolveOutputAuditorEscalationKind(audit.violations);
+
     let escalationId: string | null = null;
     if (params.threadId) {
       const esc = await recordV3OutputAuditorEscalation(supabase, {
@@ -688,6 +709,7 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
         violations: audit.violations,
         draftId: params.draftAttempt.draftId,
         variant: "commercial",
+        escalationKind,
       });
       escalationId = esc?.id ?? null;
     }
@@ -695,6 +717,7 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
     const nextHistory = [
       ...prior,
       personaStep,
+      ...repairHistory,
       {
         step: "v3_output_auditor_unsupported_business_assertions",
         passed: unsupportedAssertionViolations.length === 0,
@@ -712,8 +735,8 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
         passed: false,
         violations: audit.violations,
         escalation_id: escalationId,
-        operator_notice:
-          "Persona draft did not pass automated commercial / grounding review — body reset to pending placeholder. See violations in this history entry.",
+        escalation_kind: escalationKind,
+        operator_notice: operatorNoticeForPersonaAuditorFailure(escalationKind),
       },
     ];
 
@@ -763,6 +786,7 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
     const nextHistory = [
       ...prior,
       personaStep,
+      ...repairHistory,
       { step: "v3_output_auditor_unsupported_business_assertions", passed: true },
       { step: "v3_output_auditor_inquiry_claim_permissions", passed: true },
       { step: "v3_output_auditor_commercial_terms", passed: true },
@@ -800,6 +824,7 @@ export async function maybeRewriteOrchestratorDraftWithPersona(
   const nextHistory = [
     ...prior,
     personaStep,
+    ...repairHistory,
     {
       step: "v3_output_auditor_unsupported_business_assertions",
       passed: true,

@@ -22,11 +22,13 @@ import {
   buildInquiryReplyStrategyFactsSection,
   INQUIRY_REPLY_BOOKING_PROCESS_FORBIDDEN_MARKER,
   INQUIRY_REPLY_CONSULTATION_FIRST_CALL_MARKER,
+  INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER,
   INQUIRY_REPLY_SOFT_CALL_CTA_MARKER,
   INQUIRY_REPLY_STRATEGY_SECTION_TITLE,
   INQUIRY_REPLY_WEAK_AVAILABILITY_ONLY_MARKER,
   isWeakAvailabilityInquiryPlan,
 } from "./deriveInquiryReplyPlan.ts";
+import { PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER } from "../prompts/personaNoCallPushRealization.ts";
 import { PERSONA_WEAK_AVAILABILITY_REALIZATION_SECTION_MARKER } from "../prompts/personaWeakAvailabilityRealization.ts";
 import type { BudgetStatementInjectionPlan } from "./budgetStatementInjection.ts";
 import { buildInquiryClaimPermissions, INQUIRY_CLAIM_PERMISSIONS_SECTION_TITLE } from "./buildInquiryClaimPermissions.ts";
@@ -235,7 +237,9 @@ describe("deriveInquiryReplyPlan", () => {
     const facts = buildInquiryReplyStrategyFactsSection(p);
     expect(facts).not.toContain(INQUIRY_REPLY_CONSULTATION_FIRST_CALL_MARKER);
     expect(facts).not.toContain(INQUIRY_REPLY_SOFT_CALL_CTA_MARKER);
-    expect(facts).toContain("cta_intensity_none");
+    expect(facts).toContain(INQUIRY_REPLY_NO_CALL_PUSH_EMAIL_FIRST_MARKER);
+    expect(facts).toContain(PERSONA_NO_CALL_PUSH_REALIZATION_SECTION_MARKER);
+    expect(facts).not.toContain("cta_intensity_none — email-first");
   });
 
   it("soft_call first-touch keeps call CTA with soft intensity", () => {

@@ -222,5 +222,57 @@ describe("auditInquiryClaimPermissionViolations", () => {
       );
       expect(v.filter((x) => x.includes("booking_next_step"))).toEqual([]);
     });
+
+    it("explore: flags soft proactive live-call / conversation steer (no_call_push audit gap)", () => {
+      const perms = confirmExceptBookingExplore();
+      const bad = [
+        "Would a call work for you in the coming weeks?",
+        "The best way forward would be a conversation where we can walk through what matters.",
+        "Would you be open to a call next week?",
+        "I'd love to learn more over a conversation when you have a moment.",
+        "Let's connect over a call to align on scope.",
+        "We can talk through this on a call if that helps.",
+        "Have a conversation about your day — happy to hear more.",
+      ];
+      for (const d of bad) {
+        expect(
+          auditInquiryClaimPermissionViolations(d, perms).some((x) => x.includes("booking_next_step")),
+          d,
+        ).toBe(true);
+      }
+    });
+
+    it("explore: allows email-first continuation without live-call steer", () => {
+      const perms = confirmExceptBookingExplore();
+      const ok = [
+        "If helpful, feel free to share a bit more about the day you're planning.",
+        "I'd be happy to learn more about what you have in mind.",
+        "Please let me know if you'd like to share any more details.",
+        "We can continue the conversation here and I'll help however I can.",
+        "Happy to keep the thread going by email whenever it helps.",
+      ];
+      for (const d of ok) {
+        expect(auditInquiryClaimPermissionViolations(d, perms).filter((x) => x.includes("booking_next_step")), d).toEqual(
+          [],
+        );
+      }
+    });
+
+    it("soft_confirm: proactive 'Would a call work' still allowed (rank 2)", () => {
+      const perms = basePermissions({
+        availability: "confirm",
+        destination_fit: "confirm",
+        destination_logistics: "confirm",
+        offering_fit: "confirm",
+        proposal_process: "confirm",
+        deliverable_inclusions: "confirm",
+        booking_next_step: "soft_confirm",
+      });
+      const v = auditInquiryClaimPermissionViolations(
+        "Would a call work for you in the coming weeks if that would help?",
+        perms,
+      );
+      expect(v.filter((x) => x.includes("booking_next_step"))).toEqual([]);
+    });
   });
 });
