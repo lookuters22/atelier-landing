@@ -445,6 +445,10 @@ export function buildAiRoutingMetadataForUnresolved(input: {
 /**
  * Unlinked mail classified by LLM but no wedding to attach — visibility-first, no worker implied.
  * `confidence_score` / `reasoning` populated when the triage model exposes them (future).
+ *
+ * Legacy disposition label — kept for backward compatibility with rows persisted before the
+ * non-wedding business inquiry policy router shipped. New callers should prefer
+ * {@link buildAiRoutingMetadataNonWeddingBusinessInquiry} once policy has been evaluated.
  */
 export function buildAiRoutingMetadataUnlinkedHumanNoRoute(input: {
   llmIntent: TriageIntent;
@@ -461,6 +465,43 @@ export function buildAiRoutingMetadataUnlinkedHumanNoRoute(input: {
   if (input.reasoning != null && String(input.reasoning).trim()) {
     out.reasoning = String(input.reasoning).slice(0, 2000);
   }
+  return out;
+}
+
+/**
+ * Distinct classification bucket for an unlinked human message that the LLM classified as a
+ * **non-wedding business inquiry** (e.g. travel sessions, commercial shoots, portraits). Separate
+ * from promo / automated / bulk suppression (`promo_automated`) and from the pre-policy
+ * `unresolved_human` label. Emitted by the non-wedding business inquiry router after it evaluates
+ * the photographer's playbook rules.
+ */
+export type NonWeddingBusinessInquiryPolicyDecision =
+  | "allowed_auto"
+  | "allowed_draft"
+  | "disallowed_decline"
+  | "unclear_operator_review";
+
+export function buildAiRoutingMetadataNonWeddingBusinessInquiry(input: {
+  llmIntent: TriageIntent;
+  dispatchIntent: TriageIntent;
+  policyDecision: NonWeddingBusinessInquiryPolicyDecision;
+  matchedPlaybookRuleId: string | null;
+  matchedPlaybookActionKey: string | null;
+  reasonCode: string;
+  draftId?: string | null;
+  escalationId?: string | null;
+}): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    classified_intent: input.llmIntent,
+    dispatch_intent: input.dispatchIntent,
+    routing_disposition: "non_wedding_business_inquiry",
+    policy_decision: input.policyDecision,
+    matched_playbook_rule_id: input.matchedPlaybookRuleId,
+    matched_playbook_action_key: input.matchedPlaybookActionKey,
+    reason_code: input.reasonCode,
+  };
+  if (input.draftId) out.seeded_draft_id = input.draftId;
+  if (input.escalationId) out.operator_review_escalation_id = input.escalationId;
   return out;
 }
 

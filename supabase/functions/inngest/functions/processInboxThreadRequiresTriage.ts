@@ -10,6 +10,7 @@ import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { insertBoundedUnresolvedMatchApprovalEscalation } from "../../_shared/triage/boundedUnresolvedMatchApprovalEscalation.ts";
 import {
   buildAiRoutingMetadataForUnresolved,
+  buildAiRoutingMetadataNonWeddingBusinessInquiry,
   buildAiRoutingMetadataUnlinkedHumanNoRoute,
   deriveEmailIngressRouting,
   enforceStageGate,
@@ -19,6 +20,7 @@ import {
   type EmailIngressIdentity,
   type MatchmakerStepResult,
 } from "../../_shared/triage/emailIngressClassification.ts";
+import { routeNonWeddingBusinessInquiry } from "../../_shared/triage/nonWeddingBusinessInquiryRouter.ts";
 import { evaluatePreLlmInboundEmail } from "../../_shared/triage/preLlmEmailRouting.ts";
 import { applyUnlinkedWeddingLeadIntakeBoost } from "../../_shared/triage/unlinkedWeddingLeadIntakeBoost.ts";
 import {
@@ -204,12 +206,52 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
       nearMatchForApproval,
     });
 
-    const humanNoRouteMeta =
-      !finalWeddingId && !linkedProjectAtStart && llmIntent !== "intake" && !nearMatchForApproval
+    const shouldRouteNonWeddingBusinessInquiry =
+      !finalWeddingId &&
+      !linkedProjectAtStart &&
+      llmIntent !== "intake" &&
+      !nearMatchForApproval &&
+      !matchSuggestionMeta;
+
+    const nonWeddingBusinessInquiryOutcome = await step.run(
+      "route-non-wedding-business-inquiry",
+      async () => {
+        if (!shouldRouteNonWeddingBusinessInquiry || !finalPhotographerId) {
+          return null;
+        }
+        return await routeNonWeddingBusinessInquiry(supabaseAdmin, {
+          photographerId: finalPhotographerId,
+          threadId,
+          llmIntent,
+          dispatchIntent,
+          channel: "email",
+          senderEmail: senderRaw || "",
+          body,
+        });
+      },
+    );
+
+    const nonWeddingBusinessInquiryMeta = nonWeddingBusinessInquiryOutcome
+      ? buildAiRoutingMetadataNonWeddingBusinessInquiry({
+          llmIntent,
+          dispatchIntent,
+          policyDecision: nonWeddingBusinessInquiryOutcome.decision,
+          matchedPlaybookRuleId: nonWeddingBusinessInquiryOutcome.matchedPlaybookRuleId,
+          matchedPlaybookActionKey: nonWeddingBusinessInquiryOutcome.matchedPlaybookActionKey,
+          reasonCode: nonWeddingBusinessInquiryOutcome.reasonCode,
+          draftId: nonWeddingBusinessInquiryOutcome.draftId,
+          escalationId: nonWeddingBusinessInquiryOutcome.escalationId,
+        })
+      : null;
+
+    // Legacy label retained only when policy router did not run (e.g. missing photographer id).
+    const legacyHumanNoRouteMeta =
+      shouldRouteNonWeddingBusinessInquiry && !nonWeddingBusinessInquiryMeta
         ? buildAiRoutingMetadataUnlinkedHumanNoRoute({ llmIntent })
         : null;
 
-    const routingMetadata = matchSuggestionMeta ?? humanNoRouteMeta;
+    const routingMetadata =
+      matchSuggestionMeta ?? nonWeddingBusinessInquiryMeta ?? legacyHumanNoRouteMeta;
 
     await step.run("persist-thread-routing", async () => {
       if (linkedProjectAtStart) {
@@ -262,6 +304,18 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
     }
 
     if (dispatchIntent !== "intake" && !finalWeddingId) {
+      if (nonWeddingBusinessInquiryOutcome) {
+        return {
+          status: "non_wedding_business_inquiry_routed" as const,
+          threadId,
+          dispatchIntent,
+          llmIntent,
+          routingMetadata,
+          non_wedding_business_inquiry: nonWeddingBusinessInquiryOutcome,
+          wedding_resolution_trace: weddingResolutionTrace,
+          traceId,
+        };
+      }
       return {
         status: "metadata_only" as const,
         threadId,

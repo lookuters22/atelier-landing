@@ -134,12 +134,14 @@ import { applyUnlinkedWeddingLeadIntakeBoost } from "../../_shared/triage/unlink
 import { insertBoundedUnresolvedMatchApprovalEscalation } from "../../_shared/triage/boundedUnresolvedMatchApprovalEscalation.ts";
 import {
   buildAiRoutingMetadataForUnresolved,
+  buildAiRoutingMetadataNonWeddingBusinessInquiry,
   deriveEmailIngressRouting,
   type MatchmakerStepResult,
   resolveDeterministicIdentity,
   runConditionalMatchmakerForEmail,
   enforceStageGate,
 } from "../../_shared/triage/emailIngressClassification.ts";
+import { routeNonWeddingBusinessInquiry } from "../../_shared/triage/nonWeddingBusinessInquiryRouter.ts";
 import {
   orchestratorInboundSenderFields,
   runMainPathEmailDispatch,
@@ -594,13 +596,72 @@ export const triageFunction = inngest.createFunction(
 
     // ── Failsafe: Unfiled Inbox ──────────────────────────────────
     // With current `enforceStageGate`, no deterministic wedding forces `intake`, so this branch is
-    // normally unreachable; kept as a safety valve if gate logic changes. See UNFILED_UNRESOLVED_MATCHING_SLICE.md.
+    // normally unreachable on the legacy main path; kept as a safety valve if gate logic changes.
+    // When reached (e.g. gate is relaxed in future), delegate to the non-wedding business inquiry
+    // policy router instead of silently returning unfiled. See UNFILED_UNRESOLVED_MATCHING_SLICE.md.
     if (dispatchIntent !== "intake" && !finalWeddingId) {
       const retirementDispatchObservabilityUnfiled = buildUnfiledEarlyExitRetirementDispatchV1({
         reply_channel: replyChannel === "web" ? "web" : "email",
         dispatch_intent: dispatchIntent,
       });
       logRetirementDispatchV1(retirementDispatchObservabilityUnfiled);
+
+      const nonWeddingBusinessInquiryOutcome = await step.run(
+        "route-non-wedding-business-inquiry",
+        async () => {
+          if (!finalPhotographerId || nearMatchForApproval) return null;
+          return await routeNonWeddingBusinessInquiry(supabaseAdmin, {
+            photographerId: finalPhotographerId,
+            threadId: threadInfo.threadId,
+            llmIntent,
+            dispatchIntent,
+            channel: replyChannel === "web" ? "web" : "email",
+            senderEmail: sender || "",
+            body,
+          });
+        },
+      );
+
+      if (nonWeddingBusinessInquiryOutcome) {
+        const updatedRoutingMetadata = buildAiRoutingMetadataNonWeddingBusinessInquiry({
+          llmIntent,
+          dispatchIntent,
+          policyDecision: nonWeddingBusinessInquiryOutcome.decision,
+          matchedPlaybookRuleId: nonWeddingBusinessInquiryOutcome.matchedPlaybookRuleId,
+          matchedPlaybookActionKey: nonWeddingBusinessInquiryOutcome.matchedPlaybookActionKey,
+          reasonCode: nonWeddingBusinessInquiryOutcome.reasonCode,
+          draftId: nonWeddingBusinessInquiryOutcome.draftId,
+          escalationId: nonWeddingBusinessInquiryOutcome.escalationId,
+        });
+
+        await step.run("persist-non-wedding-business-inquiry-routing-metadata", async () => {
+          const { error } = await supabaseAdmin
+            .from("threads")
+            .update({ ai_routing_metadata: updatedRoutingMetadata as Record<string, unknown> })
+            .eq("id", threadInfo.threadId)
+            .eq("photographer_id", finalPhotographerId);
+          if (error) throw new Error(error.message);
+        });
+
+        return {
+          status: "non_wedding_business_inquiry_routed",
+          sender,
+          intent: dispatchIntent,
+          llmIntent,
+          reply_channel: replyChannel,
+          threadId: threadInfo.threadId,
+          retirement_dispatch_observability_v1: retirementDispatchObservabilityUnfiled,
+          matchSuggestion: updatedRoutingMetadata,
+          non_wedding_business_inquiry: nonWeddingBusinessInquiryOutcome,
+          wedding_resolution_trace: {
+            ...weddingResolutionTrace,
+            triage_unfiled_early_exit: true,
+            non_wedding_business_inquiry_routed: true,
+          },
+          orchestrator_client_v1_live_cutover: getOrchestratorClientV1LiveCutoverReadiness(),
+        };
+      }
+
       return {
         status: "unfiled",
         sender,
