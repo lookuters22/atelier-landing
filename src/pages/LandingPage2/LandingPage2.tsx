@@ -886,7 +886,7 @@ function LandingPage2Content() {
                   {splitWords("Questions, ").map((w, i) => (<span key={`q1${i}`} className="word">{w}</span>))}
                   <span className="word"><span className="serif-em">answered gently.</span></span>
                 </h2>
-                <p className="section-lead reveal-up">Still deciding? The answers below are the ones studios ask in the first call. If something else is on your mind, write to <a href="mailto:hello@ana.studio" style={{ color: "var(--fg-1)", textDecoration: "underline", textUnderlineOffset: "3px" }}>hello@ana.studio</a>.</p>
+                <p className="section-lead reveal-up">Still deciding? The answers below are the ones studios ask in the first call. If something else is on your mind, write to <a href="mailto:hello@meetana.com" style={{ color: "var(--fg-1)", textDecoration: "underline", textUnderlineOffset: "3px" }}>hello@meetana.com</a>.</p>
               </div>
 
               <div className="faq-list">
@@ -936,7 +936,7 @@ function LandingPage2Content() {
               <a href="#voice">Voice</a>
               <a href="#moments">Craft</a>
               <a href="#faq">FAQ</a>
-              <a href="mailto:hello@ana.studio">hello@ana.studio</a>
+              <a href="mailto:hello@meetana.com">hello@meetana.com</a>
             </div>
             <div className="footer-legal">© 2026 · Ana Studio · Made quietly</div>
           </div>
