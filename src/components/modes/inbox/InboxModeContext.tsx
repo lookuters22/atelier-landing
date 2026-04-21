@@ -27,6 +27,10 @@ interface InboxModeState {
   clearSelection: () => void;
   /** Return to list view without clearing nav filters or search (thread detail → list). */
   backToList: () => void;
+  /** Two-column list + thread: when false, list spans full center width; selection may remain for row highlight. */
+  threadDetailOpen: boolean;
+  /** Hide thread column; keep selected thread for list highlight. */
+  collapseThreadDetail: () => void;
 
   inboxFolder: InboxFolder;
   setInboxFolder: (f: InboxFolder) => void;
@@ -36,6 +40,11 @@ interface InboxModeState {
   setProjectFilterWeddingId: (id: string | null) => void;
   gmailLabelFilterId: string | null;
   setGmailLabelFilterId: (id: string | null) => void;
+  /**
+   * Left rail: `Primary` vs `All mail` (both `inbox` folder in product — matches static HTML two-row inbox scope).
+   */
+  inboxMailScope: "primary" | "all_mail";
+  setInboxMailScope: (s: "primary" | "all_mail") => void;
   /** New message compose (scratch) — separate from thread reply. */
   scratchComposeOpen: boolean;
   setScratchComposeOpen: (open: boolean) => void;
@@ -52,12 +61,15 @@ export function InboxModeProvider({ children }: { children: ReactNode }) {
   const [listTab, setListTab] = useState<InboxListTab>("all");
   const [projectFilterWeddingId, setProjectFilterWeddingId] = useState<string | null>(null);
   const [gmailLabelFilterId, setGmailLabelFilterId] = useState<string | null>(null);
+  const [inboxMailScope, setInboxMailScope] = useState<"primary" | "all_mail">("primary");
   const [scratchComposeOpen, setScratchComposeOpen] = useState(false);
+  const [threadDetailOpen, setThreadDetailOpen] = useState(true);
 
   const selectThread = useCallback((t: UnfiledThread) => {
     setInboxUrlNotice(null);
     setPendingInboxPipelineThreadId(null);
     setScratchComposeOpen(false);
+    setThreadDetailOpen(true);
     setSelection({ kind: "thread", thread: t });
   }, []);
 
@@ -65,6 +77,7 @@ export function InboxModeProvider({ children }: { children: ReactNode }) {
   const selectProject = useCallback((id: string, name: string) => {
     setInboxUrlNotice(null);
     setScratchComposeOpen(false);
+    setThreadDetailOpen(true);
     setSelection({ kind: "project", projectId: id, projectName: name });
   }, []);
 
@@ -72,12 +85,19 @@ export function InboxModeProvider({ children }: { children: ReactNode }) {
     setInboxUrlNotice(null);
     setPendingInboxPipelineThreadId(null);
     setScratchComposeOpen(false);
+    setThreadDetailOpen(true);
     setSelection({ kind: "none" });
   }, []);
 
   const backToList = useCallback(() => {
+    setThreadDetailOpen(true);
     setSelection({ kind: "none" });
   }, []);
+
+  const collapseThreadDetail = useCallback(() => {
+    if (selection.kind !== "thread") return;
+    setThreadDetailOpen(false);
+  }, [selection.kind]);
 
   return (
     <Ctx.Provider
@@ -91,6 +111,8 @@ export function InboxModeProvider({ children }: { children: ReactNode }) {
         selectProject,
         clearSelection,
         backToList,
+        threadDetailOpen,
+        collapseThreadDetail,
         inboxFolder,
         setInboxFolder,
         listTab,
@@ -99,6 +121,8 @@ export function InboxModeProvider({ children }: { children: ReactNode }) {
         setProjectFilterWeddingId,
         gmailLabelFilterId,
         setGmailLabelFilterId,
+        inboxMailScope,
+        setInboxMailScope,
         scratchComposeOpen,
         setScratchComposeOpen,
       }}

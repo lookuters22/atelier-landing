@@ -9,10 +9,19 @@ export type AgentContext = {
   crmSnapshot: CrmSnapshot;
   recentMessages: Array<Record<string, unknown>>;
   threadSummary: string | null;
+  /**
+   * Distinct `thread_participants.person_id` for this thread (reply-mode person memory; Slice 4).
+   * Empty when there is no thread or no linked participants.
+   */
+  replyModeParticipantPersonIds: string[];
   memoryHeaders: Array<{
     id: string;
     /** Null = tenant-wide memory; set when row is scoped to one wedding. */
     wedding_id: string | null;
+    /** Set when `scope === 'person'` (`memories.person_id`). */
+    person_id: string | null;
+    /** Production memory scope (`memories.scope`). */
+    scope: "project" | "person" | "studio";
     type: string;
     title: string;
     summary: string;

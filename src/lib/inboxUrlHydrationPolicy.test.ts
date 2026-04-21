@@ -13,6 +13,7 @@ describe("shouldStripInboxUrlAfterDraftReviewHydration", () => {
         draftsFetchError: false,
         draftFound: true,
         hasUsableWeddingId: true,
+        hasThreadBackedHandoff: true,
       }),
     ).toBe(false);
   });
@@ -23,6 +24,7 @@ describe("shouldStripInboxUrlAfterDraftReviewHydration", () => {
         draftsFetchError: true,
         draftFound: false,
         hasUsableWeddingId: false,
+        hasThreadBackedHandoff: false,
       }),
     ).toBe(true);
   });
@@ -33,16 +35,29 @@ describe("shouldStripInboxUrlAfterDraftReviewHydration", () => {
         draftsFetchError: false,
         draftFound: false,
         hasUsableWeddingId: false,
+        hasThreadBackedHandoff: false,
       }),
     ).toBe(true);
   });
 
-  it("strips when draft has no usable wedding (missing wedding notice)", () => {
+  it("does not strip when draft has no wedding but has thread-backed unfiled handoff", () => {
     expect(
       shouldStripInboxUrlAfterDraftReviewHydration({
         draftsFetchError: false,
         draftFound: true,
         hasUsableWeddingId: false,
+        hasThreadBackedHandoff: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("strips when draft has no wedding and no thread id (cannot open)", () => {
+    expect(
+      shouldStripInboxUrlAfterDraftReviewHydration({
+        draftsFetchError: false,
+        draftFound: true,
+        hasUsableWeddingId: false,
+        hasThreadBackedHandoff: false,
       }),
     ).toBe(true);
   });

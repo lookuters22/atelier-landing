@@ -22,6 +22,7 @@ import {
   type WeddingPersonRoleRow,
 } from "./resolveAudienceVisibility.ts";
 import { buildAgentContext } from "../memory/buildAgentContext.ts";
+import { fetchThreadParticipantPersonIdsForMemory } from "./fetchThreadParticipantPersonIdsForMemory.ts";
 import { fetchSelectedMemoriesFull } from "../memory/fetchSelectedMemoriesFull.ts";
 import {
   MAX_SELECTED_MEMORIES,
@@ -66,6 +67,7 @@ function resolveMemoryIdsForDecisionContext(
     rawMessage,
     threadSummary: base.threadSummary,
     memoryHeaders: base.memoryHeaders,
+    replyModeParticipantPersonIds: base.replyModeParticipantPersonIds,
   });
 }
 
@@ -101,6 +103,12 @@ export async function buildDecisionContext(
 ): Promise<DecisionContext> {
   const tenantPhotographerId = assertResolvedTenantPhotographerId(photographerId);
 
+  const replyModeParticipantPersonIds = await fetchThreadParticipantPersonIdsForMemory(
+    supabase,
+    tenantPhotographerId,
+    threadId,
+  );
+
   const base = await buildAgentContext(
     supabase,
     tenantPhotographerId,
@@ -108,6 +116,7 @@ export async function buildDecisionContext(
     threadId,
     replyChannel,
     rawMessage,
+    { replyModeParticipantPersonIds },
   );
 
   const memoryIds = resolveMemoryIdsForDecisionContext(
@@ -217,6 +226,12 @@ export async function buildDecisionContextQaProofPair(
 ): Promise<{ preRedaction: DecisionContext; postRedaction: DecisionContext }> {
   const tenantPhotographerId = assertResolvedTenantPhotographerId(photographerId);
 
+  const replyModeParticipantPersonIds = await fetchThreadParticipantPersonIdsForMemory(
+    supabase,
+    tenantPhotographerId,
+    threadId,
+  );
+
   const base = await buildAgentContext(
     supabase,
     tenantPhotographerId,
@@ -224,6 +239,7 @@ export async function buildDecisionContextQaProofPair(
     threadId,
     replyChannel,
     rawMessage,
+    { replyModeParticipantPersonIds },
   );
 
   const memoryIds = resolveMemoryIdsForDecisionContext(

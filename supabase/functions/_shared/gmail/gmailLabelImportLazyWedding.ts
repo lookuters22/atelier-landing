@@ -5,9 +5,10 @@
  *   The original design eagerly created the wedding in the edge handler before
  *   the async worker even started. For Promotions / Newsletter / OTA batches
  *   that meant CRM gained an inquiry-stage shell even when every candidate
- *   was suppressed (no real client). The fix: defer creation until the worker
- *   actually encounters a non-suppressed candidate. If none ever appears, no
- *   wedding is created and CRM stays clean.
+ *   was suppressed or lacked attachment eligibility (no positive CRM-link signal).
+ *   The fix: defer creation until the worker encounters a candidate that is both
+ *   not suppressed and explicitly eligible to attach to the batch project. If
+ *   none ever appears, no wedding is created and CRM stays clean.
  *
  * Race safety:
  *   Multiple chunks can run in parallel within one Inngest run (and retries
@@ -24,7 +25,7 @@ import { createGmailLabelImportWedding } from "./gmailImportMaterialize.ts";
 
 export type LazyWeddingState = {
   weddingId: string | null;
-  /** Label name used as `couple_names` source when first non-suppressed candidate fires. */
+  /** Label name used as `couple_names` source when the first attachment-eligible candidate fires. */
   labelName: string | null;
 };
 

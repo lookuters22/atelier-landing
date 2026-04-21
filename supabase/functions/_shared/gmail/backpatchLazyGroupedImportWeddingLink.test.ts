@@ -308,7 +308,7 @@ describe("backpatchLazyGroupedImportWeddingLink — atomic RPC wrapper", () => {
 // because of npm:inngest@3 resolution).
 // ---------------------------------------------------------------------------
 describe("processGmailLabelGroupApproval worker — call-site invariants", () => {
-  it("only calls backpatchLazyGroupedImportWeddingLink behind the lazy + finalizedCore gate", async () => {
+  it("only calls backpatchLazyGroupedImportWeddingLink behind attachmentEligible + lazy + finalizedCore gate", async () => {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const src = await fs.readFile(
@@ -321,13 +321,11 @@ describe("processGmailLabelGroupApproval worker — call-site invariants", () =>
 
     /**
      * The lazy gate must wrap the helper invocation: `!suppressed &&
-     * !lazyWedding.weddingId` then `result.finalizedCore`. If a future
-     * refactor pulls the call out of the gate, the regex stops matching
-     * and this test fails — preventing accidental backpatch of suppressed
-     * rows.
+     * attachmentEligible && !lazyWedding.weddingId` then `result.finalizedCore`.
+     * If a future refactor pulls the call out of the gate, the regex stops matching.
      */
     expect(src).toMatch(
-      /if\s*\(\s*!suppressed\s*&&\s*!lazyWedding\.weddingId\s*\)\s*\{[\s\S]*?if\s*\(\s*result\.finalizedCore\s*\)\s*\{[\s\S]*?backpatchLazyGroupedImportWeddingLink\s*\(/,
+      /if\s*\(\s*!suppressed\s*&&\s*attachmentEligible\s*&&\s*!lazyWedding\.weddingId\s*\)\s*\{[\s\S]*?if\s*\(\s*result\.finalizedCore\s*\)\s*\{[\s\S]*?backpatchLazyGroupedImportWeddingLink\s*\(/,
     );
 
     /**

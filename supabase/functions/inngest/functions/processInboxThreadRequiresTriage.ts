@@ -17,11 +17,18 @@ import {
   matchmakerStageIntentForGmailClassifier,
   resolveDeterministicIdentity,
   runConditionalMatchmakerForEmail,
+  shouldInvokeNonWeddingBusinessInquiryPolicyForGmailCanonical,
   type EmailIngressIdentity,
   type MatchmakerStepResult,
 } from "../../_shared/triage/emailIngressClassification.ts";
-import { routeNonWeddingBusinessInquiry } from "../../_shared/triage/nonWeddingBusinessInquiryRouter.ts";
+import {
+  computeEffectiveWeddingAfterInboxTriage,
+  nonWeddingPromotionYieldedLinkedProject,
+  routeNonWeddingBusinessInquiry,
+  type NonWeddingBusinessInquiryRouteOutcome,
+} from "../../_shared/triage/nonWeddingBusinessInquiryRouter.ts";
 import { evaluatePreLlmInboundEmail } from "../../_shared/triage/preLlmEmailRouting.ts";
+import { evaluatePostIngestSuppressionAfterPreLlm } from "../../_shared/triage/postIngestSuppressionGate.ts";
 import { applyUnlinkedWeddingLeadIntakeBoost } from "../../_shared/triage/unlinkedWeddingLeadIntakeBoost.ts";
 import {
   type MainPathEmailDispatchResult,
@@ -31,7 +38,11 @@ import { extractEmailAddress } from "../../_shared/utils/extractEmailAddress.ts"
 import { normalizeEmail } from "../../_shared/utils/normalizeEmail.ts";
 import { bootstrapInquiryWeddingForCanonicalThread } from "../../_shared/resolvers/bootstrapInquiryWeddingForCanonicalThread.ts";
 import { INBOX_THREAD_REQUIRES_TRIAGE_V1_EVENT, inngest } from "../../_shared/inngest.ts";
-
+import {
+  classifyInboundSenderRole,
+  isTriageInboundSenderRoleClassifierV1EnabledFromEnv,
+  type InboundSenderRoleClassification,
+} from "../../../../src/lib/inboundSenderRoleClassifier.ts";
 export const processInboxThreadRequiresTriage = inngest.createFunction(
   {
     id: "process-inbox-thread-requires-triage",
@@ -149,6 +160,32 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
           traceId,
         };
       }
+
+      /** Layer 1b: deterministic suppression classifier (only when Layer-1 returned needs_llm). */
+      const suppressionGate = evaluatePostIngestSuppressionAfterPreLlm({
+        messageMetadata,
+        senderRaw,
+        subject: threadRow.title as string | null,
+        body,
+      });
+      if (suppressionGate.kind === "heuristic_filtered") {
+        await step.run("persist-suppression-classifier-v1", async () => {
+          const { error } = await supabaseAdmin
+            .from("threads")
+            .update({
+              ai_routing_metadata: suppressionGate.metadata as Record<string, unknown>,
+            })
+            .eq("id", threadId)
+            .eq("photographer_id", photographerId);
+          if (error) throw new Error(error.message);
+        });
+        return {
+          status: "heuristic_filtered" as const,
+          threadId,
+          heuristic_reasons: suppressionGate.metadata.heuristic_reasons,
+          traceId,
+        };
+      }
     }
 
     const llmIntent = await step.run("classify-intent", async () => {
@@ -207,19 +244,73 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
     });
 
     const shouldRouteNonWeddingBusinessInquiry =
-      !finalWeddingId &&
-      !linkedProjectAtStart &&
-      llmIntent !== "intake" &&
-      !nearMatchForApproval &&
-      !matchSuggestionMeta;
+      shouldInvokeNonWeddingBusinessInquiryPolicyForGmailCanonical({
+        finalWeddingId,
+        linkedProjectAtStart,
+        llmIntent,
+        nearMatchForApproval,
+      });
 
-    const nonWeddingBusinessInquiryOutcome = await step.run(
-      "route-non-wedding-business-inquiry",
-      async () => {
+    /** Single step: classify + route share one closure so Inngest replays cannot drop `senderRoleClassification`. */
+    const nonWeddingWithSenderRole = await step.run(
+      "route-non-wedding-business-inquiry-with-sender-role",
+      async (): Promise<{
+        outcome: NonWeddingBusinessInquiryRouteOutcome;
+        senderRoleClassification: InboundSenderRoleClassification | null;
+        senderRoleClassifierAuditV1: Record<string, unknown>;
+      } | null> => {
         if (!shouldRouteNonWeddingBusinessInquiry || !finalPhotographerId) {
+          const skipReason = !shouldRouteNonWeddingBusinessInquiry
+            ? "gate"
+            : !finalPhotographerId
+              ? "missing_final_photographer_id"
+              : "unknown";
+          console.info(
+            "[processInboxThreadRequiresTriage] non-wedding business inquiry policy skipped",
+            JSON.stringify({
+              threadId,
+              skipReason,
+              finalPhotographerId: finalPhotographerId ?? null,
+              finalWeddingId,
+              linkedProjectAtStart,
+              llmIntent,
+              nearMatchForApproval,
+            }),
+          );
           return null;
         }
-        return await routeNonWeddingBusinessInquiry(supabaseAdmin, {
+
+        const flagEnabled = isTriageInboundSenderRoleClassifierV1EnabledFromEnv(Deno.env);
+        const apiKey = Deno.env.get("OPENAI_API_KEY")?.trim() ?? "";
+        let senderRoleClassification: InboundSenderRoleClassification | null = null;
+
+        const senderRoleClassifierAuditV1: Record<string, unknown> = {
+          schema_version: 1,
+          flag_enabled: flagEnabled,
+          has_openai_key: apiKey.length > 0,
+        };
+
+        if (flagEnabled && apiKey) {
+          senderRoleClassifierAuditV1.openai_called = true;
+          senderRoleClassification = await classifyInboundSenderRole(
+            {
+              senderRaw,
+              subject: threadRow.title as string | null,
+              body,
+            },
+            { apiKey },
+          );
+          senderRoleClassifierAuditV1.outcome_role = senderRoleClassification.role;
+          senderRoleClassifierAuditV1.outcome_confidence = senderRoleClassification.confidence;
+          if (senderRoleClassification.reason) {
+            senderRoleClassifierAuditV1.outcome_reason = senderRoleClassification.reason;
+          }
+        } else {
+          senderRoleClassifierAuditV1.openai_called = false;
+          senderRoleClassifierAuditV1.skip_reason = !flagEnabled ? "flag_disabled" : "missing_openai_key";
+        }
+
+        const outcome = await routeNonWeddingBusinessInquiry(supabaseAdmin, {
           photographerId: finalPhotographerId,
           threadId,
           llmIntent,
@@ -227,9 +318,28 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
           channel: "email",
           senderEmail: senderRaw || "",
           body,
+          senderRoleClassification,
+          threadTitle: threadRow.title as string | null,
         });
+
+        console.info(
+          "[processInboxThreadRequiresTriage] non-wedding + sender-role step",
+          JSON.stringify({
+            threadId,
+            sender_role: senderRoleClassification?.role ?? null,
+            sender_confidence: senderRoleClassification?.confidence ?? null,
+            policy_reason: outcome.reasonCode,
+            policy_decision: outcome.decision,
+          }),
+        );
+
+        return { outcome, senderRoleClassification, senderRoleClassifierAuditV1 };
       },
     );
+
+    const nonWeddingBusinessInquiryOutcome = nonWeddingWithSenderRole?.outcome ?? null;
+    const senderRoleClassification = nonWeddingWithSenderRole?.senderRoleClassification ?? null;
+    const senderRoleClassifierAuditV1 = nonWeddingWithSenderRole?.senderRoleClassifierAuditV1 ?? null;
 
     const nonWeddingBusinessInquiryMeta = nonWeddingBusinessInquiryOutcome
       ? buildAiRoutingMetadataNonWeddingBusinessInquiry({
@@ -241,6 +351,13 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
           reasonCode: nonWeddingBusinessInquiryOutcome.reasonCode,
           draftId: nonWeddingBusinessInquiryOutcome.draftId,
           escalationId: nonWeddingBusinessInquiryOutcome.escalationId,
+          decisionSource: nonWeddingBusinessInquiryOutcome.decisionSource,
+          profileFit: nonWeddingBusinessInquiryOutcome.profileFit,
+          profileFitReasonCodes: nonWeddingBusinessInquiryOutcome.profileFitReasonCodes,
+          senderRoleClassification,
+          senderRoleClassifierAuditV1,
+          promotedProjectId: nonWeddingBusinessInquiryOutcome.promotedProjectId,
+          promotedProjectType: nonWeddingBusinessInquiryOutcome.promotedProjectType,
         })
       : null;
 
@@ -250,8 +367,9 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
         ? buildAiRoutingMetadataUnlinkedHumanNoRoute({ llmIntent })
         : null;
 
+    // Non-wedding playbook outcome wins over weak matchmaker UI metadata (suggested_match_unresolved).
     const routingMetadata =
-      matchSuggestionMeta ?? nonWeddingBusinessInquiryMeta ?? legacyHumanNoRouteMeta;
+      nonWeddingBusinessInquiryMeta ?? matchSuggestionMeta ?? legacyHumanNoRouteMeta;
 
     await step.run("persist-thread-routing", async () => {
       if (linkedProjectAtStart) {
@@ -303,7 +421,11 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
       throw new Error("Near-match escalation expected but insert returned null id.");
     }
 
-    if (dispatchIntent !== "intake" && !finalWeddingId) {
+    if (
+      dispatchIntent !== "intake" &&
+      !finalWeddingId &&
+      !nonWeddingPromotionYieldedLinkedProject(nonWeddingBusinessInquiryOutcome)
+    ) {
       if (nonWeddingBusinessInquiryOutcome) {
         return {
           status: "non_wedding_business_inquiry_routed" as const,
@@ -343,12 +465,13 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
       });
     });
 
-    let effectiveWeddingId = finalWeddingId;
-    let effectivePhotographerId = finalPhotographerId;
-    if (bootstrapResult) {
-      effectiveWeddingId = bootstrapResult.weddingId;
-      effectivePhotographerId = photographerId;
-    }
+    const { effectiveWeddingId, effectivePhotographerId } = computeEffectiveWeddingAfterInboxTriage({
+      finalWeddingId,
+      finalPhotographerId,
+      tenantPhotographerId: photographerId,
+      bootstrapWeddingId: bootstrapResult?.weddingId ?? null,
+      nonWeddingOutcome: nonWeddingBusinessInquiryOutcome,
+    });
 
     const dispatchResult = await step.run(
       "dispatch-downstream",
@@ -374,6 +497,9 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
       dispatchResult,
       wedding_resolution_trace: weddingResolutionTrace,
       traceId,
+      ...(nonWeddingPromotionYieldedLinkedProject(nonWeddingBusinessInquiryOutcome)
+        ? { non_wedding_business_inquiry: nonWeddingBusinessInquiryOutcome }
+        : {}),
     };
   },
 );

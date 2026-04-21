@@ -6,8 +6,6 @@ import { useDirectoryPeople } from "../../../hooks/useDirectoryPeople";
 import { parseSenderLine } from "../../../lib/senderContactParse";
 import { ContactCreateDialog } from "../../contacts/ContactCreateDialog";
 import type { ContactCreateInput } from "../../../lib/peopleDirectoryApi";
-import { cn } from "@/lib/utils";
-
 export function InboxSenderContactActions({ sender }: { sender: string }) {
   const navigate = useNavigate();
   const { photographerId } = useAuth();
@@ -24,7 +22,7 @@ export function InboxSenderContactActions({ sender }: { sender: string }) {
 
   if (isLoading) {
     return (
-      <span className="text-[11px] text-muted-foreground tabular-nums" aria-live="polite">
+      <span className="inbox-sender-contact-hint" aria-live="polite">
         Contacts…
       </span>
     );
@@ -38,9 +36,7 @@ export function InboxSenderContactActions({ sender }: { sender: string }) {
           navigate(`/directory?contactEmail=${encodeURIComponent(existing.email)}`, { replace: false })
         }
         title="Already in contacts"
-        className={cn(
-          "inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground",
-        )}
+        className="btn-ghostline inbox-sender-contact-btn"
       >
         Open in Directory
       </button>
@@ -63,12 +59,8 @@ export function InboxSenderContactActions({ sender }: { sender: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setDialogOpen(true)}
-        className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:bg-accent"
-      >
-        <UserPlus className="h-3 w-3" strokeWidth={2} aria-hidden />
+      <button type="button" onClick={() => setDialogOpen(true)} className="btn-ghostline inbox-sender-contact-btn">
+        <UserPlus className="inbox-sender-contact-ico" strokeWidth={2} aria-hidden />
         Add to contacts
       </button>
       <ContactCreateDialog

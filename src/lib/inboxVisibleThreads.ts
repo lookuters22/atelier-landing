@@ -4,13 +4,16 @@ import {
   GMAIL_LABEL_DRAFT,
   GMAIL_LABEL_SENT,
   GMAIL_LABEL_STARRED,
+  deriveUnreadFromGmailLabelIds,
 } from "./gmailInboxLabels";
+import { isSuppressedInboxThread } from "./inboxThreadBucket";
 
 export const INQUIRY_STAGES = new Set(["inquiry", "consultation", "proposal_sent", "contract_out"]);
 export const ACTIVE_STAGES = new Set(["booked", "prep"]);
 
 export type InboxFolder = "inbox" | "starred" | "sent" | "drafts";
-export type InboxListTab = "all" | "inquiries" | "unassigned";
+/** Center list tabs — matches `Ana Dashboard.html` (`All` / `Unread` / `Needs reply`). */
+export type InboxListTab = "all" | "unread" | "needs_reply";
 
 export type DeriveVisibleInboxThreadsResult = {
   threads: UnfiledThread[];
@@ -55,7 +58,7 @@ export function deriveVisibleInboxThreads(args: {
   projectFilterWeddingId: string | null;
   gmailLabelFilterId: string | null;
 }): DeriveVisibleInboxThreadsResult {
-  const { inboxThreads, weddings, inboxFolder, listTab, projectFilterWeddingId, gmailLabelFilterId } = args;
+  const { inboxThreads, inboxFolder, listTab, projectFilterWeddingId, gmailLabelFilterId } = args;
 
   if (gmailLabelFilterId != null) {
     const anyRowHasLabelMembership = inboxThreads.some((t) => t.gmailLabelIds != null && t.gmailLabelIds.length > 0);
@@ -68,11 +71,7 @@ export function deriveVisibleInboxThreads(args: {
     }
   }
 
-  const inquiryWeddingIds = new Set(
-    weddings.filter((w) => INQUIRY_STAGES.has(w.stage)).map((w) => w.id),
-  );
-
-  let rows = inboxThreads;
+  let rows = inboxThreads.filter((t) => !isSuppressedInboxThread(t));
 
   if (gmailLabelFilterId != null) {
     rows = applyGmailUserLabelFilter(rows, gmailLabelFilterId);
@@ -81,11 +80,10 @@ export function deriveVisibleInboxThreads(args: {
   if (projectFilterWeddingId != null) {
     rows = rows.filter((t) => t.weddingId === projectFilterWeddingId);
   } else {
-    if (listTab === "unassigned") {
-      rows = rows.filter((t) => t.weddingId === null);
-    } else if (listTab === "inquiries") {
-      rows = rows.filter((t) => t.weddingId != null && inquiryWeddingIds.has(t.weddingId));
+    if (listTab === "unread") {
+      rows = rows.filter((t) => deriveUnreadFromGmailLabelIds(t.gmailLabelIds) ?? false);
     }
+    /* needs_reply: no extra filter yet — HTML demo tab; list matches “all” until reply-detection exists */
   }
 
   const folderUsesGmailLabelMetadata = inboxFolder !== "inbox";
@@ -96,4 +94,37 @@ export function deriveVisibleInboxThreads(args: {
     gmailLabelFilterUnsupported: false,
     folderUsesGmailLabelMetadata,
   };
+}
+
+/** Counts for `.list-tab` badges — same pipeline as {@link deriveVisibleInboxThreads} but before `listTab` filtering. */
+export function deriveInboxListHeadCounts(args: {
+  inboxThreads: UnfiledThread[];
+  inboxFolder: InboxFolder;
+  projectFilterWeddingId: string | null;
+  gmailLabelFilterId: string | null;
+}): { all: number; unread: number; needs_reply: number; unsupported: boolean } {
+  const { inboxThreads, inboxFolder, projectFilterWeddingId, gmailLabelFilterId } = args;
+
+  if (gmailLabelFilterId != null) {
+    const anyRowHasLabelMembership = inboxThreads.some((t) => t.gmailLabelIds != null && t.gmailLabelIds.length > 0);
+    if (!anyRowHasLabelMembership) {
+      return { all: 0, unread: 0, needs_reply: 0, unsupported: true };
+    }
+  }
+
+  let rows = inboxThreads.filter((t) => !isSuppressedInboxThread(t));
+  if (gmailLabelFilterId != null) {
+    rows = applyGmailUserLabelFilter(rows, gmailLabelFilterId);
+  }
+  if (projectFilterWeddingId != null) {
+    rows = rows.filter((t) => t.weddingId === projectFilterWeddingId);
+  }
+  rows = applyInboxFolderFilter(rows, inboxFolder);
+
+  const all = rows.length;
+  const unread = rows.filter((t) => deriveUnreadFromGmailLabelIds(t.gmailLabelIds) ?? false).length;
+  /** No reply-detection signal yet — honest zero (HTML demo used a placeholder). */
+  const needs_reply = 0;
+
+  return { all, unread, needs_reply, unsupported: false };
 }

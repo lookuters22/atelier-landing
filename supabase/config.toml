@@ -18,6 +18,10 @@ project_id = "default"
 [functions.api-resolve-draft]
 verify_jwt = false
 
+# Browser sends user JWT; gateway HS256 pre-check can block ES256 — validate in-handler (see authPhotographer.ts).
+[functions.operator-studio-assistant]
+verify_jwt = false
+
 [functions.webhook-approval]
 verify_jwt = false
 

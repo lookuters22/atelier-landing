@@ -261,6 +261,7 @@ export async function seedRbacHarnessCase(
     .insert({
       photographer_id: photographerId,
       wedding_id: weddingId,
+      scope: "project",
       type: "v3_rbac_proof",
       title: `RBAC ${caseId}`,
       summary: "Private commercial notes (harness)",

@@ -13,6 +13,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { ListPageSkeleton } from "../components/DashboardSkeleton";
 import { useUnfiledInbox, type UnfiledThread } from "../hooks/useUnfiledInbox";
+import { isSuppressedInboxThread } from "../lib/inboxThreadBucket";
 
 type FilterId =
   | "all"
@@ -135,7 +136,10 @@ export function InboxPage() {
   );
 
   const rows = useMemo(
-    () => inboxThreads.map((t) => threadToRow(t, weddingLookup)),
+    () =>
+      inboxThreads
+        .filter((t) => !isSuppressedInboxThread(t))
+        .map((t) => threadToRow(t, weddingLookup)),
     [inboxThreads, weddingLookup],
   );
 

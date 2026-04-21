@@ -1,10 +1,14 @@
-import { useCallback, useState } from "react";
-import { Archive, Loader2, Mail, MailOpen, Star, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useCallback, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 import type { UnfiledThread } from "../../../hooks/useUnfiledInbox";
+import type { GmailLabelOption } from "../../../types/gmailImport.types";
 import { formatInboxTimeAgo } from "../../../lib/inboxMessageFormat";
 import type { GmailInboxModifyAction, GmailInboxModifyResult } from "../../../lib/gmailInboxModify";
 import { deriveStarredFromGmailLabelIds, deriveUnreadFromGmailLabelIds } from "../../../lib/gmailInboxLabels";
+import { deriveInboxThreadBucket, inboxUnlinkedBucketChipLabel } from "../../../lib/inboxThreadBucket";
+import { userGmailLabelsOnThread } from "../../../lib/inboxThreadGmailLabels";
+
+const STAR_POLY = "12 2 15 8.5 22 9.3 17 14 18.5 21 12 17.5 5.5 21 7 14 2 9.3 9 8.5 12 2";
 
 function truncate(s: string, max: number) {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
@@ -14,6 +18,10 @@ function snippetForListRow(snippet: string): string {
   const t = snippet.trim();
   if (!t || t === "—") return "";
   return truncate(t, 120);
+}
+
+function formatProjectStageLabel(stage: string): string {
+  return stage.replace(/_/g, " ");
 }
 
 function gmailSyncBlockedReason(t: UnfiledThread, connectedId: string | null): string | null {
@@ -27,32 +35,29 @@ export function InboxMessageRow({
   thread,
   selected,
   onSelect,
-  onDelete,
-  deleting,
   googleConnectedAccountId,
   onGmailModify,
   onHoverPrefetch,
   onHoverPrefetchCancel,
   onRowFocusPrefetch,
-  bulkSelected = false,
-  onBulkToggle,
+  gmailLabelCatalog,
+  linkedCoupleNames,
+  linkedWeddingStage,
+  hasPendingDraft,
 }: {
   thread: UnfiledThread;
   selected: boolean;
   onSelect: () => void;
-  onDelete: () => void;
-  deleting?: boolean;
   googleConnectedAccountId: string | null;
   onGmailModify: (action: GmailInboxModifyAction) => Promise<GmailInboxModifyResult>;
-  /** Debounced thread-messages prefetch (pointer hover). */
   onHoverPrefetch?: () => void;
   onHoverPrefetchCancel?: () => void;
-  /** Immediate prefetch when row receives focus (keyboard). */
   onRowFocusPrefetch?: () => void;
-  bulkSelected?: boolean;
-  onBulkToggle?: () => void;
+  gmailLabelCatalog: readonly GmailLabelOption[];
+  linkedCoupleNames: string | null;
+  linkedWeddingStage: string | null;
+  hasPendingDraft: boolean;
 }) {
-  const [hover, setHover] = useState(false);
   const [gmailSyncing, setGmailSyncing] = useState(false);
   const [gmailActionError, setGmailActionError] = useState<string | null>(null);
 
@@ -60,7 +65,20 @@ export function InboxMessageRow({
   const unread = deriveUnreadFromGmailLabelIds(thread.gmailLabelIds) ?? false;
   const gmailBlock = gmailSyncBlockedReason(thread, googleConnectedAccountId);
   const canSyncGmail = gmailBlock === null;
-  const previewSnippet = snippetForListRow(thread.snippet);
+  const previewText = snippetForListRow(thread.snippet);
+
+  const intent = thread.ai_routing_metadata?.classified_intent?.trim() || "";
+  const isUnlinked = thread.weddingId == null;
+  const bucket = isUnlinked ? deriveInboxThreadBucket(thread) : null;
+  const bucketLabel = isUnlinked ? inboxUnlinkedBucketChipLabel(thread) : null;
+  const showIntentChip =
+    Boolean(intent) &&
+    (!isUnlinked || bucket === "inquiry" || bucket === "unfiled");
+
+  const userLabelsOnThread = useMemo(
+    () => userGmailLabelsOnThread(thread.gmailLabelIds, gmailLabelCatalog),
+    [thread.gmailLabelIds, gmailLabelCatalog],
+  );
 
   const runGmailModify = useCallback(
     async (action: GmailInboxModifyAction) => {
@@ -78,179 +96,105 @@ export function InboxMessageRow({
     [canSyncGmail, googleConnectedAccountId, onGmailModify, thread.latestProviderMessageId],
   );
 
+  const starTitle = [gmailBlock, gmailActionError, starred ? "Unstar in Gmail" : "Star in Gmail"]
+    .filter(Boolean)
+    .join(" · ");
+
+  const onStarClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canSyncGmail || gmailSyncing) return;
+    void runGmailModify(starred ? "unstar" : "star");
+  };
+
   return (
-    <li>
-      <div
-        role="button"
-        tabIndex={0}
-        data-inbox-thread-row={thread.id}
-        onClick={onSelect}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
-        onMouseEnter={() => {
-          setHover(true);
-          onHoverPrefetch?.();
-        }}
-        onMouseLeave={() => {
-          setHover(false);
-          onHoverPrefetchCancel?.();
-        }}
-        onFocus={(e) => {
-          if (e.target === e.currentTarget) onRowFocusPrefetch?.();
-        }}
-        className={cn(
-          "group flex cursor-pointer items-center gap-1.5 border-b border-border/60 px-2 py-1.5 text-left transition-colors sm:gap-2 sm:px-2.5",
-          selected
-            ? cn(
-                unread ? "bg-accent/85" : "bg-accent/80",
-                "hover:bg-accent/90",
-              )
-            : bulkSelected
-              ? "bg-muted/45 hover:bg-muted/55 dark:bg-muted/35 dark:hover:bg-muted/50"
-              : unread
-                ? "bg-muted/40 hover:bg-muted/55 dark:bg-muted/30 dark:hover:bg-muted/45"
-                : "hover:bg-accent/40",
-        )}
-      >
-        <div className="flex shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={bulkSelected}
-            onChange={() => onBulkToggle?.()}
-            className="h-3.5 w-3.5 rounded border-border"
-            aria-label="Select thread"
-            tabIndex={-1}
-          />
-        </div>
-        <div className="flex shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            disabled={!canSyncGmail || gmailSyncing}
-            className={cn(
-              "rounded p-0.5",
-              canSyncGmail
-                ? starred
-                  ? "text-amber-600 hover:text-amber-700"
-                  : "text-muted-foreground hover:text-amber-600"
-                : "cursor-not-allowed text-muted-foreground/50",
-            )}
-            aria-label={canSyncGmail ? (starred ? "Unstar" : "Star") : "Star unavailable"}
-            title={gmailBlock ?? (starred ? "Unstar in Gmail" : "Star in Gmail")}
-            onClick={() => void runGmailModify(starred ? "unstar" : "star")}
-          >
-            {gmailSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" strokeWidth={1.75} aria-hidden />
-            ) : (
-              <Star
-                className={cn("h-4 w-4", starred && canSyncGmail && "fill-amber-500 text-amber-600")}
-                strokeWidth={1.75}
-              />
-            )}
-          </button>
-        </div>
-        <span
-          className={cn(
-            "w-[128px] shrink-0 truncate text-[13px] sm:w-[148px]",
-            unread ? "font-semibold text-foreground" : "font-medium text-foreground/85",
-          )}
-          title={thread.sender || "Unknown"}
+    <li
+      role="button"
+      tabIndex={0}
+      data-inbox-thread-row={thread.id}
+      data-selected={selected ? "true" : "false"}
+      data-unread={unread ? "true" : "false"}
+      className="mrow"
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      onMouseEnter={() => onHoverPrefetch?.()}
+      onMouseLeave={() => onHoverPrefetchCancel?.()}
+      onFocus={(e) => {
+        if (e.target === e.currentTarget) onRowFocusPrefetch?.();
+      }}
+    >
+      {/* `Ana Dashboard.html`: empty `.cb` — bulk selection not in mock */}
+      <div className="cb" onClick={(e) => e.stopPropagation()} aria-hidden />
+      {gmailSyncing ? (
+        <Loader2 className="mrow-star-spin" strokeWidth={1.75} aria-hidden />
+      ) : starred ? (
+        <svg
+          className="star active"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          role="img"
+          aria-label={canSyncGmail ? "Unstar" : "Star unavailable"}
+          title={starTitle || undefined}
+          onClick={onStarClick}
+          style={{ cursor: canSyncGmail ? "pointer" : "not-allowed" }}
         >
-          {thread.sender || "Unknown"}
-        </span>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <p
-              className={cn(
-                "truncate text-[13px] leading-tight",
-                unread ? "text-foreground" : "text-foreground/90",
-              )}
-              title={
-                thread.title +
-                (previewSnippet ? ` — ${thread.snippet.trim()}` : "")
-              }
-            >
-              <span className={unread ? "font-semibold" : "font-medium"}>{thread.title || "(no subject)"}</span>
-              {previewSnippet ? (
-                <>
-                  <span className="font-normal text-muted-foreground"> — </span>
-                  <span className={cn("font-normal", unread ? "text-foreground/65" : "text-muted-foreground")}>
-                    {previewSnippet}
-                  </span>
-                </>
-              ) : null}
-            </p>
-          </div>
-          <div
-            className={cn(
-              "flex shrink-0 items-center gap-0.5 transition-opacity",
-              hover ? "opacity-100" : "opacity-0 sm:opacity-0 sm:group-hover:opacity-100",
-            )}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
-              title="Archive — not yet wired"
-              aria-label="Archive (not yet wired)"
-              onClick={() => {
-                /* TODO: archive when backend exists */
-              }}
-            >
-              <Archive className="h-4 w-4" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              disabled={!canSyncGmail || gmailSyncing}
-              className={cn(
-                "rounded p-1.5",
-                canSyncGmail
-                  ? "text-muted-foreground hover:bg-background hover:text-foreground"
-                  : "cursor-not-allowed text-muted-foreground/50",
-              )}
-              title={gmailBlock ?? (unread ? "Mark as read in Gmail" : "Mark as unread in Gmail")}
-              aria-label={canSyncGmail ? (unread ? "Mark as read" : "Mark as unread") : "Read state unavailable"}
-              onClick={() => void runGmailModify(unread ? "mark_read" : "mark_unread")}
-            >
-              {unread ? (
-                <Mail className="h-4 w-4" strokeWidth={1.75} />
-              ) : (
-                <MailOpen className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-            <button
-              type="button"
-              className="rounded p-1.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-              title="Delete thread"
-              aria-label="Delete thread"
-              disabled={deleting}
-              onClick={onDelete}
-            >
-              {deleting ? (
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.75} />
-              ) : (
-                <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-              )}
-            </button>
-          </div>
-          <span
-            className={cn(
-              "shrink-0 text-[11px] tabular-nums",
-              unread ? "text-foreground/75" : "text-muted-foreground",
-            )}
-          >
-            {formatInboxTimeAgo(thread.last_activity_at)}
-          </span>
+          <polygon points={STAR_POLY} />
+        </svg>
+      ) : (
+        <svg
+          className="star"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          role="img"
+          aria-label={canSyncGmail ? "Star" : "Star unavailable"}
+          title={starTitle || undefined}
+          onClick={onStarClick}
+          style={{ cursor: canSyncGmail ? "pointer" : "not-allowed" }}
+        >
+          <polygon points={STAR_POLY} />
+        </svg>
+      )}
+      <div className="mbody">
+        <div className="who">
+          {!unread ? null : <span className="dotunread" aria-hidden />}
+          {thread.sender?.trim() ? <span className="mrow-who-truncate">{thread.sender}</span> : null}
+        </div>
+        <div className="subj">
+          {thread.title?.trim() ? <span className="subj-title">{thread.title}</span> : null}
+          {previewText ? <span className="snippet"> — {previewText}</span> : null}
+        </div>
+        <div className="tags">
+          {hasPendingDraft ? <span className="ttag fin">Ana drafted</span> : null}
+          {bucketLabel ? (
+            <span className={bucket === "inquiry" ? "ttag fin" : "ttag"}>{bucketLabel}</span>
+          ) : null}
+          {showIntentChip ? <span className="ttag">{intent}</span> : null}
+          {userLabelsOnThread.map((l) => (
+            <span key={l.id} className="ttag">
+              {l.name}
+            </span>
+          ))}
+          {linkedCoupleNames ? (
+            <span className="ttag book" title={linkedCoupleNames}>
+              {truncate(linkedCoupleNames, 36)}
+            </span>
+          ) : null}
+          {linkedWeddingStage ? (
+            <span className={linkedWeddingStage === "booked" ? "ttag book" : "ttag"}>
+              {formatProjectStageLabel(linkedWeddingStage)}
+            </span>
+          ) : null}
         </div>
       </div>
-      {gmailActionError ? (
-        <p className="border-b border-border/60 bg-destructive/5 px-3 py-1 text-[10px] leading-snug text-destructive">
-          {gmailActionError}
-        </p>
-      ) : null}
+      <div className="right">
+        <span className="when">{formatInboxTimeAgo(thread.last_activity_at)}</span>
+      </div>
     </li>
   );
 }

@@ -19,6 +19,8 @@ export const GMAIL_LABEL_STARRED = "STARRED";
 export const GMAIL_LABEL_SENT = "SENT";
 export const GMAIL_LABEL_DRAFT = "DRAFT";
 export const GMAIL_LABEL_UNREAD = "UNREAD";
+/** Gmail system label — used for sidebar “Primary” heuristic counts when label ids are synced. */
+export const GMAIL_LABEL_INBOX = "INBOX";
 
 export function deriveStarredFromGmailLabelIds(labelIds: string[] | null): boolean | null {
   if (labelIds === null) return null;

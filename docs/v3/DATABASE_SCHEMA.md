@@ -132,6 +132,12 @@ It is not a general client communication channel.
 - `out`
 - `internal`
 
+`memory_scope` (production memory; `public.memories.scope`)
+
+- `project`
+- `person`
+- `studio`
+
 `thread_kind`
 
 - `group`
@@ -344,6 +350,7 @@ Implemented today. Target columns still missing.
 
 - `id` UUID PK
 - `photographer_id` UUID FK -> `photographers.id`
+- `project_type` `wedding_project_type` NOT NULL DEFAULT `wedding` — per-row project classification (not studio capability authority; see `studio_business_profiles`)
 - `couple_names` TEXT
 - `wedding_date` TIMESTAMPTZ
 - `location` TEXT
@@ -364,6 +371,7 @@ Implemented today. Target columns still missing.
 ### Rules
 
 - `weddings` remains the primary CRM record.
+- `project_type` classifies the row (wedding vs portrait, commercial, etc.); business-scope truth remains `studio_business_profiles` and playbook rules.
 - Do not create duplicate wedding rows for the same case if the only difference is thread/channel context.
 - If a thread may refer to multiple weddings, use `thread_weddings`; do not duplicate the wedding row.
 
@@ -779,10 +787,23 @@ Implemented today.
 - `id` UUID PK
 - `photographer_id` UUID FK -> `photographers.id`
 - `wedding_id` UUID NULL FK -> `weddings.id`
+- `scope` `memory_scope` NOT NULL — `project` \| `person` \| `studio` (Slice 1 schema; Slice 2 reply-mode fetch/selection is scope-aware)
+- `person_id` UUID NULL FK -> `people.id` ON DELETE CASCADE (person-scoped rows; writers unset until later slices)
+- `archived_at` TIMESTAMPTZ NULL — soft archive
 - `type` TEXT
 - `title` TEXT
 - `summary` TEXT
 - `full_content` TEXT
+- `source_escalation_id` UUID NULL FK -> `escalation_requests.id` (learning loop)
+- `learning_loop_artifact_key` TEXT NULL
+
+**Constraint `memories_scope_shape_check` (Slice 3):**
+
+```sql
+(scope = 'project' AND wedding_id IS NOT NULL AND person_id IS NULL)
+OR (scope = 'person' AND person_id IS NOT NULL AND wedding_id IS NULL)
+OR (scope = 'studio' AND wedding_id IS NULL AND person_id IS NULL)
+```
 
 ### Recommended additive columns
 
@@ -795,6 +816,8 @@ Implemented today.
 ### Rules
 
 - Use `memories` for durable case memory and narrative context.
+- Reply-mode header scan (`fetchMemoryHeaders`): non-archived only; with a wedding id — `scope='project'` for that `wedding_id`, all `scope='studio'`, and `scope='person'` rows whose `person_id` is in the current thread’s `thread_participants` set; without a wedding id but with participants — `person` rows for those ids plus all `project` and `studio`. Deterministic promotion caps studio picks in known-wedding reply mode, blocks cross-project `project` memory, and only promotes `person` memory when `person_id` is in that participant set (Slice 4).
+- Assistant-mode header scan (`fetchAssistantMemoryHeaders` via `buildAssistantContext`): operator-only; non-archived; default OR filter is `scope='studio'` only. Optional explicit `focusedWeddingId` / `focusedPersonId` (tenant-validated) adds `scope='project'` for that wedding and/or `scope='person'` for that person. Does not use reply-mode filters or thread participants; context type is `AssistantContext` with `clientFacingForbidden: true` (Slice 5).
 - Keep the header-scan pattern: load summaries first, full content second.
 - Do not turn all memories into global rules.
 - In the target runtime, `memories` should map to two stages:

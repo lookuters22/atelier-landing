@@ -7,6 +7,8 @@
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+import { memoryScopeForWeddingBinding } from "./memory/memoryInsertScope.ts";
+
 type ServiceClient = SupabaseClient;
 
 const LEARNING_TYPES = ["draft_approval_edit_learning", "draft_rewrite_feedback_learning"] as const;
@@ -125,6 +127,7 @@ export async function maybeRecordPatternMapReview(
   const { error } = await supabase.from("memories").insert({
     photographer_id: params.photographerId,
     wedding_id: params.weddingId,
+    scope: memoryScopeForWeddingBinding(params.weddingId),
     type: "pattern_map_review_candidate",
     title,
     summary,

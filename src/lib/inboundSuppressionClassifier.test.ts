@@ -118,6 +118,16 @@ describe("classifyInboundSuppression — legitimate wedding lead", () => {
     expect(c.verdict).toBe("human_client_or_lead");
     expect(c.suppressed).toBe(false);
   });
+
+  it("leaves a client-sent deposit invoice subject as human when sender is personal mail", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: '"Jane Smith" <jane.smith@gmail.com>',
+      subject: "Invoice for photography deposit — June 14 wedding",
+      body: "Hi! As discussed, attached is the invoice for the 50% deposit. Let me know if you need anything else.",
+    });
+    expect(c.verdict).toBe("human_client_or_lead");
+    expect(c.suppressed).toBe(false);
+  });
 });
 
 describe("classifyInboundSuppression — newsletter", () => {
@@ -136,6 +146,48 @@ describe("classifyInboundSuppression — newsletter", () => {
     expect(c.reasons).toContain("sender_domain_marketing_subdomain");
     expect(c.reasons).toContain("body_newsletter_markers");
     expect(c.reasons).toContain("body_unsubscribe_language");
+  });
+});
+
+/**
+ * Fixtures here use only sender/subject/body (no `headers`), matching the
+ * arguments to `public.classify_inbound_suppression` from
+ * `convert_unfiled_thread_to_inquiry`. Migration 20260509000000 mirrors this path.
+ */
+describe("classifyInboundSuppression — receipts / billing (transactional_non_client)", () => {
+  it("suppresses a clear payment receipt subject + receipt body copy", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "Billing <billing@saas-vendor.com>",
+      subject: "Payment receipt for invoice #1042",
+      body: "Thank you for your payment. Amount paid: $49.00. Transaction ID: ch_abc123.",
+    });
+    expect(c.verdict).toBe("transactional_non_client");
+    expect(c.suppressed).toBe(true);
+    expect(c.reasons).toContain("subject_transactional_receipt");
+    expect(c.reasons).toContain("body_transactional_receipt");
+  });
+
+  it("suppresses order-style confirmation using body markers alone", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "Store <orders@example-store.com>",
+      subject: "Thanks for shopping with us",
+      body: "Thank you for your order. Your order summary is below. Subtotal: $120.00. Sales tax: $10.00.",
+    });
+    expect(c.verdict).toBe("transactional_non_client");
+    expect(c.suppressed).toBe(true);
+    expect(c.reasons).toContain("body_transactional_receipt");
+  });
+
+  it("suppresses noreply invoice email from billing platforms", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "FreshBooks <noreply@freshbooks.com>",
+      subject: "Invoice #883921 from Studio Supplies Inc.",
+      body: "View your invoice online. Amount due: $200.00.",
+    });
+    expect(c.suppressed).toBe(true);
+    expect(c.verdict).toBe("transactional_non_client");
+    expect(c.reasons).toContain("sender_local_system_token");
+    expect(c.reasons).toContain("subject_transactional_receipt");
   });
 });
 

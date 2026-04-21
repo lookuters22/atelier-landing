@@ -11,6 +11,21 @@ import { fetchMemoryHeaders } from "./fetchMemoryHeaders.ts";
 import { fetchThreadSummary } from "./fetchThreadSummary.ts";
 import { sanitizeInboundTextForModelContext } from "./sanitizeInboundTextForModelContext.ts";
 
+export type BuildAgentContextOptions = {
+  /**
+   * Distinct `people.id` from `thread_participants` for this thread — passed through to memory header scan
+   * (`fetchMemoryHeaders`) and reply-mode selection. Usually supplied by `buildDecisionContext` only.
+   */
+  replyModeParticipantPersonIds?: string[] | null;
+};
+
+function normalizeReplyModeParticipantPersonIds(ids?: string[] | null): string[] {
+  if (!ids?.length) return [];
+  return [...new Set(ids.map((id) => String(id).trim()).filter((id) => id.length > 0))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 /**
  * Assembles tenant-scoped `AgentContext` before Orchestrator reasoning (ARCHITECTURE.md §5).
  */
@@ -21,9 +36,16 @@ export async function buildAgentContext(
   threadId: string | null,
   replyChannel: AgentContext["replyChannel"],
   rawMessage: string,
+  options?: BuildAgentContextOptions,
 ): Promise<AgentContext> {
+  const replyModeParticipantPersonIds = normalizeReplyModeParticipantPersonIds(
+    options?.replyModeParticipantPersonIds,
+  );
+
   const [memoryHeaders, threadSummary, crmSnapshot, recentMessages] = await Promise.all([
-    fetchMemoryHeaders(supabase, photographerId, weddingId),
+    fetchMemoryHeaders(supabase, photographerId, weddingId, {
+      replyModeParticipantPersonIds,
+    }),
     threadId
       ? fetchThreadSummary(supabase, photographerId, threadId)
       : Promise.resolve(null as string | null),
@@ -40,6 +62,7 @@ export async function buildAgentContext(
     crmSnapshot,
     recentMessages,
     threadSummary,
+    replyModeParticipantPersonIds,
     memoryHeaders,
     selectedMemories: [],
     globalKnowledge: [],

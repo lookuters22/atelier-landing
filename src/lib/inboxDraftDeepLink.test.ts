@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasThreadBackedDraftHandoff,
   hasUsableDraftWeddingId,
   INBOX_DRAFT_MISSING_WEDDING_MESSAGE,
   INBOX_UNRESOLVED_DRAFT_MESSAGE,
@@ -25,6 +26,21 @@ describe("inboxDraftDeepLink", () => {
 
   it("exports a non-empty unresolved message", () => {
     expect(INBOX_UNRESOLVED_DRAFT_MESSAGE.length).toBeGreaterThan(20);
+  });
+});
+
+describe("hasThreadBackedDraftHandoff", () => {
+  it("is true when draft has thread_id", () => {
+    expect(hasThreadBackedDraftHandoff({ thread_id: "t1" }, null)).toBe(true);
+  });
+
+  it("is true when payload threadId is set even if draft thread_id empty", () => {
+    expect(hasThreadBackedDraftHandoff({ thread_id: "" }, "t-url")).toBe(true);
+  });
+
+  it("is false when neither side has a thread id", () => {
+    expect(hasThreadBackedDraftHandoff({ thread_id: "" }, null)).toBe(false);
+    expect(hasThreadBackedDraftHandoff(null, "")).toBe(false);
   });
 });
 

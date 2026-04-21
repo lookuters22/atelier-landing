@@ -1,27 +1,26 @@
-import { cn } from "@/lib/utils";
 import type { InboxListTab } from "../../../lib/inboxVisibleThreads";
 
 const TABS: { id: InboxListTab; label: string }[] = [
-  { id: "all", label: "All Mail" },
-  { id: "unassigned", label: "Unassigned" },
+  { id: "all", label: "All" },
+  { id: "unread", label: "Unread" },
+  { id: "needs_reply", label: "Needs reply" },
 ];
 
 export function InboxListTabs({
   listTab,
   onChange,
   disabled,
+  counts,
 }: {
   listTab: InboxListTab;
   onChange: (t: InboxListTab) => void;
-  /** When project filter is active, tabs are visually disabled — project filter overrides tab semantics. */
   disabled?: boolean;
+  counts: { all: number; unread: number; needs_reply: number };
 }) {
+  const nFor = (id: InboxListTab) => (id === "all" ? counts.all : id === "unread" ? counts.unread : counts.needs_reply);
+
   return (
-    <div
-      role="tablist"
-      aria-label="Inbox filters"
-      className="flex shrink-0 gap-1 border-b border-border bg-background px-3 py-2"
-    >
+    <div className="list-tabs" role="tablist" aria-label="Inbox list filters">
       {TABS.map((tab) => {
         const selected = listTab === tab.id;
         return (
@@ -31,16 +30,11 @@ export function InboxListTabs({
             role="tab"
             aria-selected={selected}
             disabled={disabled}
+            data-active={selected ? "true" : "false"}
             onClick={() => onChange(tab.id)}
-            className={cn(
-              "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
-              disabled && "cursor-not-allowed opacity-50",
-              selected && !disabled
-                ? "bg-foreground/10 text-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )}
+            className="list-tab"
           >
-            {tab.label}
+            {tab.label} <span className="n">{nFor(tab.id)}</span>
           </button>
         );
       })}

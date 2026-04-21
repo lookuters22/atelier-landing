@@ -23,12 +23,19 @@ import {
 import type { ConvertUnfiledThreadToInquiryResult } from "../lib/inboxThreadLinking";
 import { INBOX_SEARCH_QUERY_PARAM } from "../lib/inboxUrlInboxParams";
 import { sanitizeInboxSearchForIlike } from "../lib/inboxSearchSanitize";
+import { isSuppressedInboxThread } from "../lib/inboxThreadBucket";
 
+/** Subset of persisted `threads.ai_routing_metadata` the inbox UI reads (JSON may include more). */
 export type AiRoutingMeta = {
-  suggested_wedding_id: string | null;
-  confidence_score: number;
-  reasoning: string;
-  classified_intent: string;
+  suggested_wedding_id?: string | null;
+  confidence_score?: number;
+  reasoning?: string;
+  classified_intent?: string;
+  routing_disposition?: string;
+  sender_role?: string;
+  sender_role_confidence?: string;
+  dispatch_intent?: string;
+  policy_decision?: string;
 };
 
 export type UnfiledThread = {
@@ -181,7 +188,14 @@ export function useUnfiledInbox() {
     [inboxQuery.data?.threads],
   );
 
+  /** All threads with no `wedding_id` (raw); includes promo/suppressed rows. */
   const unfiledThreads = useMemo(() => inboxThreads.filter((t) => t.weddingId === null), [inboxThreads]);
+
+  /** Unlinked threads surfaced on Today / default inbox work queue (excludes deterministic suppression). */
+  const todayPriorityUnlinkedThreads = useMemo(
+    () => unfiledThreads.filter((t) => !isSuppressedInboxThread(t)),
+    [unfiledThreads],
+  );
 
   const activeWeddings = useMemo(
     () => activeWeddingsQuery.data ?? [],
@@ -284,6 +298,7 @@ export function useUnfiledInbox() {
   return {
     inboxThreads,
     unfiledThreads,
+    todayPriorityUnlinkedThreads,
     activeWeddings,
     isLoading,
     loadError,

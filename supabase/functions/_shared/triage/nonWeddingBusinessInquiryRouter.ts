@@ -16,6 +16,9 @@
  *
  * Returning a discriminated result lets the triage / post-ingest caller write a single routing
  * metadata row that reflects the real outcome rather than the legacy `unresolved_human` dead end.
+ *
+ * **Authority:** `studio_business_profiles` gates fit; `playbook_rules` set automation posture;
+ * see {@link resolveNonWeddingBusinessInquiryPolicyWithProfile}.
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { formatOperatorEscalationQuestion } from "../formatOperatorEscalation.ts";
@@ -25,19 +28,60 @@ import {
   OPERATOR_ESCALATION_PENDING_DELIVERY_V1_SCHEMA_VERSION,
 } from "../inngest.ts";
 import type { TriageIntent } from "../agents/triage.ts";
+import type { InboundSenderRoleClassification } from "../../../../src/lib/inboundSenderRoleClassifier.ts";
+import { bootstrapInquiryWeddingForCanonicalThread } from "../resolvers/bootstrapInquiryWeddingForCanonicalThread.ts";
 import type { NonWeddingBusinessInquiryPolicyDecision } from "./emailIngressClassification.ts";
 import {
-  evaluateNonWeddingBusinessInquiryPolicy,
+  applyCustomerLeadProjectPromotionUpgrade,
   fetchNonWeddingBusinessInquiryPlaybookRules,
+  fetchStudioBusinessProfileForNonWeddingPolicy,
+  resolveNonWeddingBusinessInquiryPolicyWithProfile,
   type NonWeddingBusinessInquiryChannel,
-  type NonWeddingBusinessInquiryPolicyResult,
+  type NonWeddingBusinessInquiryReasonCode,
+  type NonWeddingInquiryDecisionSource,
 } from "./nonWeddingBusinessInquiryPolicy.ts";
+import {
+  inferPromotedNonWeddingProjectTypeV1,
+  type WeddingProjectType,
+} from "./inferPromotedNonWeddingProjectTypeV1.ts";
+import {
+  PROFILE_FIT_FALLBACK_DRAFT_INSTRUCTION,
+  type NonWeddingProfileFit,
+} from "./nonWeddingInquiryProfileFit.ts";
 
 const DEFAULT_DECLINE_TEMPLATE =
   "Thanks for reaching out! Right now we only take on wedding commissions, so we're not the right fit for this one — but we wish you the best with the shoot.";
 
 const DEFAULT_UNCLEAR_OPERATOR_QUESTION =
   "Non-wedding inquiry arrived with no studio rule covering it. Decide whether to reply, decline, or ignore before automation proceeds.";
+
+function buildNonWeddingEscalationQuestionBody(
+  reasonCode: NonWeddingBusinessInquiryReasonCode,
+  senderRole: InboundSenderRoleClassification | null | undefined,
+): string {
+  const isSenderRoleReason =
+    reasonCode === "SENDER_ROLE_VENDOR_SOLICITATION_OPERATOR_REVIEW" ||
+    reasonCode === "SENDER_ROLE_PARTNERSHIP_OPERATOR_REVIEW" ||
+    reasonCode === "SENDER_ROLE_BILLING_FOLLOWUP_LINK_WEDDING" ||
+    reasonCode === "SENDER_ROLE_RECRUITER_OPERATOR_REVIEW";
+  const sr = senderRole;
+  if (isSenderRoleReason && sr && (sr.confidence === "medium" || sr.confidence === "high")) {
+    const note = sr.reason?.trim() ? ` Context: ${sr.reason.trim()}` : "";
+    switch (sr.role) {
+      case "vendor_solicitation":
+        return `Inbound classified as vendor or agency solicitation (sender-role). Not a client lead — decide reply, ignore, or block.${note}`;
+      case "partnership_or_collaboration":
+        return `Inbound classified as partnership or collaboration outreach.${note} Operator review before any client-style automation.`;
+      case "billing_or_account_followup":
+        return `Inbound classified as billing or account follow-up.${note} Link to the correct wedding or account before automating.`;
+      case "recruiter_or_job_outreach":
+        return `Inbound classified as recruiting or job outreach.${note} Not a client inquiry — use operator discretion.`;
+      default:
+        break;
+    }
+  }
+  return DEFAULT_UNCLEAR_OPERATOR_QUESTION;
+}
 
 const NON_WEDDING_ROUTER_INSTRUCTION_STEP = "non_wedding_business_inquiry_router";
 
@@ -46,12 +90,14 @@ const DECLINE_BODY_OPERATOR_NOTE_MARKER = "Studio rule note for operator:";
 
 function reasonCodeForNonWeddingDraftDecision(
   decision: NonWeddingBusinessInquiryPolicyDecision,
-): NonWeddingBusinessInquiryPolicyResult["reasonCode"] {
+): NonWeddingBusinessInquiryReasonCode {
   switch (decision) {
     case "allowed_auto":
       return "PLAYBOOK_AUTO_REPLY";
     case "allowed_draft":
       return "PLAYBOOK_DRAFT_FOR_REVIEW";
+    case "allowed_promote_to_project":
+      return "CUSTOMER_LEAD_PROMOTE_TO_PROJECT";
     case "disallowed_decline":
       return "PLAYBOOK_FORBIDDEN_DECLINE";
     default:
@@ -72,11 +118,47 @@ type PendingNonWeddingDraftRow = {
  * back to `allowed_draft` / `PLAYBOOK_DRAFT_FOR_REVIEW` because `allowed_auto` and `allowed_draft`
  * bodies are indistinguishable without history.
  */
+function extractProfileAuditFromDraftHistory(row: PendingNonWeddingDraftRow): {
+  decisionSource: NonWeddingInquiryDecisionSource;
+  profileFit: NonWeddingProfileFit;
+  profileFitReasonCodes: string[];
+} | null {
+  const history = row.instruction_history;
+  if (!Array.isArray(history)) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const entry = history[i];
+    if (!entry || typeof entry !== "object") continue;
+    const rec = entry as Record<string, unknown>;
+    if (rec.step !== NON_WEDDING_ROUTER_INSTRUCTION_STEP) continue;
+    const ds = rec.decision_source;
+    const pf = rec.profile_fit;
+    const pfr = rec.profile_fit_reason_codes;
+    if (typeof ds !== "string") return null;
+    if (
+      pf !== "fit" &&
+      pf !== "unfit" &&
+      pf !== "ambiguous" &&
+      pf !== "operator_review"
+    ) {
+      return null;
+    }
+    const codes = Array.isArray(pfr)
+      ? pfr.filter((x): x is string => typeof x === "string")
+      : [];
+    return {
+      decisionSource: ds as NonWeddingInquiryDecisionSource,
+      profileFit: pf,
+      profileFitReasonCodes: codes,
+    };
+  }
+  return null;
+}
+
 function reconstructOutcomeFromPendingNonWeddingDraft(
   row: PendingNonWeddingDraftRow,
 ): {
   decision: NonWeddingBusinessInquiryPolicyDecision;
-  reasonCode: NonWeddingBusinessInquiryPolicyResult["reasonCode"];
+  reasonCode: NonWeddingBusinessInquiryReasonCode;
   matchedPlaybookRuleId: string | null;
   matchedPlaybookActionKey: string | null;
 } {
@@ -95,9 +177,13 @@ function reconstructOutcomeFromPendingNonWeddingDraft(
           typeof rec.matched_playbook_action_key === "string"
             ? rec.matched_playbook_action_key
             : null;
+        const rc =
+          typeof rec.reason_code === "string"
+            ? (rec.reason_code as NonWeddingBusinessInquiryReasonCode)
+            : reasonCodeForNonWeddingDraftDecision(d);
         return {
           decision: d,
-          reasonCode: reasonCodeForNonWeddingDraftDecision(d),
+          reasonCode: rc,
           matchedPlaybookRuleId: matchedRuleId,
           matchedPlaybookActionKey: matchedActionKey ?? row.source_action_key,
         };
@@ -129,14 +215,62 @@ function reconstructOutcomeFromPendingNonWeddingDraft(
 
 export type NonWeddingBusinessInquiryRouteOutcome = {
   decision: NonWeddingBusinessInquiryPolicyDecision;
-  reasonCode: NonWeddingBusinessInquiryPolicyResult["reasonCode"];
+  reasonCode: NonWeddingBusinessInquiryReasonCode;
   matchedPlaybookRuleId: string | null;
   matchedPlaybookActionKey: string | null;
   draftId: string | null;
   escalationId: string | null;
+  decisionSource: NonWeddingInquiryDecisionSource;
+  profileFit: NonWeddingProfileFit;
+  profileFitReasonCodes: string[];
   /** True when the router found an already-routed thread and skipped inserts to stay idempotent. */
   alreadyRouted: boolean;
+  /** Populated when `decision === "allowed_promote_to_project"` (linked `weddings` row). */
+  promotedProjectId: string | null;
+  promotedProjectType: WeddingProjectType | null;
 };
+
+/** True when promotion linked a first-class `weddings` row in this router pass (Slice 3–4). */
+export function nonWeddingPromotionYieldedLinkedProject(
+  outcome: NonWeddingBusinessInquiryRouteOutcome | null,
+): boolean {
+  return (
+    outcome !== null &&
+    outcome.decision === "allowed_promote_to_project" &&
+    typeof outcome.promotedProjectId === "string" &&
+    outcome.promotedProjectId.length > 0
+  );
+}
+
+/**
+ * Resolves `effectiveWeddingId` / `effectivePhotographerId` for {@link runMainPathEmailDispatch}
+ * after optional wedding-intake bootstrap or non-wedding promotion (Slice 4). Intake bootstrap wins
+ * when both are absent; promotion and intake bootstrap are mutually exclusive in practice.
+ */
+export function computeEffectiveWeddingAfterInboxTriage(input: {
+  finalWeddingId: string | null;
+  finalPhotographerId: string | null;
+  tenantPhotographerId: string;
+  bootstrapWeddingId: string | null;
+  nonWeddingOutcome: NonWeddingBusinessInquiryRouteOutcome | null;
+}): { effectiveWeddingId: string | null; effectivePhotographerId: string | null } {
+  if (input.bootstrapWeddingId) {
+    return {
+      effectiveWeddingId: input.bootstrapWeddingId,
+      effectivePhotographerId: input.tenantPhotographerId,
+    };
+  }
+  if (nonWeddingPromotionYieldedLinkedProject(input.nonWeddingOutcome)) {
+    return {
+      effectiveWeddingId: input.nonWeddingOutcome!.promotedProjectId,
+      effectivePhotographerId: input.finalPhotographerId ?? input.tenantPhotographerId,
+    };
+  }
+  return {
+    effectiveWeddingId: input.finalWeddingId,
+    effectivePhotographerId: input.finalPhotographerId,
+  };
+}
 
 /**
  * Reads the thread row + **active** non-wedding-inquiry artifacts. Routing metadata alone is
@@ -153,9 +287,14 @@ async function findExistingNonWeddingInquiryArtifacts(
   metadataDraftId: string | null;
   metadataEscalationId: string | null;
   metadataDecision: NonWeddingBusinessInquiryPolicyDecision | null;
-  metadataReasonCode: NonWeddingBusinessInquiryPolicyResult["reasonCode"] | null;
+  metadataReasonCode: NonWeddingBusinessInquiryReasonCode | null;
   metadataRuleId: string | null;
   metadataActionKey: string | null;
+  metadataDecisionSource: NonWeddingInquiryDecisionSource | null;
+  metadataProfileFit: NonWeddingProfileFit | null;
+  metadataProfileFitReasonCodes: string[] | null;
+  metadataPromotedProjectId: string | null;
+  metadataPromotedProjectType: WeddingProjectType | null;
   existingDraftId: string | null;
   /** Snapshot for reconstructing decision/reason when metadata is missing (same row as `existingDraftId`). */
   pendingNonWeddingDraftRow: PendingNonWeddingDraftRow | null;
@@ -195,7 +334,7 @@ async function findExistingNonWeddingInquiryArtifacts(
       : null;
   const metadataReasonCode =
     isNonWeddingBucket && typeof meta!.reason_code === "string"
-      ? (meta!.reason_code as NonWeddingBusinessInquiryPolicyResult["reasonCode"])
+      ? (meta!.reason_code as NonWeddingBusinessInquiryReasonCode)
       : null;
   const metadataRuleId =
     isNonWeddingBucket && typeof meta!.matched_playbook_rule_id === "string"
@@ -204,6 +343,37 @@ async function findExistingNonWeddingInquiryArtifacts(
   const metadataActionKey =
     isNonWeddingBucket && typeof meta!.matched_playbook_action_key === "string"
       ? (meta!.matched_playbook_action_key as string)
+      : null;
+  const metadataDecisionSource =
+    isNonWeddingBucket && typeof meta!.decision_source === "string"
+      ? (meta!.decision_source as NonWeddingInquiryDecisionSource)
+      : null;
+  const metadataProfileFit =
+    isNonWeddingBucket &&
+    (meta!.profile_fit === "fit" ||
+      meta!.profile_fit === "unfit" ||
+      meta!.profile_fit === "ambiguous" ||
+      meta!.profile_fit === "operator_review")
+      ? (meta!.profile_fit as NonWeddingProfileFit)
+      : null;
+  const metadataProfileFitReasonCodes =
+    isNonWeddingBucket && Array.isArray(meta!.profile_fit_reason_codes)
+      ? (meta!.profile_fit_reason_codes as unknown[]).filter((x): x is string => typeof x === "string")
+      : null;
+  const metadataPromotedProjectId =
+    isNonWeddingBucket && typeof meta!.promoted_project_id === "string"
+      ? (meta!.promoted_project_id as string)
+      : null;
+  const rawProjectType = isNonWeddingBucket ? meta!.project_type : null;
+  const metadataPromotedProjectType =
+    rawProjectType === "wedding" ||
+    rawProjectType === "portrait" ||
+    rawProjectType === "commercial" ||
+    rawProjectType === "family" ||
+    rawProjectType === "editorial" ||
+    rawProjectType === "brand_content" ||
+    rawProjectType === "other"
+      ? (rawProjectType as WeddingProjectType)
       : null;
 
   const { data: draftRows, error: draftErr } = await supabase
@@ -252,16 +422,65 @@ async function findExistingNonWeddingInquiryArtifacts(
     metadataReasonCode,
     metadataRuleId,
     metadataActionKey,
+    metadataDecisionSource,
+    metadataProfileFit,
+    metadataProfileFitReasonCodes,
+    metadataPromotedProjectId,
+    metadataPromotedProjectType,
     existingDraftId,
     pendingNonWeddingDraftRow,
     existingEscalationId,
   };
 }
 
+/** Customer-facing reply when policy uses profile fit but no playbook rule (`PROFILE_FIT_FALLBACK_DRAFT`). */
+function buildProfileDerivedFallbackCustomerEmail(dispatchIntent: TriageIntent): string {
+  const cta = (() => {
+    switch (dispatchIntent) {
+      case "commercial":
+        return "When you have a moment, could you share the scope, how you'd like to use the work, and your timeline — plus where you'd like to shoot if you know it?";
+      case "logistics":
+        return "When you have a moment, could you confirm the dates and locations you're considering, and what matters most for you on this?";
+      case "project_management":
+        return "Could you outline the main milestones or deliverables you're hoping for, and your rough timeline?";
+      case "concierge":
+        return "Could you share a bit more about what you have in mind — the kind of session or project, plus timing and location if you know them?";
+      case "studio":
+        return "Could you share a bit more about your request and any timing or location details that apply?";
+      case "intake":
+      default:
+        return "Could you share a bit more about what you're looking for, plus any timing and location details that would help us respond?";
+    }
+  })();
+
+  return [
+    "Hello,",
+    "",
+    "Thank you for reaching out — we appreciate you getting in touch.",
+    "",
+    `We may be able to help with this kind of request. ${cta}`,
+    "",
+    "We'll review your note and follow up from here.",
+    "",
+    "Warm regards,",
+  ].join("\n");
+}
+
 function buildDraftBody(input: {
   decision: NonWeddingBusinessInquiryPolicyDecision;
   instruction: string;
+  decisionSource: NonWeddingInquiryDecisionSource;
+  reasonCode: NonWeddingBusinessInquiryReasonCode;
+  dispatchIntent: TriageIntent;
 }): string {
+  if (
+    input.decision === "allowed_draft" &&
+    input.decisionSource === "profile_derived_fallback" &&
+    input.reasonCode === "PROFILE_FIT_FALLBACK_DRAFT"
+  ) {
+    return buildProfileDerivedFallbackCustomerEmail(input.dispatchIntent);
+  }
+
   const trimmed = input.instruction.trim();
   if (input.decision === "disallowed_decline") {
     if (trimmed.length === 0) return DEFAULT_DECLINE_TEMPLATE;
@@ -280,8 +499,26 @@ async function insertSeedDraft(
     decision: NonWeddingBusinessInquiryPolicyDecision;
     sourceActionKey: string | null;
     matchedRuleId: string | null;
+    reasonCode: NonWeddingBusinessInquiryReasonCode;
+    decisionSource: NonWeddingInquiryDecisionSource;
+    profileFit: NonWeddingProfileFit;
+    profileFitReasonCodes: string[];
   },
 ): Promise<string> {
+  const historyEntry: Record<string, unknown> = {
+    step: "non_wedding_business_inquiry_router",
+    decision: input.decision,
+    matched_playbook_rule_id: input.matchedRuleId,
+    matched_playbook_action_key: input.sourceActionKey,
+    reason_code: input.reasonCode,
+    decision_source: input.decisionSource,
+    profile_fit: input.profileFit,
+    profile_fit_reason_codes: input.profileFitReasonCodes,
+  };
+  if (input.decisionSource === "profile_derived_fallback") {
+    historyEntry.profile_fallback_operator_hint = PROFILE_FIT_FALLBACK_DRAFT_INSTRUCTION;
+  }
+
   const { data, error } = await supabase
     .from("drafts")
     .insert({
@@ -290,14 +527,7 @@ async function insertSeedDraft(
       status: "pending_approval",
       body: input.body,
       source_action_key: input.sourceActionKey,
-      instruction_history: [
-        {
-          step: "non_wedding_business_inquiry_router",
-          decision: input.decision,
-          matched_playbook_rule_id: input.matchedRuleId,
-          matched_playbook_action_key: input.sourceActionKey,
-        },
-      ],
+      instruction_history: [historyEntry],
     })
     .select("id")
     .single();
@@ -319,18 +549,40 @@ async function insertOperatorReviewEscalation(
     dispatchIntent: TriageIntent;
     llmIntent: TriageIntent;
     senderEmail: string;
-    reasonCode: NonWeddingBusinessInquiryPolicyResult["reasonCode"];
+    reasonCode: NonWeddingBusinessInquiryReasonCode;
     matchedRuleId: string | null;
     matchedActionKey: string | null;
+    senderRoleClassification?: InboundSenderRoleClassification | null;
   },
 ): Promise<string> {
-  const question_body = formatOperatorEscalationQuestion(DEFAULT_UNCLEAR_OPERATOR_QUESTION);
+  const question_body = formatOperatorEscalationQuestion(
+    buildNonWeddingEscalationQuestionBody(input.reasonCode, input.senderRoleClassification),
+  );
+
+  const sr = input.senderRoleClassification;
+  const senderRoleAudit =
+    sr &&
+    (input.reasonCode === "SENDER_ROLE_VENDOR_SOLICITATION_OPERATOR_REVIEW" ||
+      input.reasonCode === "SENDER_ROLE_PARTNERSHIP_OPERATOR_REVIEW" ||
+      input.reasonCode === "SENDER_ROLE_BILLING_FOLLOWUP_LINK_WEDDING" ||
+      input.reasonCode === "SENDER_ROLE_RECRUITER_OPERATOR_REVIEW")
+      ? {
+          sender_role: sr.role,
+          sender_role_confidence: sr.confidence,
+          sender_role_reason: sr.reason ?? null,
+        }
+      : null;
 
   const decision_justification = {
-    why_blocked: "non_wedding_business_inquiry_without_clear_policy",
-    missing_capability_or_fact: "playbook_rule_for_non_wedding_service_coverage",
-    risk_class: "studio_scope_policy",
+    why_blocked: senderRoleAudit
+      ? "sender_role_non_customer_human_outreach"
+      : "non_wedding_business_inquiry_without_clear_policy",
+    missing_capability_or_fact: senderRoleAudit
+      ? "operator_disambiguation_inbound_sender_role_v1"
+      : "playbook_rule_for_non_wedding_service_coverage",
+    risk_class: senderRoleAudit ? "inbound_sender_role_v1" : "studio_scope_policy",
     reason_code: input.reasonCode,
+    ...(senderRoleAudit ?? {}),
     evidence_refs: [
       `dispatch_intent:${input.dispatchIntent}`,
       `llm_intent:${input.llmIntent}`,
@@ -338,8 +590,9 @@ async function insertOperatorReviewEscalation(
       `matched_playbook_rule_id:${input.matchedRuleId ?? "none"}`,
       `matched_playbook_action_key:${input.matchedActionKey ?? "none"}`,
     ],
-    recommended_next_step:
-      "add_or_update_playbook_rule_for_non_wedding_service_inquiry_then_resolve",
+    recommended_next_step: senderRoleAudit
+      ? "Review sender purpose and thread; do not approve client-style drafts until confirmed."
+      : "add_or_update_playbook_rule_for_non_wedding_service_inquiry_then_resolve",
   };
 
   const { data, error } = await supabase
@@ -427,6 +680,10 @@ export async function routeNonWeddingBusinessInquiry(
     senderEmail: string;
     /** Full inbound body — currently only used for observability; reply generation may use it in future slices. */
     body: string;
+    /** Layer-3 sender role (post-ingest unlinked path); optional. */
+    senderRoleClassification?: InboundSenderRoleClassification | null;
+    /** Canonical thread title — used for v1 `project_type` inference. */
+    threadTitle?: string | null;
   },
 ): Promise<NonWeddingBusinessInquiryRouteOutcome> {
   const existing = await findExistingNonWeddingInquiryArtifacts(supabase, {
@@ -442,9 +699,13 @@ export async function routeNonWeddingBusinessInquiry(
       existing.pendingNonWeddingDraftRow !== null
         ? reconstructOutcomeFromPendingNonWeddingDraft(existing.pendingNonWeddingDraftRow)
         : null;
+    const fromDraftAudit =
+      existing.pendingNonWeddingDraftRow !== null
+        ? extractProfileAuditFromDraftHistory(existing.pendingNonWeddingDraftRow)
+        : null;
     const decision: NonWeddingBusinessInquiryPolicyDecision =
       existing.metadataDecision ?? fromDraft?.decision ?? "allowed_draft";
-    const reasonCode: NonWeddingBusinessInquiryPolicyResult["reasonCode"] =
+    const reasonCode: NonWeddingBusinessInquiryReasonCode =
       existing.metadataReasonCode ??
       fromDraft?.reasonCode ??
       reasonCodeForNonWeddingDraftDecision(decision);
@@ -456,15 +717,24 @@ export async function routeNonWeddingBusinessInquiry(
         existing.metadataActionKey ?? fromDraft?.matchedPlaybookActionKey ?? null,
       draftId: activeDraftId,
       escalationId: activeEscalationId ?? null,
+      decisionSource:
+        existing.metadataDecisionSource ??
+        fromDraftAudit?.decisionSource ??
+        "playbook_explicit",
+      profileFit: existing.metadataProfileFit ?? fromDraftAudit?.profileFit ?? "ambiguous",
+      profileFitReasonCodes:
+        existing.metadataProfileFitReasonCodes ?? fromDraftAudit?.profileFitReasonCodes ?? [],
       alreadyRouted: true,
+      promotedProjectId: existing.metadataPromotedProjectId,
+      promotedProjectType: existing.metadataPromotedProjectType,
     };
   }
 
   if (activeEscalationId) {
     const decision: NonWeddingBusinessInquiryPolicyDecision =
       existing.metadataDecision ?? "unclear_operator_review";
-    const reasonCode: NonWeddingBusinessInquiryPolicyResult["reasonCode"] =
-      existing.metadataReasonCode ?? "PLAYBOOK_NO_RULE_ESCALATE";
+    const reasonCode: NonWeddingBusinessInquiryReasonCode =
+      existing.metadataReasonCode ?? "PROFILE_AMBIGUOUS_NO_PLAYBOOK_ESCALATE";
     return {
       decision,
       reasonCode,
@@ -472,27 +742,67 @@ export async function routeNonWeddingBusinessInquiry(
       matchedPlaybookActionKey: existing.metadataActionKey,
       draftId: null,
       escalationId: activeEscalationId,
+      decisionSource: existing.metadataDecisionSource ?? "profile_ambiguous_escalate",
+      profileFit: existing.metadataProfileFit ?? "ambiguous",
+      profileFitReasonCodes: existing.metadataProfileFitReasonCodes ?? [],
       alreadyRouted: true,
+      promotedProjectId: existing.metadataPromotedProjectId,
+      promotedProjectType: existing.metadataPromotedProjectType,
     };
   }
 
-  const rules = await fetchNonWeddingBusinessInquiryPlaybookRules(
-    supabase,
-    input.photographerId,
-  );
+  const [rules, profile] = await Promise.all([
+    fetchNonWeddingBusinessInquiryPlaybookRules(supabase, input.photographerId),
+    fetchStudioBusinessProfileForNonWeddingPolicy(supabase, input.photographerId),
+  ]);
 
-  const policy = evaluateNonWeddingBusinessInquiryPolicy(
+  const basePolicy = resolveNonWeddingBusinessInquiryPolicyWithProfile(
     rules,
+    profile,
     input.dispatchIntent,
     input.channel,
+    input.senderRoleClassification ?? null,
+  );
+  const policy = applyCustomerLeadProjectPromotionUpgrade(
+    basePolicy,
+    input.senderRoleClassification ?? null,
   );
 
   const shared = {
     reasonCode: policy.reasonCode,
     matchedPlaybookRuleId: policy.matchedRule?.id ?? null,
     matchedPlaybookActionKey: policy.matchedActionKey,
+    decisionSource: policy.decisionSource,
+    profileFit: policy.profileFit,
+    profileFitReasonCodes: policy.profileFitReasonCodes,
     alreadyRouted: false,
   };
+
+  if (policy.decision === "allowed_promote_to_project") {
+    const projectType = inferPromotedNonWeddingProjectTypeV1({
+      dispatchIntent: input.dispatchIntent,
+      profile,
+      threadTitle: input.threadTitle ?? null,
+      rawMessagePreview: input.body,
+    });
+    const { weddingId } = await bootstrapInquiryWeddingForCanonicalThread(supabase, {
+      photographerId: input.photographerId,
+      threadId: input.threadId,
+      rawMessagePreview: input.body,
+      senderEmail: input.senderEmail,
+      threadTitle: input.threadTitle ?? null,
+      projectType,
+    });
+
+    return {
+      decision: policy.decision,
+      ...shared,
+      draftId: null,
+      escalationId: null,
+      promotedProjectId: weddingId,
+      promotedProjectType: projectType,
+    };
+  }
 
   if (
     policy.decision === "allowed_auto" ||
@@ -502,10 +812,20 @@ export async function routeNonWeddingBusinessInquiry(
     const draftId = await insertSeedDraft(supabase, {
       photographerId: input.photographerId,
       threadId: input.threadId,
-      body: buildDraftBody({ decision: policy.decision, instruction: policy.instruction }),
+      body: buildDraftBody({
+        decision: policy.decision,
+        instruction: policy.instruction,
+        decisionSource: policy.decisionSource,
+        reasonCode: policy.reasonCode,
+        dispatchIntent: input.dispatchIntent,
+      }),
       decision: policy.decision,
       sourceActionKey: policy.matchedActionKey,
       matchedRuleId: policy.matchedRule?.id ?? null,
+      reasonCode: policy.reasonCode,
+      decisionSource: policy.decisionSource,
+      profileFit: policy.profileFit,
+      profileFitReasonCodes: policy.profileFitReasonCodes,
     });
 
     return {
@@ -513,6 +833,8 @@ export async function routeNonWeddingBusinessInquiry(
       ...shared,
       draftId,
       escalationId: null,
+      promotedProjectId: null,
+      promotedProjectType: null,
     };
   }
 
@@ -525,6 +847,7 @@ export async function routeNonWeddingBusinessInquiry(
     reasonCode: policy.reasonCode,
     matchedRuleId: policy.matchedRule?.id ?? null,
     matchedActionKey: policy.matchedActionKey,
+    senderRoleClassification: input.senderRoleClassification ?? null,
   });
 
   return {
@@ -532,5 +855,7 @@ export async function routeNonWeddingBusinessInquiry(
     ...shared,
     draftId: null,
     escalationId,
+    promotedProjectId: null,
+    promotedProjectType: null,
   };
 }

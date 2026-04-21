@@ -13,6 +13,7 @@ import {
   OPERATOR_ESCALATION_PENDING_DELIVERY_V1_SCHEMA_VERSION,
   type OperatorEscalationDeliveryPolicy,
 } from "./inngest.ts";
+import { memoryScopeForWeddingBinding } from "./memory/memoryInsertScope.ts";
 import { createAwaitingReplyTaskDeduped } from "./operatorAwaitingReplyTask.ts";
 import { supabaseAdmin } from "./supabase.ts";
 
@@ -290,6 +291,7 @@ export async function handleOperatorDataToolCall(
       const { error } = await supabaseAdmin.from("memories").insert({
         photographer_id: photographerId,
         wedding_id,
+        scope: memoryScopeForWeddingBinding(wedding_id),
         type: "operator_whatsapp_note",
         title,
         summary: summary || full_content.slice(0, 400),

@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -1198,10 +1198,13 @@ export type Database = {
       }
       memories: {
         Row: {
+          archived_at: string | null
           full_content: string
           id: string
           learning_loop_artifact_key: string | null
+          person_id: string | null
           photographer_id: string
+          scope: Database["public"]["Enums"]["memory_scope"]
           source_escalation_id: string | null
           summary: string
           title: string
@@ -1209,10 +1212,13 @@ export type Database = {
           wedding_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           full_content: string
           id?: string
           learning_loop_artifact_key?: string | null
+          person_id?: string | null
           photographer_id: string
+          scope?: Database["public"]["Enums"]["memory_scope"]
           source_escalation_id?: string | null
           summary: string
           title: string
@@ -1220,10 +1226,13 @@ export type Database = {
           wedding_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           full_content?: string
           id?: string
           learning_loop_artifact_key?: string | null
+          person_id?: string | null
           photographer_id?: string
+          scope?: Database["public"]["Enums"]["memory_scope"]
           source_escalation_id?: string | null
           summary?: string
           title?: string
@@ -1231,6 +1240,13 @@ export type Database = {
           wedding_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "memories_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "memories_photographer_id_fkey"
             columns: ["photographer_id"]
@@ -2218,6 +2234,7 @@ export type Database = {
           package_inclusions: string[]
           package_name: string | null
           photographer_id: string
+          project_type: Database["public"]["Enums"]["wedding_project_type"]
           stage: Database["public"]["Enums"]["project_stage"]
           story_notes: string | null
           strategic_pause: boolean
@@ -2236,6 +2253,7 @@ export type Database = {
           package_inclusions?: string[]
           package_name?: string | null
           photographer_id: string
+          project_type?: Database["public"]["Enums"]["wedding_project_type"]
           stage?: Database["public"]["Enums"]["project_stage"]
           story_notes?: string | null
           strategic_pause?: boolean
@@ -2254,6 +2272,7 @@ export type Database = {
           package_inclusions?: string[]
           package_name?: string | null
           photographer_id?: string
+          project_type?: Database["public"]["Enums"]["wedding_project_type"]
           stage?: Database["public"]["Enums"]["project_stage"]
           story_notes?: string | null
           strategic_pause?: boolean
@@ -2336,7 +2355,6 @@ export type Database = {
           latest_body: string | null
           latest_message_id: string | null
           latest_message_metadata: Json | null
-          /** Gmail `messages.get` id on latest message; migration `20260415120100_v_threads_inbox_latest_provider_message_id.sql`. */
           latest_provider_message_id: string | null
           latest_sender: string | null
           latest_sent_at: string | null
@@ -2363,6 +2381,16 @@ export type Database = {
       }
     }
     Functions: {
+      backpatch_lazy_grouped_import_wedding_link: {
+        Args: {
+          p_gmail_label_import_group_id: string
+          p_import_candidate_id: string
+          p_photographer_id: string
+          p_thread_id: string
+          p_wedding_id: string
+        }
+        Returns: undefined
+      }
       check_user_exists: { Args: { lookup_email: string }; Returns: boolean }
       claim_draft_for_outbound: {
         Args: {
@@ -2376,6 +2404,10 @@ export type Database = {
           status: Database["public"]["Enums"]["draft_status"]
           thread_id: string
         }[]
+      }
+      classify_inbound_suppression: {
+        Args: { p_body: string; p_sender_raw: string; p_subject: string }
+        Returns: Json
       }
       complete_escalation_resolution_authorized_case_exception: {
         Args: {
@@ -2476,7 +2508,23 @@ export type Database = {
         Returns: Json
       }
       complete_task: { Args: { p_task_id: string }; Returns: Json }
+      convert_unfiled_thread_to_inquiry: {
+        Args: {
+          p_couple_names?: string
+          p_lead_client_name?: string
+          p_thread_id: string
+        }
+        Returns: Json
+      }
       delete_inbox_thread: { Args: { p_thread_id: string }; Returns: Json }
+      domain_is_ota_or_marketplace: {
+        Args: { p_domain: string }
+        Returns: boolean
+      }
+      extract_sender_email_from_raw: {
+        Args: { p_raw: string }
+        Returns: string
+      }
       finalize_gmail_import_link_existing_thread: {
         Args: {
           p_clear_import_approval_error: boolean
@@ -2530,13 +2578,12 @@ export type Database = {
         Args: { p_thread_id: string; p_wedding_id: string }
         Returns: Json
       }
-      convert_unfiled_thread_to_inquiry: {
-        Args: {
-          p_thread_id: string
-          p_couple_names?: string | null
-          p_lead_client_name?: string | null
-        }
-        Returns: Json
+      local_part_has_marketing_or_system_token: {
+        Args: { p_local: string }
+        Returns: {
+          has_marketing: boolean
+          has_system: boolean
+        }[]
       }
       match_knowledge: {
         Args: {
@@ -2583,6 +2630,18 @@ export type Database = {
         }
         Returns: Json
       }
+      validate_studio_base_location_shape: {
+        Args: { p_value: Json }
+        Returns: boolean
+      }
+      validate_studio_service_area_row_shape: {
+        Args: { p_value: Json }
+        Returns: boolean
+      }
+      validate_studio_service_areas_shape: {
+        Args: { p_value: Json }
+        Returns: boolean
+      }
     }
     Enums: {
       automation_mode: "auto" | "draft_only" | "human_only"
@@ -2607,6 +2666,7 @@ export type Database = {
       escalation_status: "open" | "answered" | "dismissed" | "promoted"
       event_type: "about_call" | "timeline_call" | "gallery_reveal" | "other"
       message_direction: "in" | "out" | "internal"
+      memory_scope: "project" | "person" | "studio"
       person_kind: "individual" | "organization"
       project_stage:
         | "inquiry"
@@ -2628,6 +2688,14 @@ export type Database = {
         | "system"
       thread_kind: "group" | "planner_only" | "other"
       thread_wedding_relation: "primary" | "mentioned" | "candidate"
+      wedding_project_type:
+        | "wedding"
+        | "portrait"
+        | "commercial"
+        | "family"
+        | "editorial"
+        | "brand_content"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2782,6 +2850,7 @@ export const Constants = {
       escalation_status: ["open", "answered", "dismissed", "promoted"],
       event_type: ["about_call", "timeline_call", "gallery_reveal", "other"],
       message_direction: ["in", "out", "internal"],
+      memory_scope: ["project", "person", "studio"],
       person_kind: ["individual", "organization"],
       project_stage: [
         "inquiry",
@@ -2799,6 +2868,15 @@ export const Constants = {
       thread_channel: ["email", "web", "whatsapp_operator", "manual", "system"],
       thread_kind: ["group", "planner_only", "other"],
       thread_wedding_relation: ["primary", "mentioned", "candidate"],
+      wedding_project_type: [
+        "wedding",
+        "portrait",
+        "commercial",
+        "family",
+        "editorial",
+        "brand_content",
+        "other",
+      ],
     },
   },
 } as const

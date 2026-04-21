@@ -9,6 +9,7 @@ import { generateTextEmbeddingSmall } from "../embeddings/generateTextEmbeddingS
 import {
   fetchRelevantGlobalKnowledgeForDecisionContext,
   MAX_GLOBAL_KNOWLEDGE_ROWS,
+  MAX_GLOBAL_KNOWLEDGE_ROWS_ASSISTANT,
 } from "./fetchRelevantGlobalKnowledgeForDecisionContext.ts";
 
 type RpcCapture = {
@@ -102,6 +103,29 @@ describe("fetchRelevantGlobalKnowledgeForDecisionContext", () => {
       replyChannel: "web",
     });
     expect(out.length).toBe(MAX_GLOBAL_KNOWLEDGE_ROWS);
+  });
+
+  it("caps at options.maxRows (assistant Mode B default constant)", async () => {
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      id: `id-${i}`,
+      document_type: "brand_voice",
+      content: `c${i}`,
+      metadata: null,
+      created_at: `2026-01-01T00:00:00.000Z`,
+      similarity: 0.95 - i * 0.01,
+    }));
+    const supabase = rpcClient(rows, {});
+    const out = await fetchRelevantGlobalKnowledgeForDecisionContext(
+      supabase,
+      {
+        photographerId: "tenant-1",
+        rawMessage: "studio assistant query",
+        threadSummary: null,
+        replyChannel: "web",
+      },
+      { maxRows: MAX_GLOBAL_KNOWLEDGE_ROWS_ASSISTANT },
+    );
+    expect(out.length).toBe(MAX_GLOBAL_KNOWLEDGE_ROWS_ASSISTANT);
   });
 
   it("returns empty when RPC returns no rows", async () => {

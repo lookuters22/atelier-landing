@@ -1,5 +1,10 @@
 /**
  * G5 async: chunked grouped Gmail label approval — avoids long synchronous Edge requests.
+ *
+ * Attachment path (high level): CRM-linking to the batch wedding requires explicit
+ * attachment eligibility (known client email or sender anchor from prior linked
+ * threads in this group), not merely shared label + passing suppression.
+ * See `docs/v3/GMAIL_GROUPED_IMPORT_ATTACHMENT_PATH.md`.
  */
 import type {
   GmailAccountTokenCache,
@@ -17,6 +22,7 @@ import {
   ensureBatchWeddingForGroup,
   type LazyWeddingState,
 } from "../../_shared/gmail/gmailLabelImportLazyWedding.ts";
+import { loadAnchorEmailsForGroupedImportWedding } from "../../_shared/gmail/gmailProjectAttachmentEligibility.ts";
 import { backpatchLazyGroupedImportWeddingLink } from "../../_shared/gmail/backpatchLazyGroupedImportWeddingLink.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { logA4WorkerOpLatencyV1 } from "../../_shared/workerOpLatencyObservability.ts";
@@ -192,15 +198,32 @@ async function processChunk(params: {
   /** Reuse `users.threads.get?format=full` when the same Gmail thread appears more than once in this chunk. */
   const gmailThreadFetchCache: GmailThreadFetchCache = new Map();
 
+  /**
+   * Same-chunk sender anchors: Inngest steps reset in-memory state, but within
+   * one chunk we must let thread B inherit thread A's sender after A links.
+   */
+  const chunkAnchorOverlay = new Set<string>();
+
   for (const cand of list) {
     const row = cand as Record<string, unknown>;
     const cid = row.id as string;
 
+    const anchorFromDb = lazyWedding.weddingId
+      ? await loadAnchorEmailsForGroupedImportWedding(
+          supabaseAdmin,
+          photographerId,
+          lazyWedding.weddingId,
+          groupId,
+        )
+      : new Set<string>();
+    const mergedAnchors = new Set<string>([...anchorFromDb, ...chunkAnchorOverlay]);
+    const groupedAttachmentAnchorEmails = [...mergedAnchors];
+
     /**
-     * Pass the current lazyWedding id (may be null on the very first
-     * non-suppressed candidate). Suppressed rows always materialize with
-     * `weddingId: null` regardless. Non-suppressed rows that arrive before
-     * lazy creation get `null` here and are backpatched to the lazyWedding id
+     * Pass the current lazyWedding id (may be null until the first
+     * attachment-eligible candidate). Suppressed rows always materialize with
+     * `weddingId: null` regardless. Eligible rows that arrive before lazy
+     * creation get `null` here and are backpatched to the lazyWedding id
      * immediately after creation below.
      */
     const passWeddingId = lazyWedding.weddingId;
@@ -216,6 +239,7 @@ async function processChunk(params: {
       gmailAccountTokenCache,
       gmailThreadFetchCache,
       clearImportApprovalError: true,
+      groupedAttachmentAnchorEmails,
     });
 
     if ("error" in result) {
@@ -233,13 +257,14 @@ async function processChunk(params: {
 
     const threadId = result.threadId;
     const suppressed = result.suppressed === true;
+    const attachmentEligible = result.groupedAttachmentEligible === true;
 
     /**
-     * Lazy batch-wedding creation — only the first non-suppressed candidate
-     * triggers `createGmailLabelImportWedding`. If every candidate is
-     * suppressed, no wedding is ever created and CRM stays clean.
+     * Lazy batch-wedding creation — only the first attachment-eligible candidate
+     * triggers `createGmailLabelImportWedding`. If every candidate is suppressed
+     * or ineligible, no wedding is created and CRM stays clean.
      */
-    if (!suppressed && !lazyWedding.weddingId) {
+    if (!suppressed && attachmentEligible && !lazyWedding.weddingId) {
       const ensure = await ensureBatchWeddingForGroup(supabaseAdmin, groupId, photographerId, lazyWedding, now);
       if ("error" in ensure) {
         await supabaseAdmin
@@ -288,6 +313,10 @@ async function processChunk(params: {
     }
 
     if (result.finalizedCore) {
+      if (attachmentEligible) {
+        const em = result.normalizedInboundEmail?.trim().toLowerCase() ?? "";
+        if (em) chunkAnchorOverlay.add(em);
+      }
       await persistChunkSuccessBump(groupId, counterState);
       continue;
     }
@@ -319,12 +348,24 @@ async function processChunk(params: {
               },
             }
           : {}),
+        ...(!suppressed && result.groupedAttachmentEligible === false
+          ? {
+              grouped_attachment_eligibility: {
+                eligible: false,
+                reason: result.groupedAttachmentReason ?? "no_positive_attachment_evidence",
+                ...(result.groupedAttachmentEvidence
+                  ? { evidence: result.groupedAttachmentEvidence }
+                  : {}),
+                at: now,
+              },
+            }
+          : {}),
       },
       clearImportApprovalError: true,
       threadWeddingId:
         suppressed
           ? null
-          : result.needsThreadWeddingIdUpdate
+          : result.needsThreadWeddingIdUpdate && attachmentEligible
           ? lazyWedding.weddingId
           : null,
     });
@@ -340,6 +381,11 @@ async function processChunk(params: {
         .eq("photographer_id", photographerId);
       await persistChunkFailureBump(groupId, counterState, cid, finErr);
       continue;
+    }
+
+    if (attachmentEligible) {
+      const em = result.normalizedInboundEmail?.trim().toLowerCase() ?? "";
+      if (em) chunkAnchorOverlay.add(em);
     }
 
     await persistChunkSuccessBump(groupId, counterState);
@@ -404,7 +450,7 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
       }
       /**
        * Wedding may legitimately be null on first run — it is created lazily
-       * by the chunk loop the first time a non-suppressed candidate appears.
+       * by the chunk loop the first time an attachment-eligible candidate appears.
        * Retry runs after partial approval may already have it set; either is
        * valid. The `missing_wedding` guard from the earlier eager-creation
        * design has been removed.
@@ -436,7 +482,7 @@ export const processGmailLabelGroupApproval = inngest.createFunction(
 
     /**
      * Mutable per-run lazy-wedding state. Initialised from whatever the group
-     * row holds (null on fresh approve_group, set after first non-suppressed
+     * row holds (null on fresh approve_group, set after first attachment-eligible
      * candidate or on retry of a partially-approved group).
      */
     const lazyWedding: LazyWeddingState = {

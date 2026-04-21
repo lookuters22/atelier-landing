@@ -194,6 +194,7 @@ export async function seedV3HighRiskReplayBundle(
     .insert({
       photographer_id: photographerId,
       wedding_id: weddingId,
+      scope: "project",
       type: "v3_rtrp_case_note",
       title: "Scheduling / package authority",
       summary: "Bride constraint on hour and package changes",
@@ -209,6 +210,7 @@ export async function seedV3HighRiskReplayBundle(
     .insert({
       photographer_id: photographerId,
       wedding_id: weddingId,
+      scope: "project",
       type: "v3_verify_case_note",
       title: "Planner gallery access (verify)",
       summary: "Verbal access grant — needs confirmation",

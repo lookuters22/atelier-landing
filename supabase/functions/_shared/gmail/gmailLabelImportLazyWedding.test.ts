@@ -10,10 +10,10 @@
  *
  * Fix locked in here:
  *   - `ensureBatchWeddingForGroup` is the single chokepoint where the wedding
- *     gets created. It is only called when the worker meets a non-suppressed
- *     candidate, so an "all suppressed" batch never reaches it and no
- *     wedding is created. (Tested at the worker call-site contract: see
- *     "all-suppressed batch never calls ensureBatchWeddingForGroup".)
+ *     gets created. The worker only calls it when a candidate is both not
+ *     suppressed and attachment-eligible (positive evidence), so an all-
+ *     suppressed or all-ineligible batch never reaches it and no wedding is
+ *     created. (Tested at the worker call-site contract: static gate check.)
  *   - When called, it claims the wedding race-safely under
  *     `materialized_wedding_id IS NULL`. Concurrent chunks see the persisted
  *     id and reuse it.
@@ -287,7 +287,7 @@ describe("ensureBatchWeddingForGroup — lazy creation contract", () => {
  * worker is not importable under Vitest because of `npm:inngest` resolution.
  */
 describe("processChunk — call-site gate for lazy wedding creation", () => {
-  it("only invokes ensureBatchWeddingForGroup behind a `!suppressed && !lazyWedding.weddingId` gate", async () => {
+  it("only invokes ensureBatchWeddingForGroup behind suppression + attachment-eligibility + lazy-wedding gates", async () => {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     const src = await fs.readFile(
@@ -299,11 +299,11 @@ describe("processChunk — call-site gate for lazy wedding creation", () => {
     );
     /**
      * Lock in the textual gate around the lazy creation call. Any future
-     * refactor that drops the suppression check will fail this assertion,
-     * preventing CRM pollution from regressing.
+     * refactor that drops the suppression or attachment-eligibility check
+     * will fail this assertion, preventing CRM pollution from regressing.
      */
     expect(src).toMatch(
-      /if\s*\(\s*!suppressed\s*&&\s*!lazyWedding\.weddingId\s*\)\s*\{[\s\S]*?ensureBatchWeddingForGroup\s*\(/,
+      /if\s*\(\s*!suppressed\s*&&\s*attachmentEligible\s*&&\s*!lazyWedding\.weddingId\s*\)\s*\{[\s\S]*?ensureBatchWeddingForGroup\s*\(/,
     );
     /**
      * Defensive: there must be exactly one call to ensureBatchWeddingForGroup
@@ -311,5 +311,22 @@ describe("processChunk — call-site gate for lazy wedding creation", () => {
      */
     const callCount = (src.match(/ensureBatchWeddingForGroup\s*\(/g) ?? []).length;
     expect(callCount).toBe(1);
+  });
+
+  it("merges DB anchors with a chunk overlay and passes them into materializeGmailImportCandidate", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await fs.readFile(
+      path.resolve(
+        process.cwd(),
+        "supabase/functions/inngest/functions/processGmailLabelGroupApproval.ts",
+      ),
+      "utf-8",
+    );
+    expect(src).toMatch(/loadAnchorEmailsForGroupedImportWedding\s*\(/);
+    expect(src).toMatch(/groupedAttachmentAnchorEmails/);
+    expect(src).toMatch(
+      /threadWeddingId:\s*[\s\S]*?attachmentEligible\s*\?/,
+    );
   });
 });

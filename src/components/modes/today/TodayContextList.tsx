@@ -238,7 +238,7 @@ export function TodayContextList() {
               )}
               strokeWidth={1.5}
             />
-            <span className="font-medium">Unfiled</span>
+            <span className="font-medium">Inbox threads</span>
             <span className="ml-auto rounded border border-border bg-background px-1.5 py-0 text-[11px] text-muted-foreground tabular-nums">
               {isLoading ? "—" : unfiledActions.length}
             </span>

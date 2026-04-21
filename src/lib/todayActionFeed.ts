@@ -5,6 +5,14 @@ import type { PendingDraft } from "../hooks/usePendingApprovals";
 import type { UnfiledThread } from "../hooks/useUnfiledInbox";
 import type { TaskRow } from "../hooks/useTasks";
 import {
+  deriveInboxThreadBucket,
+  inboxBucketTodayStatusLabel,
+  isSuppressedInboxThread,
+  readInboxMetadataSenderRole,
+  zenLobbyHeroTagForInboxBucket,
+  type InboxThreadBucket,
+} from "./inboxThreadBucket";
+import {
   escalationResolutionTarget,
   resolutionTargetToTodayActionResolution,
   type ResolutionTarget,
@@ -13,7 +21,40 @@ import {
 
 export type { PipelineResolutionTab, TodayActionResolution } from "./resolutionTarget";
 
-export type TodayActionType = "draft_approval" | "unfiled_thread" | "open_task" | "open_escalation";
+export type TodayActionType =
+  | "draft_approval"
+  | "unfiled_thread"
+  | "linked_lead_thread"
+  | "open_task"
+  | "open_escalation";
+
+/**
+ * ZenLobby priority tabs — four operator-facing groups, no catch-all “All”.
+ * Open tasks stay in `allActions` for pulse/sidebar/dock but map to `null` here (no task tab).
+ */
+export type ZenTodayTabId = "review" | "drafts" | "leads" | "needs_filing";
+
+export const ZEN_TODAY_TAB_ORDER: readonly ZenTodayTabId[] = [
+  "review",
+  "drafts",
+  "leads",
+  "needs_filing",
+] as const;
+
+/** Stable UI labels for Zen tab buttons (single source for tests + ZenLobby). */
+export const ZEN_TODAY_TAB_LABELS: Record<ZenTodayTabId, string> = {
+  review: "Review",
+  drafts: "Drafts",
+  leads: "Leads",
+  needs_filing: "Needs filing",
+};
+
+const ZEN_TAB_COUNT_ZERO: Record<ZenTodayTabId, number> = {
+  review: 0,
+  drafts: 0,
+  leads: 0,
+  needs_filing: 0,
+};
 
 export type TodayCanonicalHomeType = "wedding" | "thread" | "inbox";
 
@@ -45,7 +86,42 @@ export type TodayAction = {
   /** Typed destination — use for navigation and tests; `resolution` / `route_to` are derived. */
   target: ResolutionTarget;
   today_selection: Exclude<TodaySelection, { type: "overview" } | { type: "wedding" }>;
+  /** Set for `unfiled_thread` actions only — drives ZenLobby labels. */
+  inbox_thread_bucket?: InboxThreadBucket;
+  /** Zen priority list hero tag (unfiled + linked lead thread rows). */
+  zen_priority_tag?: string;
 };
+
+/** @returns Tab for Zen priority list, or `null` when the action is not shown in any top tab (e.g. tasks). */
+export function zenTodayTabForAction(a: TodayAction): ZenTodayTabId | null {
+  switch (a.action_type) {
+    case "open_escalation":
+      return "review";
+    case "draft_approval":
+      return "drafts";
+    case "linked_lead_thread":
+      return "leads";
+    case "unfiled_thread": {
+      const b = a.inbox_thread_bucket;
+      if (b === "inquiry") return "leads";
+      if (b === "operator_review") return "review";
+      return "needs_filing";
+    }
+    case "open_task":
+      return null;
+    default:
+      return "needs_filing";
+  }
+}
+
+export function countTodayActionsByZenTab(actions: TodayAction[]): Record<ZenTodayTabId, number> {
+  const out = { ...ZEN_TAB_COUNT_ZERO };
+  for (const a of actions) {
+    const t = zenTodayTabForAction(a);
+    if (t) out[t]++;
+  }
+  return out;
+}
 
 export type OpenEscalationRow = {
   id: string;
@@ -126,18 +202,23 @@ export function todayActionFromDraft(d: PendingDraft): TodayAction {
   };
 }
 
-export function todayActionFromUnfiled(t: UnfiledThread): TodayAction {
+/**
+ * Linked inbox thread whose project is still in pre-booking (`INQUIRY_STAGES` in inbox surface).
+ * Includes promoted non-wedding projects sharing the same stage enum.
+ */
+export function todayActionFromLinkedLeadThread(t: UnfiledThread, projectLabel: string): TodayAction {
   const created = t.last_activity_at;
   const target: ResolutionTarget = { type: "inbox_import", threadId: t.id };
   const resolution = resolutionTargetToTodayActionResolution(target);
+  const label = projectLabel.trim() || "Open lead";
   return {
-    id: `unfiled_thread:${t.id}`,
-    action_type: "unfiled_thread",
+    id: `linked_lead_thread:${t.id}`,
+    action_type: "linked_lead_thread",
     source_table: "threads",
     source_id: t.id,
     title: t.title,
-    subtitle: t.sender || "Unknown sender",
-    status_label: "Unfiled",
+    subtitle: label,
+    status_label: "Open lead",
     canonical_home_type: "thread",
     canonical_home_id: t.id,
     needs_user_input: true,
@@ -147,6 +228,35 @@ export function todayActionFromUnfiled(t: UnfiledThread): TodayAction {
     resolution,
     target,
     today_selection: { type: "unfiled", id: t.id },
+    zen_priority_tag: "Open lead",
+  };
+}
+
+export function todayActionFromUnfiled(t: UnfiledThread): TodayAction {
+  const created = t.last_activity_at;
+  const target: ResolutionTarget = { type: "inbox_import", threadId: t.id };
+  const resolution = resolutionTargetToTodayActionResolution(target);
+  const inbox_thread_bucket = deriveInboxThreadBucket(t);
+  const senderRole = readInboxMetadataSenderRole(t.ai_routing_metadata);
+  return {
+    id: `unfiled_thread:${t.id}`,
+    action_type: "unfiled_thread",
+    source_table: "threads",
+    source_id: t.id,
+    title: t.title,
+    subtitle: t.sender || "Unknown sender",
+    status_label: inboxBucketTodayStatusLabel(t),
+    canonical_home_type: "thread",
+    canonical_home_id: t.id,
+    needs_user_input: true,
+    created_at: created,
+    due_at: null,
+    route_to: todayActionHref(resolution),
+    resolution,
+    target,
+    today_selection: { type: "unfiled", id: t.id },
+    inbox_thread_bucket,
+    zen_priority_tag: zenLobbyHeroTagForInboxBucket(inbox_thread_bucket, senderRole),
   };
 }
 
@@ -235,12 +345,24 @@ export function sortTodayActionsByRecency(actions: TodayAction[]): TodayAction[]
 export function buildTodayActionsFromSources(input: {
   drafts: PendingDraft[];
   unfiledThreads: UnfiledThread[];
+  /** Linked threads in pre-booking stages (wedding + non-wedding projects). */
+  linkedLeadThreads: UnfiledThread[];
+  /** Project list label (e.g. couple / client names) for each linked lead thread. */
+  getLinkedLeadSubtitle?: (t: UnfiledThread) => string;
   tasks: TaskRow[];
   escalations: OpenEscalationRow[];
 }): TodayAction[] {
   const out: TodayAction[] = [];
+  const leadSubtitle = input.getLinkedLeadSubtitle ?? (() => "Open lead");
   for (const d of input.drafts) out.push(todayActionFromDraft(d));
-  for (const t of input.unfiledThreads) out.push(todayActionFromUnfiled(t));
+  for (const t of input.unfiledThreads) {
+    if (isSuppressedInboxThread(t)) continue;
+    out.push(todayActionFromUnfiled(t));
+  }
+  for (const t of input.linkedLeadThreads) {
+    if (isSuppressedInboxThread(t)) continue;
+    out.push(todayActionFromLinkedLeadThread(t, leadSubtitle(t)));
+  }
   for (const t of input.tasks) out.push(todayActionFromTask(t));
   for (const e of input.escalations) out.push(todayActionFromEscalation(e));
   return sortTodayActionsByRecency(out);

@@ -435,6 +435,7 @@ async function main(): Promise<void> {
           .insert({
             photographer_id: photographerId,
             wedding_id: expansion.weddingId,
+            scope: "project",
             type: "v3_verify_case_note",
             title: "Contract scope — approval contact",
             summary: "No add-on hours or fee increases without bride approval",
@@ -722,6 +723,7 @@ async function main(): Promise<void> {
           .insert({
             photographer_id: photographerId,
             wedding_id: expansion.weddingId,
+            scope: "project",
             type: "v3_verify_case_note",
             title: "Publication / gallery embargo (verify)",
             summary: "Do not share galleries publicly or with vendors until couple release",

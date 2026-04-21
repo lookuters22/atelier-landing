@@ -21,7 +21,7 @@
 import { describe, expect, it } from "vitest";
 
 import { extractSuppressionRelevantInboundHeaders } from "./inboundHeaderExtraction.ts";
-import { readInboundFromHeader } from "./readInboundFromHeader.ts";
+import { inboundMetadataHeadersForClassifier, readInboundFromHeader } from "./readInboundFromHeader.ts";
 import { classifyGmailImportCandidate } from "../suppression/classifyGmailImportCandidate.ts";
 
 describe("extractSuppressionRelevantInboundHeaders", () => {
@@ -55,6 +55,37 @@ describe("extractSuppressionRelevantInboundHeaders", () => {
       headers: [{ name: "From", value: "   " }],
     });
     expect(headers.from).toBeNull();
+  });
+});
+
+describe("inboundMetadataHeadersForClassifier", () => {
+  it("maps persisted inbound_headers to classifier header keys", () => {
+    const meta = {
+      gmail_import: {
+        inbound_headers: {
+          from: "List <list@example.com>",
+          list_unsubscribe: "<https://example.com/u>",
+          list_id: "<list.example.com>",
+          precedence: "bulk",
+          auto_submitted: "auto-generated",
+        },
+      },
+    };
+    const h = inboundMetadataHeadersForClassifier(meta);
+    expect(h).toEqual({
+      "auto-submitted": "auto-generated",
+      precedence: "bulk",
+      "list-unsubscribe": "<https://example.com/u>",
+      "list-id": "<list.example.com>",
+    });
+  });
+
+  it("returns null when no suppression headers are present", () => {
+    expect(
+      inboundMetadataHeadersForClassifier({
+        gmail_import: { inbound_headers: { from: "a@b.com" } },
+      }),
+    ).toBeNull();
   });
 });
 

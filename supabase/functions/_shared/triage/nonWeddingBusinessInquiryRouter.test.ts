@@ -24,7 +24,13 @@ type PlaybookRuleRow = {
 
 type MockState = {
   rules: PlaybookRuleRow[];
+  /** When omitted, no `studio_business_profiles` row (ambiguous fit). */
+  studioProfile?: Record<string, unknown> | null;
   threadMetadata: Record<string, unknown> | null;
+  /** Initial `threads.wedding_id`; mock updates when bootstrap links the thread. */
+  threadWeddingId?: string | null;
+  threadTitle?: string | null;
+  nextWeddingId?: string;
   existingDrafts: {
     id: string;
     source_action_key: string;
@@ -50,10 +56,13 @@ function buildSupabaseMock(state: MockState): {
   draftInserts: Record<string, unknown>[];
   escalationInserts: Record<string, unknown>[];
   threadUpdates: Record<string, unknown>[];
+  weddingInserts: Record<string, unknown>[];
 } {
   const draftInserts: Record<string, unknown>[] = [];
   const escalationInserts: Record<string, unknown>[] = [];
   const threadUpdates: Record<string, unknown>[] = [];
+  const weddingInserts: Record<string, unknown>[] = [];
+  const runtime = { threadWeddingId: state.threadWeddingId ?? null as string | null };
 
   // Chainable "eq/like/in/limit" helpers that resolve to a fixed dataset.
   function selectChain<T>(rows: T[]) {
@@ -83,6 +92,20 @@ function buildSupabaseMock(state: MockState): {
       if (table === "playbook_rules") {
         return {
           select: () => selectChain(state.rules),
+        };
+      }
+      if (table === "studio_business_profiles") {
+        return {
+          select: () => {
+            const chain: Record<string, unknown> = {};
+            chain.eq = () => chain;
+            chain.maybeSingle = async () => {
+              const data =
+                "studioProfile" in state ? (state.studioProfile ?? null) : null;
+              return { data, error: null };
+            };
+            return chain;
+          },
         };
       }
       if (table === "drafts") {
@@ -168,16 +191,45 @@ function buildSupabaseMock(state: MockState): {
           },
         };
       }
+      if (table === "weddings") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            weddingInserts.push(row);
+            return {
+              select: () => ({
+                single: async () => ({
+                  data: { id: state.nextWeddingId ?? "wed-bootstrap-1" },
+                  error: null,
+                }),
+              }),
+            };
+          },
+        };
+      }
+      if (table === "clients") {
+        return {
+          insert: async () => ({ error: null }),
+        };
+      }
       if (table === "threads") {
         return {
           select: () =>
             selectChain(
               state.threadMetadata === undefined
                 ? []
-                : [{ ai_routing_metadata: state.threadMetadata }],
+                : [
+                    {
+                      id: "thread-1",
+                      wedding_id: runtime.threadWeddingId,
+                      photographer_id: "photo-1",
+                      title: state.threadTitle ?? null,
+                      ai_routing_metadata: state.threadMetadata,
+                    },
+                  ],
             ),
           update: (row: Record<string, unknown>) => {
             threadUpdates.push(row);
+            if (typeof row.wedding_id === "string") runtime.threadWeddingId = row.wedding_id;
             return {
               eq: () => ({
                 eq: async () => ({ error: null }),
@@ -190,7 +242,7 @@ function buildSupabaseMock(state: MockState): {
     },
   } as unknown as SupabaseClient;
 
-  return { client, draftInserts, escalationInserts, threadUpdates };
+  return { client, draftInserts, escalationInserts, threadUpdates, weddingInserts };
 }
 
 function ruleRow(over: Partial<PlaybookRuleRow>): PlaybookRuleRow {
@@ -254,6 +306,221 @@ describe("routeNonWeddingBusinessInquiry", () => {
     expect(escalationInserts).toHaveLength(0);
   });
 
+  it("profile_derived_fallback — draft body is customer-facing email, not internal instruction text", async () => {
+    const { client, draftInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [],
+      /** Concierge + portraiture capacity → clear profile fit; commercial would operator-review without a rule. */
+      studioProfile: {
+        core_services: ["photo"],
+        service_types: ["weddings", "portraiture"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const conciergeInput = { ...baseInput, llmIntent: "concierge" as const, dispatchIntent: "concierge" as const };
+    const out = await routeNonWeddingBusinessInquiry(client, conciergeInput);
+
+    expect(out.decision).toBe("allowed_draft");
+    expect(out.reasonCode).toBe("PROFILE_FIT_FALLBACK_DRAFT");
+    expect(out.decisionSource).toBe("profile_derived_fallback");
+    const body = String(draftInserts[0].body);
+    expect(body).not.toMatch(/no explicit playbook rule/i);
+    expect(body).not.toMatch(/Draft a concise/i);
+    expect(body).not.toMatch(/internal/i);
+    expect(body).toMatch(/Thank you for reaching out/i);
+    expect(body).toMatch(/may be able to help/i);
+    expect(body).toMatch(/Warm regards/);
+    const hist = draftInserts[0].instruction_history as unknown[];
+    expect(hist[0]).toMatchObject({ profile_fallback_operator_hint: expect.stringMatching(/playbook rule/i) });
+  });
+
+  it("commercial + clear profile fit + no playbook rule — operator review, no customer fallback draft", async () => {
+    const { client, draftInserts, escalationInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [],
+      studioProfile: {
+        core_services: ["photo", "content_creation"],
+        service_types: ["weddings"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, baseInput);
+
+    expect(out.decision).toBe("unclear_operator_review");
+    expect(out.reasonCode).toBe("COMMERCIAL_UNLINKED_REQUIRES_OPERATOR_DISAMBIGUATION");
+    expect(out.decisionSource).toBe("commercial_unlinked_operator_review");
+    expect(out.draftId).toBeNull();
+    expect(out.escalationId).toBe("esc-1");
+    expect(draftInserts).toHaveLength(0);
+    expect(escalationInserts).toHaveLength(1);
+    expect(escalationInserts[0]).toMatchObject({
+      reason_code: "COMMERCIAL_UNLINKED_REQUIRES_OPERATOR_DISAMBIGUATION",
+      action_key: "non_wedding_inquiry_policy_review",
+    });
+  });
+
+  it("sender-role vendor_solicitation + commercial + fit — vendor reason, no draft, escalation explains role", async () => {
+    const clearFitProfile = {
+      core_services: ["photo", "content_creation"],
+      service_types: ["weddings"],
+      geographic_scope: { schema_version: 2, mode: "domestic" },
+      travel_policy: { schema_version: 2, mode: "travels_freely" },
+      lead_acceptance_rules: {
+        schema_version: 2,
+        when_service_not_offered: "decline_politely",
+        when_geography_not_in_scope: "decline_politely",
+      },
+    };
+    const { client, draftInserts, escalationInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [],
+      studioProfile: clearFitProfile,
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      senderRoleClassification: {
+        role: "vendor_solicitation",
+        confidence: "high",
+        reason: "SEO package",
+      },
+    });
+
+    expect(out.reasonCode).toBe("SENDER_ROLE_VENDOR_SOLICITATION_OPERATOR_REVIEW");
+    expect(out.decisionSource).toBe("sender_role_vendor_operator_review");
+    expect(draftInserts).toHaveLength(0);
+    expect(escalationInserts).toHaveLength(1);
+    const esc = escalationInserts[0];
+    expect(String(esc.question_body)).toMatch(/vendor or agency solicitation/i);
+    const dj = esc.decision_justification as Record<string, unknown>;
+    expect(dj.why_blocked).toBe("sender_role_non_customer_human_outreach");
+    expect(dj.sender_role).toBe("vendor_solicitation");
+    expect(dj.sender_role_confidence).toBe("high");
+  });
+
+  it("sender-role billing_or_account_followup — billing reason code, no draft", async () => {
+    const { client, draftInserts, escalationInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [],
+      studioProfile: {
+        core_services: ["photo"],
+        service_types: ["weddings", "portraiture"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      llmIntent: "concierge",
+      dispatchIntent: "concierge",
+      senderRoleClassification: { role: "billing_or_account_followup", confidence: "medium" },
+    });
+
+    expect(out.reasonCode).toBe("SENDER_ROLE_BILLING_FOLLOWUP_LINK_WEDDING");
+    expect(draftInserts).toHaveLength(0);
+    expect(escalationInserts).toHaveLength(1);
+    expect(String(escalationInserts[0].question_body)).toMatch(/billing or account follow-up/i);
+  });
+
+  it("customer_lead + commercial + fit + no rule — still commercial disambiguation escalation", async () => {
+    const { client, escalationInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [],
+      studioProfile: {
+        core_services: ["photo", "content_creation"],
+        service_types: ["weddings"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      senderRoleClassification: { role: "customer_lead", confidence: "high" },
+    });
+
+    expect(out.reasonCode).toBe("COMMERCIAL_UNLINKED_REQUIRES_OPERATOR_DISAMBIGUATION");
+    expect(escalationInserts[0].decision_justification as Record<string, unknown>).toMatchObject({
+      why_blocked: "non_wedding_business_inquiry_without_clear_policy",
+    });
+  });
+
+  it("low-confidence vendor role — falls through to commercial disambiguation", async () => {
+    const { client, escalationInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [],
+      studioProfile: {
+        core_services: ["photo", "content_creation"],
+        service_types: ["weddings"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      senderRoleClassification: { role: "vendor_solicitation", confidence: "low" },
+    });
+
+    expect(out.reasonCode).toBe("COMMERCIAL_UNLINKED_REQUIRES_OPERATOR_DISAMBIGUATION");
+  });
+
+  it("idempotency: existing open escalation short-circuits (sender-role reason)", async () => {
+    const { client, draftInserts, escalationInserts } = buildSupabaseMock({
+      rules: [],
+      threadMetadata: {
+        routing_disposition: "non_wedding_business_inquiry",
+        policy_decision: "unclear_operator_review",
+        reason_code: "SENDER_ROLE_VENDOR_SOLICITATION_OPERATOR_REVIEW",
+        decision_source: "sender_role_vendor_operator_review",
+        operator_review_escalation_id: "esc-prior",
+      },
+      existingDrafts: [],
+      existingEscalations: [{ id: "esc-prior", status: "open", action_key: "non_wedding_inquiry_policy_review" }],
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      senderRoleClassification: { role: "vendor_solicitation", confidence: "high" },
+    });
+
+    expect(out.alreadyRouted).toBe(true);
+    expect(out.escalationId).toBe("esc-prior");
+    expect(out.reasonCode).toBe("SENDER_ROLE_VENDOR_SOLICITATION_OPERATOR_REVIEW");
+    expect(draftInserts).toHaveLength(0);
+    expect(escalationInserts).toHaveLength(0);
+  });
+
   it("disallowed_decline — seeds a decline draft incorporating the rule note", async () => {
     const { client, draftInserts } = buildSupabaseMock({
       ...cleanThreadState,
@@ -283,7 +550,7 @@ describe("routeNonWeddingBusinessInquiry", () => {
     const out = await routeNonWeddingBusinessInquiry(client, baseInput);
 
     expect(out.decision).toBe("unclear_operator_review");
-    expect(out.reasonCode).toBe("PLAYBOOK_NO_RULE_ESCALATE");
+    expect(out.reasonCode).toBe("PROFILE_AMBIGUOUS_NO_PLAYBOOK_ESCALATE");
     expect(out.draftId).toBeNull();
     expect(out.escalationId).toBe("esc-1");
     expect(draftInserts).toHaveLength(0);
@@ -292,7 +559,7 @@ describe("routeNonWeddingBusinessInquiry", () => {
       photographer_id: "photo-1",
       thread_id: "thread-1",
       action_key: "non_wedding_inquiry_policy_review",
-      reason_code: "PLAYBOOK_NO_RULE_ESCALATE",
+      reason_code: "PROFILE_AMBIGUOUS_NO_PLAYBOOK_ESCALATE",
       operator_delivery: "dashboard_only",
       status: "open",
     });
@@ -304,10 +571,52 @@ describe("routeNonWeddingBusinessInquiry", () => {
     ]);
   });
 
+  it("lead_acceptance route_to_operator on service OOS — escalation, not draft", async () => {
+    const { client, draftInserts, escalationInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [ruleRow({ decision_mode: "auto", instruction: "Should not auto." })],
+      studioProfile: {
+        core_services: ["photo"],
+        service_types: ["weddings", "elopements"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "route_to_operator",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const conciergeInput = { ...baseInput, llmIntent: "concierge" as const, dispatchIntent: "concierge" as const };
+    const out = await routeNonWeddingBusinessInquiry(client, conciergeInput);
+
+    expect(out.decision).toBe("unclear_operator_review");
+    expect(out.reasonCode).toBe("PROFILE_OOS_LEAD_ACCEPTANCE_OPERATOR_REVIEW");
+    expect(out.profileFit).toBe("operator_review");
+    expect(draftInserts).toHaveLength(0);
+    expect(escalationInserts).toHaveLength(1);
+    expect(escalationInserts[0]).toMatchObject({
+      reason_code: "PROFILE_OOS_LEAD_ACCEPTANCE_OPERATOR_REVIEW",
+    });
+  });
+
   it("allowed_auto — still seeds a draft (no auto-send here; dashboard approval preserved)", async () => {
     const { client, draftInserts } = buildSupabaseMock({
       ...cleanThreadState,
       rules: [ruleRow({ decision_mode: "auto", instruction: "Reply with standard blurb." })],
+      /** Clear commercial fit so ambiguous-fit downgrade does not apply. */
+      studioProfile: {
+        core_services: ["photo", "content_creation"],
+        service_types: ["weddings"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
     });
 
     const out = await routeNonWeddingBusinessInquiry(client, baseInput);
@@ -714,5 +1023,162 @@ describe("routeNonWeddingBusinessInquiry", () => {
     expect(out.decision).toBe("allowed_draft");
     expect(out.matchedPlaybookRuleId).toBe("email-specific");
     expect(draftInserts[0].body).toBe("Email-specific policy: reply briefly.");
+  });
+
+  const studioProfileFitConcierge = {
+    core_services: ["photo"],
+    service_types: ["weddings", "portraiture"],
+    geographic_scope: { schema_version: 2, mode: "domestic" },
+    travel_policy: { schema_version: 2, mode: "travels_freely" },
+    lead_acceptance_rules: {
+      schema_version: 2,
+      when_service_not_offered: "decline_politely",
+      when_geography_not_in_scope: "decline_politely",
+    },
+  };
+
+  it("customer_lead + fit + allowed_draft — promotes to first-class project, no draft", async () => {
+    const { client, draftInserts, weddingInserts, threadUpdates } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [ruleRow({ decision_mode: "draft_only" })],
+      studioProfile: studioProfileFitConcierge,
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      llmIntent: "concierge",
+      dispatchIntent: "concierge",
+      body: "Looking for a family session this fall",
+      threadTitle: "Family photos",
+      senderRoleClassification: { role: "customer_lead", confidence: "high" },
+    });
+
+    expect(out.decision).toBe("allowed_promote_to_project");
+    expect(out.reasonCode).toBe("CUSTOMER_LEAD_PROMOTE_TO_PROJECT");
+    expect(out.decisionSource).toBe("customer_lead_promote_to_project");
+    expect(out.draftId).toBeNull();
+    expect(draftInserts).toHaveLength(0);
+    expect(weddingInserts).toHaveLength(1);
+    expect(weddingInserts[0].project_type).toBe("family");
+    expect(out.promotedProjectId).toBe("wed-bootstrap-1");
+    expect(out.promotedProjectType).toBe("family");
+    expect(threadUpdates.some((u) => (u as { wedding_id?: string }).wedding_id === "wed-bootstrap-1")).toBe(
+      true,
+    );
+  });
+
+  it("customer_lead + commercial + matched playbook — promotes with project_type commercial", async () => {
+    const { client, weddingInserts, draftInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [
+        ruleRow({
+          action_key: "non_wedding_inquiry_commercial",
+          decision_mode: "draft_only",
+          instruction: "Reply with rates.",
+        }),
+      ],
+      studioProfile: {
+        core_services: ["photo", "content_creation"],
+        service_types: ["weddings", "commercial"],
+        geographic_scope: { schema_version: 2, mode: "domestic" },
+        travel_policy: { schema_version: 2, mode: "travels_freely" },
+        lead_acceptance_rules: {
+          schema_version: 2,
+          when_service_not_offered: "decline_politely",
+          when_geography_not_in_scope: "decline_politely",
+        },
+      },
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      senderRoleClassification: { role: "customer_lead", confidence: "medium" },
+    });
+
+    expect(out.decision).toBe("allowed_promote_to_project");
+    expect(weddingInserts[0].project_type).toBe("commercial");
+    expect(draftInserts).toHaveLength(0);
+  });
+
+  it("partnership_or_collaboration — no project created", async () => {
+    const { client, weddingInserts, draftInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [ruleRow({ decision_mode: "draft_only" })],
+      studioProfile: studioProfileFitConcierge,
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      llmIntent: "concierge",
+      dispatchIntent: "concierge",
+      senderRoleClassification: { role: "partnership_or_collaboration", confidence: "high" },
+    });
+
+    expect(out.reasonCode).toBe("SENDER_ROLE_PARTNERSHIP_OPERATOR_REVIEW");
+    expect(weddingInserts).toHaveLength(0);
+    expect(draftInserts).toHaveLength(0);
+  });
+
+  it("recruiter_or_job_outreach — no project created", async () => {
+    const { client, weddingInserts, draftInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [ruleRow({ decision_mode: "draft_only" })],
+      studioProfile: studioProfileFitConcierge,
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      llmIntent: "concierge",
+      dispatchIntent: "concierge",
+      senderRoleClassification: { role: "recruiter_or_job_outreach", confidence: "high" },
+    });
+
+    expect(out.reasonCode).toBe("SENDER_ROLE_RECRUITER_OPERATOR_REVIEW");
+    expect(weddingInserts).toHaveLength(0);
+    expect(draftInserts).toHaveLength(0);
+  });
+
+  it("customer_lead + forbidden playbook — decline draft only, no promotion", async () => {
+    const { client, weddingInserts, draftInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [ruleRow({ decision_mode: "forbidden", instruction: "Decline." })],
+      studioProfile: studioProfileFitConcierge,
+    });
+
+    const out = await routeNonWeddingBusinessInquiry(client, {
+      ...baseInput,
+      llmIntent: "concierge",
+      dispatchIntent: "concierge",
+      senderRoleClassification: { role: "customer_lead", confidence: "high" },
+    });
+
+    expect(out.decision).toBe("disallowed_decline");
+    expect(weddingInserts).toHaveLength(0);
+    expect(draftInserts).toHaveLength(1);
+  });
+
+  it("promotion path — second route reuses linked project (no duplicate wedding insert)", async () => {
+    const { client, weddingInserts } = buildSupabaseMock({
+      ...cleanThreadState,
+      rules: [ruleRow({ decision_mode: "draft_only" })],
+      studioProfile: studioProfileFitConcierge,
+      nextWeddingId: "wed-once",
+    });
+
+    const input = {
+      ...baseInput,
+      llmIntent: "concierge" as const,
+      dispatchIntent: "concierge" as const,
+      body: "Portrait session inquiry with headshots",
+      senderRoleClassification: { role: "customer_lead", confidence: "high" },
+    };
+
+    const out1 = await routeNonWeddingBusinessInquiry(client, input);
+    expect(out1.promotedProjectId).toBe("wed-once");
+    expect(weddingInserts).toHaveLength(1);
+
+    const out2 = await routeNonWeddingBusinessInquiry(client, input);
+    expect(out2.promotedProjectId).toBe("wed-once");
+    expect(weddingInserts).toHaveLength(1);
   });
 });

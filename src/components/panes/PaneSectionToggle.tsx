@@ -9,17 +9,20 @@ export function PaneSectionToggle({
   onOpenChange,
   children,
   className,
+  /** When set, default pane padding/typography classes are omitted so callers can use rail-specific styles (e.g. Ana `.ctx-section-label-toggle`). */
+  replaceBaseClassName = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
   className?: string;
+  replaceBaseClassName?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={() => onOpenChange(!open)}
-      className={cn(PANE_SECTION_TOGGLE, className)}
+      className={cn(!replaceBaseClassName && PANE_SECTION_TOGGLE, "text-left", className)}
       aria-expanded={open}
     >
       {open ? (

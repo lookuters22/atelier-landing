@@ -63,6 +63,96 @@ html, body {
   src: url(https://cdn.jsdelivr.net/fontsource/fonts/geist-mono:vf@latest/geist-mono-latin-wght-normal.woff2) format('woff2-variations');
 }
 
+/* Ana dashboard redesign — Saans (trial) from landing2 bundle; PPNeueMontreal fallback */
+@font-face {
+  font-family: 'Saans';
+  src: url('/landing2/fonts/Saans-TRIAL-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Saans';
+  src: url('/landing2/fonts/Saans-TRIAL-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Saans';
+  src: url('/landing2/fonts/Saans-TRIAL-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Saans';
+  src: url('/landing2/fonts/Saans-TRIAL-SemiBold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Saans';
+  src: url('/landing2/fonts/Saans-TRIAL-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Saans';
+  src: url('/landing2/fonts/Saans-TRIAL-Heavy.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Ana HTML `.mrow .when`, `.msg-head .when`, `.ctx-item .n` — `var(--font-semi-mono)` in export/redesign/ana.css */
+@font-face {
+  font-family: 'SaansSemiMono';
+  src: url('/landing2/fonts/SaansSemiMono-TRIAL-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SaansSemiMono';
+  src: url('/landing2/fonts/SaansSemiMono-TRIAL-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SaansSemiMono';
+  src: url('/landing2/fonts/SaansSemiMono-TRIAL-SemiBold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* export/redesign/ana.css — var(--font-mono) → SaansMono for Ana Inbox port */
+@font-face {
+  font-family: 'SaansMono';
+  src: url('/landing2/fonts/SaansMono-TRIAL-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SaansMono';
+  src: url('/landing2/fonts/SaansMono-TRIAL-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SaansMono';
+  src: url('/landing2/fonts/SaansMono-TRIAL-SemiBold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
@@ -907,7 +997,8 @@ html, body {
 
 /* ==========================================================
    VERCEL DARK DASHBOARD THEME
-   Scoped to .font-dashboard (wraps SidebarProvider).
+   Scoped to .font-dashboard (wraps SidebarProvider, manager, etc.).
+   Ana main shell tokens live under .font-dashboard.ana-main-dashboard only.
    Landing page stays warm/light via :root tokens.
    ========================================================== */
 .font-dashboard {
@@ -919,7 +1010,7 @@ html, body {
   letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
 
-  /* Conceptzilla light palette (default) */
+  /* Conceptzilla light palette (default) — manager + non–main-dashboard surfaces */
   --color-canvas: #f5f5f5;
   --color-ink: #1a1a1a;
   --color-ink-muted: #6b6b6b;
@@ -974,11 +1065,103 @@ html, body {
   --radius-3xl: 22px;
   --radius-4xl: 26px;
 
+  --dashboard-pane-divider: color-mix(in oklab, var(--color-border) 55%, transparent);
+  --dashboard-pane-divider-hover: color-mix(in oklab, var(--color-ink) 18%, transparent);
+
   --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
 
   /* Sidebar (off-white for Panes 1+2) */
   --color-sidebar: #f5f5f5;
   --sidebar-background: 0 0% 96%;
+  --sidebar-foreground: 0 0% 25%;
+  --sidebar-primary: 217 91% 60%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 92%;
+  --sidebar-accent-foreground: 0 0% 10%;
+  --sidebar-border: 0 0% 90%;
+  --sidebar-ring: 217 91% 60%;
+  --color-sidebar-foreground: #6b6b6b;
+  --color-sidebar-accent: rgba(0, 0, 0, 0.04);
+  --color-sidebar-accent-foreground: #1a1a1a;
+  --color-sidebar-primary: #2563eb;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-border: rgba(0, 0, 0, 0.08);
+  --color-sidebar-ring: #2563eb;
+}
+
+/*
+ * Ana main dashboard shell — /today, /inbox, /pipeline, /calendar only
+ * (class toggled in FourPaneLayout). Keeps manager/other .font-dashboard surfaces on legacy tokens.
+ */
+.font-dashboard.ana-main-dashboard {
+  --font-dashboard: "Saans", "PPNeueMontreal", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-semi-mono: "SaansSemiMono", "Saans", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 400;
+
+  --color-fin: #ff5600;
+  --color-canvas: #faf9f6;
+  --color-ink: #111111;
+  --color-ink-muted: #626260;
+  --color-ink-faint: #7b7b78;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-sunken: #f4f2ed;
+  --color-border: #dedbd6;
+  --color-link: #2563eb;
+  --color-link-hover: #1d4ed8;
+  --color-warn: #ef4444;
+
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #2563eb;
+
+  --color-background: #faf9f6;
+  --color-foreground: #111111;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #111111;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #111111;
+
+  --color-primary: #111111;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #f4f2ed;
+  --color-secondary-foreground: #111111;
+  --color-muted: #f0eeea;
+  --color-muted-foreground: #626260;
+
+  --color-accent: rgba(0, 0, 0, 0.04);
+  --color-accent-foreground: #111111;
+
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --highlight-top: rgba(255, 255, 255, 0.8);
+  --color-input: #f0eeea;
+  --color-ring: #2563eb;
+
+  --radius: 8px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
+  --radius-4xl: 22px;
+
+  --dashboard-pane-divider: color-mix(in oklab, var(--color-border) 55%, transparent);
+  --dashboard-pane-divider-hover: color-mix(in oklab, var(--color-ink) 18%, transparent);
+  --ease-ana-out: cubic-bezier(0.2, 0, 0, 1);
+
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
+
+  --color-sidebar: #f4f2ed;
+  --sidebar-background: 40 20% 95%;
   --sidebar-foreground: 0 0% 25%;
   --sidebar-primary: 217 91% 60%;
   --sidebar-primary-foreground: 0 0% 100%;
@@ -1059,6 +1242,11 @@ html, body {
   --color-sidebar-primary-foreground: #f5f5f7;
   --color-sidebar-border: rgba(255, 255, 255, 0.10);
   --color-sidebar-ring: #0169cc;
+}
+
+.dark .font-dashboard.ana-main-dashboard {
+  --color-fin: #ff5600;
+  --color-surface-sunken: #141416;
 }
 
 /* ============ THEME TRANSITION ============ */
@@ -1143,13 +1331,89 @@ html, body {
   --color-sidebar-ring: #0169cc;
 }
 
+.light .font-dashboard.ana-main-dashboard {
+  --color-canvas: #faf9f6;
+  --color-ink: #111111;
+  --color-ink-muted: #626260;
+  --color-ink-faint: #7b7b78;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-sunken: #f4f2ed;
+  --color-border: #dedbd6;
+  --color-link: #0169cc;
+  --color-link-hover: #0050a0;
+  --color-warn: #ff3b30;
+
+  --color-success: #34c759;
+  --color-error: #ff3b30;
+  --color-warning: #ff9500;
+  --color-info: #0169cc;
+
+  --color-background: #faf9f6;
+  --color-foreground: #111111;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #111111;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #111111;
+
+  --color-primary: #111111;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #f4f2ed;
+  --color-secondary-foreground: #111111;
+  --color-muted: #f0eeea;
+  --color-muted-foreground: #626260;
+
+  --color-accent: rgba(0, 0, 0, 0.04);
+  --color-accent-foreground: #111111;
+
+  --color-destructive: #ff3b30;
+  --color-destructive-foreground: #ffffff;
+
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --highlight-top: rgba(255, 255, 255, 0.8);
+  --color-input: #e5e5ea;
+  --color-ring: #0169cc;
+
+  --shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.03);
+
+  --sidebar-background: 240 5% 95%;
+  --sidebar-foreground: 240 6% 25%;
+  --sidebar-primary: 207 99% 40%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 240 5% 92%;
+  --sidebar-accent-foreground: 240 6% 10%;
+  --sidebar-border: 240 5% 84%;
+  --sidebar-ring: 207 99% 40%;
+  --color-sidebar: transparent;
+  --color-sidebar-foreground: #636366;
+  --color-sidebar-accent: rgba(0, 0, 0, 0.04);
+  --color-sidebar-accent-foreground: #1c1c1e;
+  --color-sidebar-primary: #0169cc;
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-border: rgba(0, 0, 0, 0.08);
+  --color-sidebar-ring: #0169cc;
+}
+
 .light .font-dashboard[data-slot="sidebar-wrapper"] {
   background: #f2f2f7 !important;
+}
+
+.light .font-dashboard.ana-main-dashboard[data-slot="sidebar-wrapper"] {
+  background: #faf9f6 !important;
 }
 
 .light .font-dashboard [data-slot="sidebar-inset"] {
   background: #f9f9fb !important;
   border-color: #d8d8dc !important;
+  box-shadow: none;
+}
+
+.light .font-dashboard.ana-main-dashboard [data-slot="sidebar-inset"] {
+  background: #faf9f6 !important;
+  border-color: var(--color-border) !important;
   box-shadow: none;
 }
 
@@ -1221,16 +1485,1049 @@ html, body {
   padding-top: 26px;
 }
 
+/* Today (ZenLobby) — Ana redesign companion to export/redesign/Ana Dashboard.html */
+.zen-today-name {
+  font-family: "Instrument Serif", ui-serif, Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@keyframes zen-fin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(255, 86, 0, 0.8);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 rgba(255, 86, 0, 0);
+  }
+}
+
+.zen-fin-pulse-dot {
+  animation: zen-fin-pulse 2.4s ease-in-out infinite;
+}
+
+/* -----------------------------------------------------------------------------
+   Today (ZenLobby) strict port — export/redesign/Ana Dashboard.html #view-today
+   Scoped under .zen-today-port; tokens mirror .ana-inbox-port for Saans / mono / serif.
+   ----------------------------------------------------------------------------- */
+.font-dashboard.ana-main-dashboard .zen-today-port {
+  --color-off-black: #111111;
+  --color-white: #ffffff;
+  --color-warm-cream: #faf9f6;
+  --color-fin: #ff5600;
+  --color-report-orange: #fe4c02;
+  --color-report-blue: #65b5ff;
+  --color-report-green: #0bdf50;
+  --color-report-red: #c41c1c;
+  --color-report-pink: #ff2067;
+  --color-report-lime: #b3e01c;
+  --fg-1: var(--color-off-black);
+  --fg-2: #313130;
+  --fg-3: #626260;
+  --fg-4: #7b7b78;
+  --fg-5: #9c9fa5;
+  --border-default: #dedbd6;
+  --surface-canvas: var(--color-warm-cream);
+  --surface-raised: var(--color-white);
+  --surface-sunken: #f4f2ed;
+  --radius-button: 4px;
+  --radius-nav: 6px;
+  --radius-card: 8px;
+  --font-sans: "Saans", "PPNeueMontreal", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SaansMono", ui-monospace, monospace;
+  --font-semi-mono: "SaansSemiMono", "Saans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-ui: var(--font-sans);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  /*
+   * Single backdrop recipe from export/redesign/Ana Dashboard.html `.dock` (L1042–1043).
+   * Same file also uses smaller blurs on .stat / .pri-hero / .prow — we use the dock’s
+   * stronger frosted chrome so live UI matches the visible “glass” in the redesign.
+   */
+  --ana-today-backdrop: blur(28px) saturate(1.3);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .today {
+  position: relative;
+  flex: 1 1 0;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: #fff;
+  display: grid;
+  /* Single row fills viewport height so the right column can shrink and .pri-list scrolls (avoids grid row growing with list content → clipped/half cards). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, clamp(560px, 42vw, 640px));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .today-left {
+  position: relative;
+  z-index: 2;
+  padding: 28px 40px 96px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .left-top {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .left-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 720px;
+}
+
+@media (max-width: 1400px) {
+  .font-dashboard.ana-main-dashboard .zen-today-port .stat-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 440px;
+  }
+}
+
+/* Stat / KPI glass — fills + borders from Ana Dashboard.html `.stat`; backdrop uses `--ana-today-backdrop` */
+.font-dashboard.ana-main-dashboard .zen-today-port .stat {
+  position: relative;
+  z-index: 0;
+  transform: translateZ(0);
+  padding: 12px 14px 13px;
+  background-color: rgba(20, 22, 26, 0.38);
+  -webkit-backdrop-filter: var(--ana-today-backdrop);
+  backdrop-filter: var(--ana-today-backdrop);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.22);
+  color: #fff;
+  min-width: 0;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat.warn-stat {
+  border-color: rgba(255, 104, 104, 0.28);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-k {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-v {
+  margin-top: 6px;
+  font-size: clamp(24px, 2.4vw, 30px);
+  line-height: 1;
+  letter-spacing: -0.8px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-v.attn {
+  color: #fff;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-v.warn {
+  color: #ff8a7a;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-delta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--color-fin);
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(255, 86, 0, 0.14);
+  border: 1px solid rgba(255, 86, 0, 0.32);
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .stat-sub {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: -0.05px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .today-right {
+  position: relative;
+  z-index: 2;
+  padding: 28px 32px 108px 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.25);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .meta .dot-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .meta .sun {
+  display: inline-block;
+  position: relative;
+  width: 90px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .meta .sun svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .meta .sun .arc {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .meta .sun .dot {
+  fill: var(--color-fin);
+  filter: drop-shadow(0 0 4px rgba(255, 86, 0, 0.9));
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .greet {
+  margin-top: 0;
+  font-family: var(--font-sans);
+  font-size: clamp(44px, 6.2vw, 68px);
+  line-height: 0.98;
+  letter-spacing: -1.8px;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.32);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .greet .muted {
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 400;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .greet .name {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -3.4px;
+  color: #fff;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pulse {
+  margin-top: 2px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: clamp(14px, 1.3vw, 17px);
+  line-height: 1.42;
+  color: rgba(255, 255, 255, 0.88);
+  max-width: 560px;
+  letter-spacing: -0.15px;
+  text-shadow: 0 1px 20px rgba(0, 0, 0, 0.3);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pulse .fin {
+  color: var(--color-fin);
+  font-style: normal;
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ticker {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ticker .it {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ticker .it::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-fin);
+  display: inline-block;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ticker b {
+  color: #fff;
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-panel.zen-pri-panel {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-head {
+  flex-shrink: 0;
+  padding: 4px 8px 14px;
+  border-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.3);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-eyebrow .fin-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-fin);
+  animation: zen-fin-pulse 2.4s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(255, 86, 0, 0.8);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-title {
+  margin: 0;
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1;
+  letter-spacing: -0.9px;
+  font-weight: 400;
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.32);
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-title b {
+  font-weight: 400;
+  font-family: var(--font-serif);
+  font-style: italic;
+  letter-spacing: -1.2px;
+}
+
+/* Priority tabs — Ana Dashboard.html "Underline tabs (not a chip pill)"; active line is a real node (.ptab-indicator) for crisp stacking over the hairline (same metrics as embedded .ptab[data-active]::after). */
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 6px 2px 0;
+  margin: 0;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  padding: 8px 0 10px;
+  color: rgba(255, 255, 255, 0.55);
+  position: relative;
+  z-index: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.28);
+  outline-offset: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab .n {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab[data-active="true"] {
+  color: #fff;
+  z-index: 1;
+}
+
+/* Same geometry as Ana Dashboard.html: full tab width, 1.5px, bottom -1px over the divider; paints above sibling tabs and the strip hairline */
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1.5px;
+  border-radius: 0;
+  background-color: #fff;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateZ(0);
+  z-index: 2;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab[data-active="true"] .ptab-indicator {
+  opacity: 1;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .ptab[data-active="true"] .n {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Priority hero — literal Ana Dashboard.html `.pri-hero` (L389–403): blur(24px) saturate(1.15), 12px radius */
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero {
+  position: relative;
+  z-index: 0;
+  flex-shrink: 0;
+  transform: translateZ(0);
+  margin: 16px 8px 12px;
+  padding: 18px 20px 16px;
+  background-color: rgba(20, 22, 26, 0.46);
+  -webkit-backdrop-filter: blur(24px) saturate(1.15);
+  backdrop-filter: blur(24px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 2px solid var(--color-fin);
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 50px rgba(0, 0, 0, 0.28);
+  color: #fff;
+  cursor: pointer;
+  transition:
+    transform 180ms var(--ease-out),
+    background 180ms var(--ease-out);
+  text-align: left;
+  /* width:100% + horizontal margin overflows the column — match block fill without exceeding parent */
+  width: auto;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero:hover {
+  background: rgba(20, 22, 26, 0.58);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--color-fin);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-tag .sdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-fin);
+  box-shadow: 0 0 8px rgba(255, 86, 0, 0.6);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-age {
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-who {
+  margin-top: 10px;
+  font-size: 17px;
+  font-weight: 500;
+  color: #fff;
+  letter-spacing: -0.2px;
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-preview {
+  margin-top: 6px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-meta {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-meta .sep {
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-hero-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pbtn {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 12px;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--color-fin);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(255, 86, 0, 0.35);
+  transition:
+    filter 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pbtn:hover {
+  filter: brightness(1.08);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pbtn:active {
+  transform: scale(0.97);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pbtn.ghost {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pbtn.ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+/*
+ * Priority list — literal copy of Ana Dashboard.html `.pri-list` (L466–471).
+ * This is the REAL scroll container for the Today priority rows. No masks, no gradients,
+ * no opacity washes on the stack.
+ *
+ * Literal source (Ana Dashboard.html:466-471):
+ *   .pri-list {
+ *     flex: 1; min-height: 0;
+ *     overflow-y: auto;
+ *     padding: 0 8px 90px;
+ *     display: flex; flex-direction: column; gap: 8px;
+ *     margin-top: 2px;
+ *   }
+ *
+ * `ZenLobby` may set an inline `max-height` on `.pri-list` so the default scrollport matches the
+ * redesign-aligned default stack (~six full rows after the hero in product; static HTML uses five
+ * demo rows), avoiding a half-visible
+ * row below the last full row when `flex: 1` would otherwise over-allocate height.
+ */
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/*
+ * Scrollbar — literal copy of Ana Dashboard.html L22–25, scoped to `.pri-list` so it
+ * overrides the global scrollbar-hide rule at `src/index.css` L2–6
+ * (`::-webkit-scrollbar { display: none; width: 0px; background: transparent; }`)
+ * which otherwise hides every WebKit scrollbar in the app.
+ *
+ * The `display:block !important; width:10px !important; height:10px !important` is the
+ * minimum required to defeat that global rule for this element only. Everything else
+ * (transparent track, transparent thumb, 999px radius, oklab(0.145 0 0 / 0.18) on
+ * hover/focus-within) is the verbatim redesign behavior.
+ */
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-list::-webkit-scrollbar {
+  display: block !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-list::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-list:hover::-webkit-scrollbar-thumb,
+.font-dashboard.ana-main-dashboard .zen-today-port .pri-list:focus-within::-webkit-scrollbar-thumb {
+  background: oklab(0.145 0 0 / 0.18);
+}
+
+/* Priority list row — literal Ana Dashboard.html `.prow` (L473–488): blur(18px) saturate(1.1), 10px radius */
+.font-dashboard.ana-main-dashboard .zen-today-port .prow {
+  position: relative;
+  z-index: 0;
+  flex-shrink: 0;
+  transform: translateZ(0);
+  display: grid;
+  max-width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: 30px 1fr auto;
+  gap: 12px;
+  padding: 11px 14px;
+  background-color: rgba(20, 22, 26, 0.34);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  align-items: center;
+  cursor: pointer;
+  transition:
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out);
+  color: #fff;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .prow:hover {
+  background: rgba(20, 22, 26, 0.48);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .prow.escalation {
+  border-left: 2px solid #ff6868;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .prow.fin-draft {
+  border-left: 2px solid var(--color-fin);
+}
+
+/* Ana Dashboard.html `.prow.done` (L492); `.zen-pri-stack-tail` = same visual for the bottom row of the capped first viewport when status is not “Done”. */
+.font-dashboard.ana-main-dashboard .zen-today-port .prow.done,
+.font-dashboard.ana-main-dashboard .zen-today-port .prow.zen-pri-stack-tail {
+  opacity: 0.55;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-family: var(--font-semi-mono);
+  font-weight: 500;
+  font-size: 10.5px;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .avatar.warn {
+  background: rgba(255, 104, 104, 0.12);
+  border-color: rgba(255, 104, 104, 0.35);
+  color: #ffb1a5;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .prow .who {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: nowrap;
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .prow .who .age {
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .prow .label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.68);
+  letter-spacing: -0.1px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  white-space: nowrap;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill .sdot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill.fin {
+  border-color: rgba(255, 86, 0, 0.45);
+  background: rgba(255, 86, 0, 0.14);
+  color: #ffb085;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill.fin .sdot {
+  background: var(--color-fin);
+  box-shadow: 0 0 6px rgba(255, 86, 0, 0.6);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill.warn {
+  border-color: rgba(255, 104, 104, 0.4);
+  background: rgba(255, 104, 104, 0.12);
+  color: #ffb1a5;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill.warn .sdot {
+  background: #ff7a7a;
+}
+
+/* Ana Dashboard.html .pill.done (L541–542) — paired with .prow.done */
+.font-dashboard.ana-main-dashboard .zen-today-port .pill.done {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .pill.done .sdot {
+  background: #7ae49a;
+}
+
+/* glass-soft primitive from Ana Dashboard.html — draft selection chrome only */
+.font-dashboard.ana-main-dashboard .zen-today-port .zen-glass-well {
+  margin: 0 8px 8px;
+  padding: 10px 12px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: var(--ana-today-backdrop);
+  backdrop-filter: var(--ana-today-backdrop);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ---------------------------------------------------------------------------
+   Ana floating badge + chat — export/redesign/Ana Dashboard.html .ana-badge + .glass
+   --------------------------------------------------------------------------- */
+.font-dashboard .ana-support-dock {
+  --ana-fin: #ff5600;
+  --ana-glass-bg: rgba(20, 22, 26, 0.36);
+  font-family: "Saans", "PPNeueMontreal", ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-dashboard .ana-support-dock .ana-badge-port {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  border-radius: 999px;
+  background: rgba(20, 22, 26, 0.55);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transform: translateZ(0);
+  isolation: isolate;
+}
+
+.font-dashboard .ana-support-dock .ana-badge-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--ana-fin);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: "Instrument Serif", ui-serif, Georgia, serif;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 0;
+  padding-bottom: 2px;
+  box-shadow: 0 0 10px rgba(255, 86, 0, 0.5);
+}
+
+.font-dashboard .ana-support-dock .ana-widget-glass-panel {
+  background: var(--ana-glass-bg);
+  backdrop-filter: blur(22px) saturate(1.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 20px 60px rgba(0, 0, 0, 0.25);
+  transform: translateZ(0);
+  isolation: isolate;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.font-dashboard .ana-support-dock .ana-widget-input-well {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.font-dashboard .ana-support-dock .ana-widget-role {
+  font-family: "SaansMono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.font-dashboard .ana-support-dock .ana-widget-body {
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+}
+
+.font-dashboard .ana-support-dock .ana-widget-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition:
+    background 150ms cubic-bezier(0.2, 0, 0, 1),
+    filter 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.font-dashboard .ana-support-dock .ana-widget-send:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  filter: brightness(1.06);
+}
+
+.font-dashboard .ana-support-dock .ana-widget-send svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.7;
+}
+
+/* Floating dock glass — Ana Dashboard.html .dock (literal treatment on nav shell) */
+.font-dashboard nav.ana-floating-dock {
+  border-radius: 16px;
+  padding: 6px 8px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(14, 16, 20, 0.68);
+  backdrop-filter: blur(28px) saturate(1.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+    0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.font-dashboard nav.ana-floating-dock.ana-floating-dock--inbox {
+  background: rgba(14, 16, 20, 0.82);
+}
+
+/* Idle dim: no `filter` on ancestors — it disables descendant backdrop-filter (stats / priority glass). */
+.font-dashboard.ana-main-dashboard .zen-today-port .zen-soft-focus .zen-soft-target {
+  opacity: 0.42;
+  transition: opacity 2s ease;
+}
+
+.font-dashboard.ana-main-dashboard .zen-today-port .zen-soft-focus,
+.font-dashboard.ana-main-dashboard .zen-today-port .zen-soft-target {
+  transition: opacity 0.45s ease;
+}
+
+@media (max-width: 1023px) {
+  .font-dashboard.ana-main-dashboard .zen-today-port .today {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .font-dashboard.ana-main-dashboard .zen-today-port .today-left {
+    padding: 24px 24px 48px;
+  }
+
+  .font-dashboard.ana-main-dashboard .zen-today-port .today-right {
+    padding: 16px 16px 96px;
+  }
+}
+
+/* Mode content wrapper — keeps resizable panes scrollable inside flex shell */
+.dashboard-page-shell {
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+}
+
 .font-dashboard .dashboard-context-pane {
   font-family: var(--font-dashboard);
   background: #f6f8fc;
   color: #1c1c1e;
 }
 
+.font-dashboard.ana-main-dashboard .dashboard-context-pane {
+  background: var(--color-surface-sunken);
+  color: var(--color-foreground);
+}
+
 .font-dashboard .dashboard-inspector-pane {
   font-family: var(--font-dashboard);
   background: #ffffff;
   color: #1c1c1e;
+}
+
+.font-dashboard.ana-main-dashboard .dashboard-inspector-pane {
+  background: var(--color-surface);
+  color: var(--color-foreground);
 }
 
 .dark .font-dashboard .dashboard-context-pane {
@@ -1261,6 +2558,7 @@ html, body {
 [data-slot="dialog-content"].dashboard-context-dialog-surface {
   font-family: var(--font-dashboard);
   border-radius: 18px;
+  /* Portaled outside route shell — fixed legacy surface (matches pre–Ana context rail) */
   background: #f6f8fc;
   color: #1c1c1e;
   border-color: rgba(0, 0, 0, 0.08);
@@ -1897,5 +3195,4524 @@ html:not(.light) [data-slot="dialog-content"].dashboard-context-dialog-surface {
 /* Dialog overlays in dashboard */
 .font-dashboard [role="dialog"][data-state] {
   border-radius: 18px;
+}
+
+/* =============================================================================
+   Ana Inbox strict visual port — tokens + rules from export/redesign/Ana Dashboard.html
+   (embedded <style>) and export/redesign/ana.css. Scoped so dashboard shell keeps behavior.
+   ============================================================================= */
+.font-dashboard.ana-main-dashboard .ana-inbox-port.ana-inbox-shell-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 340px;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-canvas);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port.ana-inbox-shell-root {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-inbox-shell-cell {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-inbox-shell-middle {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port {
+  --color-off-black: #111111;
+  --color-white: #ffffff;
+  --color-warm-cream: #faf9f6;
+  --color-fin: #ff5600;
+  --color-report-orange: #fe4c02;
+  --color-report-blue: #65b5ff;
+  --color-report-green: #0bdf50;
+  --color-report-red: #c41c1c;
+  --color-report-pink: #ff2067;
+  --color-report-lime: #b3e01c;
+  --fg-1: var(--color-off-black);
+  --fg-2: #313130;
+  --fg-3: #626260;
+  --fg-4: #7b7b78;
+  --fg-5: #9c9fa5;
+  --border-default: #dedbd6;
+  --surface-canvas: var(--color-warm-cream);
+  --surface-raised: var(--color-white);
+  --surface-sunken: #f4f2ed;
+  --radius-button: 4px;
+  --radius-nav: 6px;
+  --radius-card: 8px;
+  --font-sans: "Saans", "PPNeueMontreal", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SaansMono", ui-monospace, monospace;
+  --font-semi-mono: "SaansSemiMono", "Saans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-ui: var(--font-sans);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  /* export/redesign/ana.css :root --fs-body / --lh-body */
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background: var(--surface-canvas);
+  color-scheme: light;
+}
+
+.dark .font-dashboard.ana-main-dashboard .ana-inbox-port {
+  /* redesign reference is light; keep warm surfaces for parity */
+  --fg-1: #111111;
+  --fg-2: #313130;
+  --fg-3: #626260;
+  --fg-4: #7b7b78;
+  --fg-5: #9c9fa5;
+  --border-default: #dedbd6;
+  --surface-canvas: #faf9f6;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f2ed;
+  color: var(--fg-1);
+  background: var(--surface-canvas);
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-inbox-center {
+  display: grid;
+  grid-template-columns: 420px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border-default);
+}
+/* List-only mode: thread detail collapsed — single full-width column (export/redesign list focus). */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-inbox-center.ana-inbox-center-list-full {
+  grid-template-columns: minmax(0, 1fr);
+  border-right: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .pane {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-default);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .pane.last {
+  border-right: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .pane-head {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .pane-head h3 {
+  font-size: 17px;
+  letter-spacing: -0.4px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .pane-head h3 .count {
+  font-family: var(--font-semi-mono);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--fg-3);
+  padding: 2px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .pane-head h3 button.count {
+  font: inherit;
+  cursor: default;
+  background: transparent;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx {
+  background: var(--surface-sunken);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx .search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx .search input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 13px;
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx .search input::placeholder {
+  color: var(--fg-5);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx .search .kbd {
+  font-family: var(--font-semi-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  padding: 1px 5px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 8px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-section-label {
+  padding: 12px 10px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+/* Collapsible rail sections (Projects, Gmail labels, …): same mono/meta as `.ctx-section-label`, chevron via PaneSectionToggle */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-nav button.ctx-section-label-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0;
+  padding: 12px 10px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  text-align: left;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-nav button.ctx-section-label-toggle:hover {
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-nav button.ctx-section-label-toggle svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--fg-2);
+  letter-spacing: -0.1px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item:hover {
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-1);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item[data-active="true"] {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item .n {
+  margin-left: auto;
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+  font-variant-numeric: tabular-nums;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item[data-active="true"] .n {
+  color: rgba(255, 255, 255, 0.7);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-item .fin-n {
+  margin-left: auto;
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--color-fin);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: -0.1px;
+  font-weight: 400;
+  color: var(--fg-3);
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-sans);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-label:hover {
+  background: oklab(0.145 0 0 / 0.03);
+  color: var(--fg-1);
+}
+/* Buttons must not use `font: inherit` — parent nav has no 13px, so labels blew up to root/body size. */
+.font-dashboard.ana-main-dashboard .ana-inbox-port button.ctx-label {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: -0.1px;
+  font-weight: 400;
+  color: var(--fg-3);
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port button.ctx-label[data-active="true"] {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port button.ctx-label[data-active="true"]:hover {
+  background: var(--color-off-black);
+  color: var(--color-white);
+  filter: brightness(1.05);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-label .sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-head {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+  background: var(--surface-canvas);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  width: fit-content;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-tab {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  color: var(--fg-3);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-tab[data-active="true"] {
+  background: var(--surface-raised);
+  color: var(--fg-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-tab .n {
+  color: var(--fg-4);
+  margin-left: 6px;
+  font-weight: 400;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-tab[data-active="true"] .n {
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+/* Thread counts line — sans per `Ana Dashboard.html` `.list-meta` (12px meta, not mono body) */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-meta .left {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: -0.1px;
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-meta .act {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--fg-3);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-meta .act:hover {
+  color: var(--fg-1);
+}
+
+/* Bulk selection row — port-only (no shadcn); reuses `.cb` / `.act` tokens */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-toolbar .cb {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 2px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-toolbar .cb input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-toolbar .cb input[type="checkbox"]:checked {
+  background: var(--color-off-black);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-toolbar .cb.inbox-list-sel-cb-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-bulk-select {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-button);
+  background: var(--surface-raised);
+  padding: 4px 8px;
+  max-width: 9.5rem;
+  cursor: pointer;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-bulk-select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  min-width: 26px;
+  min-height: 26px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-ico {
+  width: 14px;
+  height: 14px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-spin {
+  width: 14px;
+  height: 14px;
+  animation: ana-inbox-spin 0.85s linear infinite;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-del {
+  color: var(--color-report-red);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-list-sel-count {
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+@keyframes ana-inbox-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-rail-note {
+  margin: 0 8px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-nav);
+  background: var(--surface-raised);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--fg-2);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-rail-note[data-tone="warn"] {
+  border-color: rgba(254, 76, 2, 0.35);
+  color: var(--fg-2);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-rail-note[data-tone="err"] {
+  border-color: rgba(196, 28, 28, 0.35);
+  color: var(--color-report-red);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ctx-rail-hint {
+  margin: 0 8px 8px;
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-note {
+  padding: 16px 18px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-3);
+  border-bottom: 1px solid var(--border-default);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list-note[data-tone="err"] {
+  color: var(--color-report-red);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft[data-review-draft="true"] {
+  box-shadow: 0 0 0 2px rgba(255, 86, 0, 0.35);
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-workspace-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-url-notice {
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(254, 76, 2, 0.22);
+  background: rgba(255, 86, 0, 0.06);
+  padding: 10px 16px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fg-2);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-url-notice-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-url-notice-dismiss {
+  border: 0;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-fin);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  flex-shrink: 0;
+  padding: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-workspace-center {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-workspace-center-plain {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-pipeline-loading {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-canvas);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-pipeline-loading span {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-message-list-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface-canvas);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow {
+  display: grid;
+  grid-template-columns: 18px 18px 1fr auto;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+  align-items: flex-start;
+  position: relative;
+  list-style: none;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow:hover {
+  background: oklab(0.145 0 0 / 0.018);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-selected="true"] {
+  background: #f2eee5;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-selected="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-off-black);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-unread="true"] .who,
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-unread="true"] .subj {
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-unread="true"] .subj .snippet {
+  color: var(--fg-4);
+  font-weight: 400;
+}
+/* `.cb` — literal `Ana Dashboard.html` 14×14 raised box; native checkbox styled to sit inside. */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .cb {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 2px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .cb input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+  border: 0;
+  border-radius: 1px;
+  background: transparent;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .cb input[type="checkbox"]:checked {
+  background: var(--color-off-black);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .star {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .star:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .star .star-svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .star.active {
+  color: var(--color-fin);
+  fill: var(--color-fin);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .mbody {
+  min-width: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .who {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-2);
+  letter-spacing: -0.1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .mrow-who-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .mrow-star-spin {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+  animation: ana-inbox-spin 0.85s linear infinite;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .who .dotunread {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-fin);
+  display: none;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-unread="true"] .who .dotunread {
+  display: inline-block;
+}
+/* One-line subject + inline snippet — `Ana Dashboard.html` `.subj` / `.snippet` */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .subj {
+  margin-top: 2px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-2);
+  letter-spacing: -0.1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .subj .subj-title {
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .subj .snippet {
+  color: var(--fg-4);
+  font-weight: 400;
+}
+/* Literal `export/redesign/Ana Dashboard.html` `.mrow .tags` (default flex-wrap is nowrap — do not add `wrap`) */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .ttag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: oklab(0.145 0 0 / 0.05);
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .ttag.fin {
+  background: rgba(255, 86, 0, 0.1);
+  color: var(--color-fin);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .ttag.warn {
+  background: rgba(196, 28, 28, 0.1);
+  color: var(--color-report-red);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .ttag.book {
+  background: rgba(11, 223, 80, 0.1);
+  color: #0a7a2f;
+}
+
+/* Attachment chips in thread — mono meta like `.ttag` */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-attach-chip {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: oklab(0.145 0 0 / 0.05);
+  color: var(--fg-3);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-attach-chip:hover {
+  background: oklab(0.145 0 0 / 0.08);
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow .when {
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+  font-variant-numeric: tabular-nums;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .mrow[data-unread="true"] .when {
+  color: var(--fg-2);
+  font-weight: 500;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-banner-err {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(196, 28, 28, 0.22);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-report-red);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head .convert-err {
+  margin: 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-report-red);
+}
+
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread {
+  background: var(--surface-canvas);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-feed-col {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-inspector-fullbtn {
+  width: 100%;
+  justify-content: center;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-inspector-pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-inspector-pick-list button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-1);
+  cursor: pointer;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-inspector-pick-list button:hover {
+  opacity: 0.88;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-inspector-pick-list button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head {
+  padding: 22px 36px 18px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head .back {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+/* `Ana Dashboard.html` `.thread-head h1` — Saans, not serif (mock subject line) */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head h1 {
+  font-size: 28px;
+  line-height: 1.02;
+  letter-spacing: -0.8px;
+  font-weight: 400;
+  margin: 4px 0 0;
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head .crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head .crumbs .chip-sm {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 3px 7px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head .crumbs .chip-sm.book {
+  background: rgba(11, 223, 80, 0.08);
+  border-color: rgba(11, 180, 70, 0.25);
+  color: #0a7a2f;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-head-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .t-action {
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  font-size: 12px;
+  background: var(--surface-raised);
+  color: var(--fg-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .t-action:hover {
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-1);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .t-action svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.75;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .thread-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 36px 120px;
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg:last-of-type {
+  border-bottom: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-msg-reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--border-default);
+  padding: 12px 0 0;
+  margin: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-msg-reply-actions .t-action svg {
+  flex-shrink: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-msg-reply-actions-feed {
+  padding-top: 16px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head .ava {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--color-off-black);
+  color: var(--color-white);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-semi-mono);
+  font-size: 13px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head .ava.you {
+  background: var(--surface-canvas);
+  color: var(--fg-1);
+  border: 1px solid var(--border-default);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head .meta {
+  flex: 1;
+  min-width: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head .name {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head .name .addr {
+  font-weight: 400;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-head .when {
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+}
+/* `Ana Dashboard.html` `.msg p` — thread body is Saans, not serif */
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-inbox-ana-plain p {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--fg-2);
+  margin: 0 0 12px;
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-inbox-ana-plain p:last-child {
+  margin-bottom: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .msg-inbox-ana-plain p b {
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft {
+  margin: 22px 0 4px;
+  border: 1px solid var(--color-fin);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  overflow: hidden;
+  position: relative;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 86, 0, 0.025), transparent 30%);
+  pointer-events: none;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 86, 0, 0.15);
+  background: rgba(255, 86, 0, 0.03);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-head .left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-head .badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-fin);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-head .badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-fin);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-head .who-for {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-head .who-for b {
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-body {
+  padding: 18px 18px 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-body p {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--fg-2);
+  margin: 0 0 10px;
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-foot .left {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-foot .left .conf {
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ana-draft-foot .actions {
+  display: flex;
+  gap: 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .btn-send {
+  background: var(--color-fin);
+  color: var(--color-white);
+  padding: 7px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .btn-send:hover {
+  filter: brightness(1.05);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .btn-send:active {
+  transform: scale(0.96);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port a.btn-ghostline,
+.font-dashboard.ana-main-dashboard .ana-inbox-port a.btn-send {
+  text-decoration: none;
+  box-sizing: border-box;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port a.btn-ghostline {
+  display: inline-flex;
+  align-items: center;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port a.btn-send {
+  display: inline-flex;
+  align-items: center;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .btn-ghostline {
+  background: transparent;
+  color: var(--fg-2);
+  padding: 7px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .btn-ghostline:hover {
+  color: var(--fg-1);
+  background: oklab(0.145 0 0 / 0.04);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inspector {
+  background: var(--surface-sunken);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inspector .pane-head {
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inspector .pane-head h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+  color: var(--fg-1);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 20px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana {
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  border-radius: var(--radius-card);
+  padding: 16px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana.linked {
+  border-color: rgba(11, 223, 80, 0.25);
+  background: rgba(11, 223, 80, 0.03);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana h4 {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  margin: 0 0 4px;
+  color: var(--fg-1);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana p {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+  margin: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana .open-link {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  text-decoration: none;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .card-ana .open-link:hover {
+  opacity: 0.85;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .insp-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 8px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .insp-label.insp-label-inline {
+  margin: 0;
+  margin-right: 4px;
+  display: inline;
+  vertical-align: baseline;
+  color: var(--fg-2);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ai-reason-val {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .insp-mini-err {
+  margin: 8px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-report-red);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .insp-sender-line {
+  margin: 0 0 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-sender-contact-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-sender-contact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  padding: 5px 10px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .inbox-sender-contact-ico {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .kv {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .kv .row {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 10px;
+  align-items: flex-start;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .kv .row svg {
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  color: var(--fg-4);
+  stroke-width: 1.75;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .kv .row .k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  margin-bottom: 2px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .kv .row .v {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ai-reason {
+  border-top: 1px solid var(--border-default);
+  padding-top: 14px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ai-reason .conf-bar {
+  height: 3px;
+  background: oklab(0.145 0 0 / 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ai-reason .conf-bar > i {
+  display: block;
+  height: 100%;
+  background: var(--color-fin);
+  width: var(--ana-inspector-conf-pct, 87%);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .ai-reason .reason {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  font-family: var(--font-serif);
+  font-style: italic;
+  letter-spacing: -0.1px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .auto-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .auto-seg {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-canvas);
+  border-radius: 5px;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .auto-seg button {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  padding: 6px 0;
+  color: var(--fg-3);
+  border-radius: 3px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .auto-seg button[data-active="true"] {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+.font-dashboard.ana-main-dashboard .ana-inbox-port .auto-desc {
+  font-size: 12px;
+  color: var(--fg-3);
+  font-family: var(--font-serif);
+  font-style: italic;
+  letter-spacing: -0.1px;
+  margin: 0;
+}
+
+/* =============================================================================
+   Pipeline — export/redesign/Ana Dashboard.html #view-pipeline (PIPELINE section + HTML ~2914–3287)
+   Scoped under .ana-pipeline-port; pairs with .ana-inbox-port on the same root for shared thread/.msg rules.
+   ============================================================================= */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port {
+  --color-off-black: #111111;
+  --color-white: #ffffff;
+  --color-report-green: #0bdf50;
+  --color-report-red: #c41c1c;
+  --color-fin: #ff5600;
+  --fg-1: var(--color-off-black);
+  --fg-2: #313130;
+  --fg-3: #626260;
+  --fg-4: #7b7b78;
+  --fg-5: #9c9fa5;
+  --border-default: #dedbd6;
+  --surface-canvas: #faf9f6;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f2ed;
+  --font-sans: "Saans", "PPNeueMontreal", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SaansMono", ui-monospace, monospace;
+  --font-semi-mono: "SaansSemiMono", "Saans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pane-head h3 {
+  margin: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pane-head h3 .count {
+  font-family: var(--font-semi-mono);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--fg-3);
+  padding: 2px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  background: transparent;
+  cursor: default;
+}
+
+/* Left list — .wed-row, .wed-group (Ana Dashboard.html embedded ~610–695) */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+  border: none;
+  color: inherit;
+  font-family: var(--font-sans);
+  transition: background 120ms cubic-bezier(0.2, 0, 0, 1), color 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row:hover {
+  background: oklab(0.145 0 0 / 0.04);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row[data-active="true"] {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row .couple {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+  line-height: 1.25;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row[data-active="true"] .couple {
+  color: var(--color-white);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row .meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row[data-active="true"] .meta-line {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.4;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-chip.inquiry::before {
+  background: #e4a11b;
+}
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-chip.active::before {
+  background: var(--color-report-green);
+}
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-chip.deliver::before {
+  background: #9577e5;
+}
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-chip.archived::before {
+  background: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-row[data-active="true"] .stage-chip {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-group {
+  padding: 14px 10px 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-4);
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-group:hover {
+  color: var(--fg-2);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-group svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2;
+  transition: transform 160ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-group[data-collapsed="true"] svg {
+  transform: rotate(-90deg);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-group .gc {
+  margin-left: auto;
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .wed-group-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Pipeline center — tabbed project workspace (Ana Dashboard redesign) */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-pane {
+  min-height: 0;
+  min-width: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .kmono {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .kmono.orange {
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-tabbar {
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-raised);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-tab-row {
+  display: flex;
+  padding: 0 16px;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 12px 10px;
+  border: none;
+  background: transparent;
+  color: var(--fg-3);
+  font-size: 12.5px;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab:hover {
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab .n {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  padding-left: 3px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab[data-active="true"] {
+  color: var(--fg-1);
+  border-bottom-color: var(--color-off-black);
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab[data-active="true"] .n {
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px 12px;
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb .back {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb .back:hover {
+  color: var(--fg-2);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.6px;
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb .crumb-meta {
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb .chip-sm.book {
+  background: rgba(11, 223, 80, 0.14);
+  color: #17612a;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .proj-crumb-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  min-width: 0;
+  padding: 20px 24px 28px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab-body--threads {
+  padding: 0 !important;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Overview grid */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  grid-column: span 3;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-card.ov-hero {
+  grid-column: span 6;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 24px;
+  align-items: start;
+  padding: 22px 24px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-hero .brief {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.45;
+  letter-spacing: -0.2px;
+  margin: 8px 0 18px;
+  color: var(--fg-1);
+  text-wrap: pretty;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-next {
+  background: rgba(255, 86, 0, 0.04);
+  border-left: 2px solid var(--color-fin);
+  padding: 10px 14px;
+  border-radius: 0 4px 4px 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-next p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-hero-r {
+  text-align: right;
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 24px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-hero-r .bignum {
+  font-family: var(--font-serif);
+  font-size: 72px;
+  line-height: 1;
+  letter-spacing: -2px;
+  margin-top: 6px;
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-hero-r .bignum em {
+  font-style: normal;
+  font-size: 20px;
+  color: var(--fg-3);
+  letter-spacing: -0.5px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-hero-r .caption {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  margin-top: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-head .linkish {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-head .linkish:hover {
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+  font-size: 13px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-task .cb {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--fg-4);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-t-ti {
+  flex: 1;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-t-when {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-t-when.urgent {
+  color: var(--color-report-red);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-fin-bar {
+  height: 6px;
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  margin: 4px 0 12px;
+  overflow: hidden;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-fin-fill {
+  height: 100%;
+  background: var(--color-report-green);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-fin-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-fin-row:last-child {
+  border-bottom: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-fin-row .g,
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-fin-row b.g {
+  color: var(--color-report-green);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-threads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-th {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-th .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-th .dot.ana {
+  background: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-th .dot.warn {
+  background: var(--color-report-red);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-th .m {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: 0.3px;
+  text-align: right;
+  max-width: 55%;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-travel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-trv {
+  border-left: 2px solid var(--border-default);
+  padding: 4px 0 4px 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-trv .ti {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-trv .sub {
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-risks {
+  grid-column: span 6;
+  background: var(--surface-raised);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .risk {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .risk:last-child {
+  border-bottom: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .risk .risk-ico {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-fin);
+  color: var(--color-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .risk .risk-ico.soft {
+  background: var(--surface-sunken);
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .risk b {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .risk .sub {
+  font-size: 12px;
+  color: var(--fg-3);
+  margin-top: 2px;
+  line-height: 1.45;
+  font-family: var(--font-serif);
+  font-style: italic;
+}
+
+/* Tasks columns */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .tasks-wrap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .tasks-col {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .tcol-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .tcol-head .n {
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task {
+  display: flex;
+  gap: 10px;
+  padding: 10px 6px;
+  border-radius: 4px;
+  cursor: default;
+  align-items: flex-start;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task:hover {
+  background: var(--surface-sunken);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .cb {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--fg-4);
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .cb[data-on="true"] {
+  background: var(--surface-sunken);
+  border-color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .cb.done {
+  background: var(--color-off-black);
+  border-color: var(--color-off-black);
+  position: relative;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .cb.done::after {
+  content: "✓";
+  color: var(--color-white);
+  font-size: 10px;
+  position: absolute;
+  top: -2px;
+  left: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .t-ti {
+  font-size: 13px;
+  letter-spacing: -0.1px;
+  line-height: 1.35;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task.done .t-ti {
+  text-decoration: line-through;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .t-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: 0.3px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task .t-meta .tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--surface-sunken);
+  color: var(--fg-2);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Files */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .files-wrap {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .files-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .files-side .kmono {
+  padding: 6px 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  color: var(--fg-1);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-folder:hover {
+  background: var(--surface-sunken);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-folder[data-active="true"] {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-folder svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 1.6;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-folder .n {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-folder[data-active="true"] .n {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .files-main {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  flex: 1;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab-body--files {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ptab-body--files .files-wrap {
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .files-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .files-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 80px 1fr 90px;
+  gap: 14px;
+  padding: 10px 16px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port button.file-row {
+  width: 100%;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-row:hover:not(.file-grp-head) {
+  background: var(--surface-sunken);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-row.file-grp-head {
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--fg-4);
+  padding: 8px 16px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-row.file-grp-section {
+  margin-top: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .file-row b {
+  font-weight: 500;
+  color: var(--fg-1);
+  font-size: 12.5px;
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .f-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .f-name b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .f-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .f-ico.pdf {
+  background: rgba(196, 28, 28, 0.12);
+  color: var(--color-report-red);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .f-ico.doc {
+  background: rgba(101, 181, 255, 0.14);
+  color: #2164a8;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .f-ico.img {
+  background: rgba(11, 223, 80, 0.14);
+  color: #0a7828;
+}
+
+/* Finance */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-hero {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.3fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-hero .fin-total {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -1px;
+  margin-top: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-hero .fin-big {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  line-height: 1;
+  letter-spacing: -0.8px;
+  margin-top: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-hero .fin-big.g {
+  color: var(--color-report-green);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-hero .fin-sub {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  margin-top: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-bar {
+  height: 10px;
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-fill {
+  height: 100%;
+  background: var(--color-report-green);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-legend {
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-3);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-legend .d {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--surface-sunken);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-legend .d.g {
+  background: var(--color-report-green);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-card.fin-ana {
+  background: rgba(255, 86, 0, 0.04);
+}
+
+/* Travel */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .trv-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .trv-hero {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .trv-hero h2 {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.6px;
+  margin: 6px 0 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .trv-hero .sub {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .trv-hero-r {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 2px;
+  background: var(--surface-sunken);
+  color: var(--fg-3);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pill.g {
+  background: rgba(11, 223, 80, 0.15);
+  color: #17612a;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pill.big {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+/* Event */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-hero {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 22px 24px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-hero h2 {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.6px;
+  margin: 6px 0 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-hero .caption {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: -0.15px;
+  color: var(--fg-2);
+  max-width: 640px;
+  text-wrap: pretty;
+  margin: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-hero-ctas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 16px 18px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-card.evt-ana {
+  background: rgba(255, 86, 0, 0.04);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-card.evt-ana p {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  line-height: 1.5;
+  letter-spacing: -0.15px;
+  color: var(--fg-1);
+  text-wrap: pretty;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .kv {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .kv:last-child {
+  border-bottom: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .kv span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .kv b {
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  color: var(--fg-1);
+}
+
+/* People */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-sec .kmono {
+  margin-bottom: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  position: relative;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-card .avt.big {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-off-black);
+  color: var(--color-white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  margin-bottom: 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-card .avt.big.soft {
+  background: #d1c9c0;
+  color: var(--color-off-black);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-card .nm {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl-card .role {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+  margin-top: 1px;
+}
+
+@media (max-width: 1400px) {
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-card {
+    grid-column: span 2;
+  }
+
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-card.ov-hero {
+    grid-column: span 4;
+  }
+
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .ov-risks {
+    grid-column: span 4;
+  }
+
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .fin-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .evt-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .tasks-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .font-dashboard.ana-main-dashboard .ana-pipeline-port .files-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Stage progress rail */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  padding-right: 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  height: 1.5px;
+  width: 100%;
+  background: var(--border-default);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-done="true"]::after,
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-current="true"]::after {
+  background: var(--color-off-black);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-current="true"]::after {
+  background: linear-gradient(90deg, var(--color-off-black) 55%, var(--border-default) 100%);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-canvas);
+  border: 1.5px solid var(--border-default);
+  position: relative;
+  z-index: 1;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-done="true"] .dot {
+  background: var(--color-off-black);
+  border-color: var(--color-off-black);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-current="true"] .dot {
+  background: var(--surface-canvas);
+  border-color: var(--color-fin);
+  box-shadow: 0 0 0 3px rgba(255, 86, 0, 0.12);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step .lbl {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--fg-4);
+  line-height: 1.3;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-done="true"] .lbl {
+  color: var(--fg-2);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step[data-current="true"] .lbl {
+  color: var(--fg-1);
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .stage-rail .step .when {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+  letter-spacing: 0.3px;
+}
+
+/* Small buttons + draft (pipeline inspector / thread) */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  color: var(--fg-2);
+  cursor: pointer;
+  letter-spacing: -0.1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .btn-sm:hover {
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .btn-sm.primary {
+  background: var(--color-off-black);
+  color: var(--color-white);
+  border-color: var(--color-off-black);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .btn-sm.primary:hover {
+  opacity: 0.88;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pipeline-ana-read-copy {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--fg-1);
+  letter-spacing: -0.003em;
+  margin: 0;
+}
+
+/* Right inspector — .p-insp-card, .p-count-hero, .ppl (~942–1001) */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 14px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .inspector {
+  background: var(--surface-sunken);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-count-hero {
+  padding: 18px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background:
+    radial-gradient(60% 100% at 0% 0%, rgba(255, 86, 0, 0.07), rgba(255, 86, 0, 0) 70%),
+    #fff;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-count-hero .big {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  line-height: 1;
+  color: var(--fg-1);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-count-hero .big em {
+  font-style: italic;
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-count-hero .caption {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  line-height: 1.5;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-card {
+  padding: 14px 15px;
+  background: #fff;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-card .ct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-card .ct .edit {
+  color: var(--color-fin);
+  cursor: pointer;
+  text-transform: none;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  letter-spacing: 0;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-row {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 9px;
+  align-items: start;
+  padding: 4px 0;
+  font-size: 12.5px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-row svg {
+  width: 12px;
+  height: 12px;
+  stroke: var(--fg-3);
+  margin-top: 3px;
+  fill: none;
+  stroke-width: 1.6;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-row .k {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .p-insp-row .v {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-1);
+  line-height: 1.3;
+  letter-spacing: -0.003em;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl:last-child {
+  border-bottom: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl .avt {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--color-off-black);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl .role {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .ppl .nm {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-1);
+  font-weight: 400;
+}
+
+/* Task rows (alt tab) */
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .pipeline-task-list {
+  margin: 0;
+  padding: 10px 10px 24px;
+  list-style: none;
+  background: var(--surface-canvas);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: #fff;
+  margin-bottom: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row .chk {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row[data-done="true"] .chk {
+  background: var(--color-fin);
+  border-color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row[data-done="true"] .tt {
+  color: var(--fg-3);
+  text-decoration: line-through;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row .tt {
+  flex: 1;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg-1);
+  letter-spacing: -0.003em;
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row .due {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-pipeline-port .task-row .due.warn {
+  color: var(--color-fin);
+}
+
+/* =============================================================================
+   Calendar — export/redesign/Ana Dashboard.html #view-calendar (CSS ~1966–2696, HTML ~4010–4367)
+   Scoped under .ana-calendar-port on each calendar pane root.
+   ============================================================================= */
+.font-dashboard.ana-main-dashboard .ana-calendar-port {
+  --color-off-black: #111111;
+  --color-white: #ffffff;
+  --color-oat: #e5e2dc;
+  --color-report-red: #c41c1c;
+  --color-fin: #ff5600;
+  --fg-1: var(--color-off-black);
+  --fg-2: #313130;
+  --fg-3: #626260;
+  --fg-4: #7b7b78;
+  --fg-5: #9c9fa5;
+  --border-default: #dedbd6;
+  --surface-canvas: #faf9f6;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f2ed;
+  --font-sans: "Saans", "PPNeueMontreal", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SaansMono", ui-monospace, monospace;
+  --font-semi-mono: "SaansSemiMono", "Saans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+}
+
+.dark .font-dashboard.ana-main-dashboard .ana-calendar-port {
+  --color-off-black: #f5f5f7;
+  --color-white: #0a0a0a;
+  --color-oat: #3a3a3c;
+  --fg-1: #f5f5f7;
+  --fg-2: #d1d1d6;
+  --fg-3: #a1a1a6;
+  --fg-4: #8e8e93;
+  --fg-5: #636366;
+  --border-default: #38383a;
+  --surface-canvas: #0a0a0a;
+  --surface-raised: #1c1c1e;
+  --surface-sunken: #141416;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-ctx {
+  background: var(--surface-sunken);
+  border-right: 1px solid var(--border-default);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-ctx .pane-head {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-ctx .pane-head h3 {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-ctx .pane-head .sub {
+  margin-top: 4px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-ctx-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 10px 40px;
+}
+
+/* Mini calendar — Ana Dashboard.html ~1982–2044 (literal port) */
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal {
+  padding: 4px 4px 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-head .mm {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-head .nav {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-head .nav button {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  color: var(--fg-3);
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-head .nav button:hover {
+  background: oklab(0.145 0 0 / 0.05);
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-head .nav svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .dow {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  padding: 4px 0 6px;
+  text-align: center;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d {
+  position: relative;
+  height: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--fg-2);
+  border-radius: 3px;
+  cursor: pointer;
+  gap: 1px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d:hover {
+  background: oklab(0.145 0 0 / 0.05);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d:focus {
+  outline: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d:focus-visible {
+  outline: 2px solid var(--color-fin);
+  outline-offset: 1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d .num {
+  line-height: 1;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d .dots {
+  display: flex;
+  gap: 2px;
+  height: 3px;
+  align-items: center;
+  justify-content: center;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d .dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.out {
+  color: var(--fg-5);
+  opacity: 0.55;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.today {
+  color: var(--color-fin);
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.today .num {
+  position: relative;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.today .num::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: -3px;
+  bottom: -3px;
+  border: 1px solid var(--color-fin);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* Selected day: filled; if also today, drop fin outline */
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.sel {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.sel .num {
+  color: var(--color-white);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.sel.today .num::after {
+  display: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mini-cal-grid .d.sel .dots i {
+  filter: brightness(1.6);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-ctx-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  padding: 0 4px 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .ftype {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  width: 100%;
+  font-size: 13px;
+  color: var(--fg-2);
+  letter-spacing: -0.1px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .ftype:hover {
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .ftype .swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .ftype.off {
+  color: var(--fg-4);
+  text-decoration: line-through;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .ftype.off .swatch {
+  background: transparent !important;
+  border-color: var(--color-oat);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .ftype .n {
+  margin-left: auto;
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--fg-2);
+  letter-spacing: -0.1px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-item:hover {
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-item[data-active="true"] {
+  background: var(--color-off-black);
+  color: var(--color-white);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-item svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+  stroke-width: 1.75;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-item .n {
+  margin-left: auto;
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-item[data-active="true"] .n {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tz-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tz-row .t {
+  font-family: var(--font-semi-mono);
+  color: var(--fg-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tz-row .c {
+  font-size: 11px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-canvas);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: 12px 18px 10px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-canvas);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-title h1 {
+  font-size: 19px;
+  letter-spacing: -0.5px;
+  font-weight: 500;
+  color: var(--fg-1);
+  white-space: nowrap;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-tb-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-arrow {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  display: grid;
+  place-items: center;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-arrow:hover {
+  color: var(--fg-1);
+  border-color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-nav-arrow svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-today-btn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--fg-2);
+  font-family: var(--font-semi-mono);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-today-btn:hover {
+  color: var(--fg-1);
+  border-color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .view-toggle button {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  padding: 5px 11px;
+  border-radius: 3px;
+  color: var(--fg-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .view-toggle button[data-active="true"] {
+  background: var(--surface-raised);
+  color: var(--fg-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-add-btn {
+  height: 26px;
+  padding: 0 10px;
+  background: var(--color-off-black);
+  color: var(--color-white);
+  border-radius: 4px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-add-btn:hover {
+  filter: brightness(1.1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-add-btn svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.2;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .month-dow span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  text-align: right;
+  padding: 0 12px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr;
+  min-height: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell {
+  position: relative;
+  padding: 8px 10px 6px;
+  border-right: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+  overflow: hidden;
+  background: var(--surface-canvas);
+  transition: background 140ms var(--ease-out);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell:nth-child(7n) {
+  border-right: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell:hover {
+  background: var(--surface-raised);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.out {
+  background: transparent;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.out .dnum {
+  color: var(--fg-5);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.weekend {
+  background: oklab(0.145 0 0 / 0.012);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.today {
+  background: rgba(255, 86, 0, 0.035);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.sel {
+  background: oklab(0.145 0 0 / 0.06);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell .dnum {
+  font-family: var(--font-semi-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-2);
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  align-self: flex-end;
+  line-height: 1;
+  padding-bottom: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.today .dnum {
+  color: var(--color-fin);
+  position: relative;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell.today .dnum::before {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  bottom: -4px;
+  left: -6px;
+  border: 1.5px solid var(--color-fin);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border-default);
+  border-left-width: 3px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.2;
+  font-family: inherit;
+  text-align: left;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip:hover {
+  background: var(--surface-raised);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip .t {
+  font-family: var(--font-semi-mono);
+  font-weight: 400;
+  color: var(--fg-3);
+  font-size: 10.5px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-shoot {
+  border-left-color: #5d5bd4;
+  background: rgba(93, 91, 212, 0.07);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-shoot .t {
+  color: #5d5bd4;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-consult {
+  border-left-color: #65b5ff;
+  background: rgba(101, 181, 255, 0.1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-consult .t {
+  color: #3a8fd6;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-travel {
+  border-left-color: #0bdf50;
+  background: rgba(11, 223, 80, 0.08);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-travel .t {
+  color: #0a7a2f;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-block {
+  border-left-color: var(--fg-4);
+  background: oklab(0.145 0 0 / 0.04);
+  color: var(--fg-2);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .chip.cal-evt-block .t {
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell .more {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  padding: 2px 4px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-align: left;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .mcell .more:hover {
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .week-head {
+  display: grid;
+  grid-template-columns: 42px repeat(7, 1fr);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-canvas);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  flex-shrink: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .week-head .tz-col {
+  border-right: 1px solid var(--border-default);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell {
+  padding: 8px;
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell:last-child {
+  border-right: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell .dow-lbl {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell .dnum {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+  font-weight: 500;
+  color: var(--fg-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell.today .dnum {
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell.today .dow-lbl {
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell.sel {
+  background: oklab(0.145 0 0 / 0.04);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wdaycell .sub {
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .week-body {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px repeat(7, 1fr);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .hour-col .hr {
+  height: 56px;
+  padding: 2px 8px 0 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--fg-4);
+  letter-spacing: 0.6px;
+  position: relative;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .week-day-col .hr-slot {
+  height: 56px;
+  border-bottom: 1px solid oklab(0.145 0 0 / 0.04);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .week-day-col.today {
+  background: rgba(255, 86, 0, 0.025);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .week-day-col.sel {
+  background: oklab(0.145 0 0 / 0.025);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  padding: 5px 7px;
+  border-radius: 3px;
+  font-size: 11.5px;
+  color: var(--fg-1);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--fg-4);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+  cursor: pointer;
+  line-height: 1.2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 5;
+  font-family: inherit;
+  text-align: left;
+}
+
+.dark .font-dashboard.ana-main-dashboard .ana-calendar-port .wev {
+  background: rgba(28, 28, 30, 0.95);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  z-index: 6;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev .wev-t {
+  font-family: var(--font-semi-mono);
+  font-size: 10px;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev .wev-ti {
+  font-weight: 500;
+  letter-spacing: -0.15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-shoot {
+  border-left-color: #5d5bd4;
+  background: rgba(93, 91, 212, 0.07);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-shoot .wev-t {
+  color: #5d5bd4;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-consult {
+  border-left-color: #3a8fd6;
+  background: rgba(101, 181, 255, 0.1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-consult .wev-t {
+  color: #3a8fd6;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-travel {
+  border-left-color: #0a7a2f;
+  background: rgba(11, 223, 80, 0.08);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-travel .wev-t {
+  color: #0a7a2f;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-block {
+  border-left-color: var(--fg-4);
+  background: oklab(0.145 0 0 / 0.04);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .wev.cal-evt-block .wev-t {
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-fin);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .now-line::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -3.5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-fin);
+  box-shadow: 0 0 0 2px var(--surface-canvas), 0 0 6px rgba(255, 86, 0, 0.7);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .now-line .tag {
+  position: absolute;
+  left: -42px;
+  top: -8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  color: var(--color-fin);
+  background: var(--surface-canvas);
+  padding: 1px 4px 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector {
+  background: var(--surface-sunken);
+  border-left: 1px solid var(--border-default);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector-head .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector-head h3 {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+  font-weight: 500;
+  margin-top: 2px;
+  color: var(--fg-1);
+  margin-bottom: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector-head .sub {
+  margin-top: 4px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .insp-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .insp-section-head .l {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .insp-section-head .l .fin-dot-sm {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-fin);
+  box-shadow: 0 0 4px rgba(255, 86, 0, 0.5);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .insp-section-head .action {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .insp-section-head .action:hover {
+  color: var(--fg-1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .day-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 3px 2px;
+  cursor: pointer;
+  border-radius: 3px;
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row:hover {
+  background: oklab(0.145 0 0 / 0.035);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row.past {
+  opacity: 0.5;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .time {
+  font-family: var(--font-semi-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  padding-top: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev {
+  position: relative;
+  padding: 6px 10px 7px 12px;
+  border-left: 3px solid var(--fg-4);
+  background: var(--surface-raised);
+  border-radius: 0 3px 3px 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev.cal-evt-shoot {
+  border-left-color: #5d5bd4;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev.cal-evt-consult {
+  border-left-color: #3a8fd6;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev.cal-evt-travel {
+  border-left-color: #0a7a2f;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev.cal-evt-block {
+  border-left-color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev.ev-current {
+  border-left-color: var(--color-fin);
+  box-shadow: 0 0 0 1px rgba(255, 86, 0, 0.3), 0 2px 10px rgba(255, 86, 0, 0.1);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev .ti {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+  line-height: 1.25;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev .loc {
+  margin-top: 2px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .tl-row .ev .dur {
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+  margin-top: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--color-fin);
+  border-radius: 4px;
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 86, 0, 0.03), transparent 40%);
+  pointer-events: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal .p-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal .p-who {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal .p-age {
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal .p-body {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fg-2);
+  letter-spacing: -0.1px;
+  margin: 4px 0 10px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .proposal .p-body b {
+  font-style: normal;
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .pslot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  background: var(--surface-canvas);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+  font-family: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .pslot:hover {
+  border-color: var(--color-fin);
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .pslot .when {
+  font-family: var(--font-semi-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .pslot .dur {
+  font-family: var(--font-semi-mono);
+  font-size: 10.5px;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-btn {
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 3px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-btn.primary {
+  background: var(--color-fin);
+  color: #fff;
+  border: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-btn.ghost {
+  color: var(--fg-2);
+  border: 1px solid var(--border-default);
+  background: var(--surface-canvas);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-btn.linkish {
+  color: var(--fg-4);
+  font-weight: 400;
+  background: transparent;
+  border: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .paused {
+  background: oklab(0.145 0 0 / 0.03);
+  border: 1px dashed var(--fg-4);
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .paused .p-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .paused .p-head .ico {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: oklab(0.145 0 0 / 0.05);
+  display: grid;
+  place-items: center;
+  color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .paused .p-head .ico svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .paused .p-who {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .paused .p-body {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--fg-3);
+  letter-spacing: -0.1px;
+  line-height: 1.4;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 12px 14px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card h4 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+  letter-spacing: -0.1px;
+  margin-bottom: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card p {
+  font-size: 12.5px;
+  color: var(--fg-3);
+  line-height: 1.5;
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  margin-bottom: 2px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card .open-link {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-1);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card .open-link:hover {
+  color: var(--color-fin);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .conflict {
+  background: rgba(196, 28, 28, 0.04);
+  border: 1px solid rgba(196, 28, 28, 0.3);
+  border-left: 3px solid var(--color-report-red);
+  border-radius: 3px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--color-report-red);
+  line-height: 1.4;
+  letter-spacing: -0.1px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .conflict b {
+  font-weight: 500;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .conflict .detail {
+  color: var(--fg-3);
+  font-family: var(--font-serif);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+/* Selected event + event form — same inspector vocabulary as idle */
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-head-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 18px 12px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-head-row h3 {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+  font-weight: 500;
+  color: var(--fg-1);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-back {
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-default);
+  background: var(--surface-raised);
+  display: grid;
+  place-items: center;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-back:hover {
+  color: var(--fg-1);
+  border-color: var(--fg-3);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid oklab(0.145 0 0 / 0.06);
+  font-size: 12px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-meta-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-meta-k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-meta-v {
+  font-family: var(--font-semi-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-1);
+  text-align: right;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector-foot {
+  background: var(--surface-sunken);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-field {
+  display: block;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-field-lbl {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  margin-bottom: 6px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-field-inp {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-canvas);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-field-inp:focus {
+  outline: none;
+  border-color: var(--color-fin);
+  box-shadow: 0 0 0 1px rgba(255, 86, 0, 0.2);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-field-inp::placeholder {
+  color: var(--fg-4);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port select.cal-field-inp {
+  cursor: pointer;
+  appearance: auto;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-field-err {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-report-red);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-btn.danger {
+  background: transparent;
+  border: none;
+  color: var(--color-report-red);
+  font-weight: 500;
+  padding: 5px 8px;
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .p-btn.danger:hover {
+  text-decoration: underline;
+}
+
+/* Selected event inspector — type accents (same palette as chips / week cells) */
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector.cal-evt-inspector-shoot {
+  background: linear-gradient(180deg, rgba(93, 91, 212, 0.06), var(--surface-sunken) 120px);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector.cal-evt-inspector-consult {
+  background: linear-gradient(180deg, rgba(101, 181, 255, 0.1), var(--surface-sunken) 120px);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector.cal-evt-inspector-travel {
+  background: linear-gradient(180deg, rgba(11, 223, 80, 0.07), var(--surface-sunken) 120px);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-inspector.cal-evt-inspector-block {
+  background: linear-gradient(180deg, oklab(0.145 0 0 / 0.05), var(--surface-sunken) 120px);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-head-row.cal-evt-head-shoot {
+  border-left: 3px solid #5d5bd4;
+  padding-left: 15px;
+  background: linear-gradient(90deg, rgba(93, 91, 212, 0.1), transparent 55%);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-head-row.cal-evt-head-consult {
+  border-left: 3px solid #3a8fd6;
+  padding-left: 15px;
+  background: linear-gradient(90deg, rgba(101, 181, 255, 0.14), transparent 55%);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-head-row.cal-evt-head-travel {
+  border-left: 3px solid #0a7a2f;
+  padding-left: 15px;
+  background: linear-gradient(90deg, rgba(11, 223, 80, 0.1), transparent 55%);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .cal-evt-head-row.cal-evt-head-block {
+  border-left: 3px solid var(--fg-4);
+  padding-left: 15px;
+  background: linear-gradient(90deg, oklab(0.145 0 0 / 0.06), transparent 55%);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card.cal-evt-brief.cal-evt-brief-shoot {
+  border-left: 3px solid #5d5bd4;
+  padding-left: 13px;
+  background: rgba(93, 91, 212, 0.04);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card.cal-evt-brief.cal-evt-brief-consult {
+  border-left: 3px solid #3a8fd6;
+  padding-left: 13px;
+  background: rgba(101, 181, 255, 0.06);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card.cal-evt-brief.cal-evt-brief-travel {
+  border-left: 3px solid #0a7a2f;
+  padding-left: 13px;
+  background: rgba(11, 223, 80, 0.05);
+}
+
+.font-dashboard.ana-main-dashboard .ana-calendar-port .brief-card.cal-evt-brief.cal-evt-brief-block {
+  border-left: 3px solid var(--fg-4);
+  padding-left: 13px;
+  background: oklab(0.145 0 0 / 0.03);
 }
 

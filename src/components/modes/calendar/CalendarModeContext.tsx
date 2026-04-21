@@ -209,13 +209,25 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   shoot: "Shoots",
   consult: "Consultations",
   travel: "Travel",
-  block: "Blocked",
+  block: "Editing blocks",
 };
+
+/**
+ * Class prefix for calendar event type styling (chips, wev, inspector).
+ * Do not use raw `event.type` as a class — `block` is a Tailwind utility and breaks colored chips.
+ */
+export function calEventTypeClass(type: EventType): string {
+  return `cal-evt-${type}`;
+}
 
 export type CalendarModeContextValue = {
   viewDate: Date;
   setViewDate: Dispatch<SetStateAction<Date>>;
   shiftMonth: (delta: number) => void;
+  /** Jump to today (aligns selected date + month chrome). */
+  goToday: () => void;
+  /** Month: shift month. Week: ±7 days. Day: ±1 day. */
+  shiftPeriod: (delta: number) => void;
 
   selectedDate: string;
   selectDate: (iso: string) => void;
@@ -226,6 +238,8 @@ export type CalendarModeContextValue = {
   setCalendarView: (view: CalendarView) => void;
 
   events: CalEvent[];
+  /** Counts by event type for the left pane (photographer filter only, ignores type toggles). */
+  typeCounts: Record<EventType, number>;
   visibleEvents: CalEvent[];
   agendaEvents: CalEvent[];
   eventsByDate: Map<string, CalEvent[]>;
@@ -264,7 +278,10 @@ export function CalendarModeProvider({
   weddingLinkBase = "/pipeline",
   filterPhotographerId = "all",
 }: CalendarModeProviderProps) {
-  const [viewDate, setViewDate] = useState(() => new Date(2026, 2, 1));
+  const [viewDate, setViewDate] = useState(() => {
+    const t = new Date();
+    return new Date(t.getFullYear(), t.getMonth(), 1);
+  });
   const [events, setEvents] = useState<CalEvent[]>(SEED_EVENTS);
   const [activeNav, setActiveNavRaw] = useState<CalendarNav>("schedule");
   const [calendarView, setCalendarView] = useState<CalendarView>("week");
@@ -302,12 +319,20 @@ export function CalendarModeProvider({
     });
   }, []);
 
+  const photographerEvents = useMemo(
+    () => events.filter((e) => eventVisibleForPhotographer(e, filterPhotographerId)),
+    [events, filterPhotographerId],
+  );
+
+  const typeCounts = useMemo(() => {
+    const c: Record<EventType, number> = { shoot: 0, consult: 0, travel: 0, block: 0 };
+    for (const e of photographerEvents) c[e.type]++;
+    return c;
+  }, [photographerEvents]);
+
   const visibleEvents = useMemo(
-    () =>
-      events
-        .filter((e) => eventVisibleForPhotographer(e, filterPhotographerId))
-        .filter((e) => activeTypeFilters.has(e.type)),
-    [events, filterPhotographerId, activeTypeFilters],
+    () => photographerEvents.filter((e) => activeTypeFilters.has(e.type)),
+    [photographerEvents, activeTypeFilters],
   );
 
   const y = viewDate.getFullYear();
@@ -383,6 +408,28 @@ export function CalendarModeProvider({
     setViewDate((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
   }, []);
 
+  const goToday = useCallback(() => {
+    const t = new Date();
+    setSelectedDate(toISODateLocal(t));
+    setViewDate(new Date(t.getFullYear(), t.getMonth(), 1));
+  }, []);
+
+  const shiftPeriod = useCallback(
+    (delta: number) => {
+      if (calendarView === "month") {
+        shiftMonth(delta);
+        return;
+      }
+      const anchor = new Date(selectedDate + "T12:00:00");
+      const days = calendarView === "week" ? delta * 7 : delta;
+      anchor.setDate(anchor.getDate() + days);
+      const iso = toISODateLocal(anchor);
+      setSelectedDate(iso);
+      setViewDate(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+    },
+    [calendarView, selectedDate, shiftMonth],
+  );
+
   const todayISO = toISODateLocal(new Date());
 
   const value: CalendarModeContextValue = useMemo(
@@ -390,6 +437,8 @@ export function CalendarModeProvider({
       viewDate,
       setViewDate,
       shiftMonth,
+      goToday,
+      shiftPeriod,
       selectedDate,
       selectDate,
       activeNav,
@@ -397,6 +446,7 @@ export function CalendarModeProvider({
       calendarView,
       setCalendarView,
       events,
+      typeCounts,
       visibleEvents,
       agendaEvents,
       eventsByDate,
@@ -420,12 +470,15 @@ export function CalendarModeProvider({
     [
       viewDate,
       shiftMonth,
+      goToday,
+      shiftPeriod,
       selectedDate,
       selectDate,
       activeNav,
       setActiveNav,
       calendarView,
       events,
+      typeCounts,
       visibleEvents,
       agendaEvents,
       eventsByDate,

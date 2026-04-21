@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, FileText, Paperclip } from "lucide-react";
 import { trySanitizeEmailHtmlForIframe } from "../../lib/sanitizeEmailHtml";
 import { snippetForThreadRow } from "../../lib/threadMessageSnippet";
 import { partitionThreadForOmission, THREAD_OMISSION_THRESHOLD } from "../../lib/threadMessageOmission";
+import { cn } from "@/lib/utils";
 import { EmailHtmlReadingSurface } from "../email/EmailHtmlReadingSurface";
 import { EmailHtmlIframe } from "../email/EmailHtmlIframe";
 import { MessageAttachmentChips, type ChatAttachmentRow } from "./MessageAttachmentChips";
@@ -24,9 +25,13 @@ export interface ChatMessage {
 
 type SegmentedRow = { msg: ChatMessage; seg: "earlier" | "today" };
 
+export type ConversationThreadSurface = "default" | "inboxAna";
+
 interface ConversationFeedProps {
   earlierMessages: ChatMessage[];
   todayMessages: ChatMessage[];
+  /** Inbox thread detail: Ana `.thread-body` / `.msg` presentation (default: legacy feed). */
+  threadSurface?: ConversationThreadSurface;
   foldable?: boolean;
   expandedMap?: Record<string, boolean>;
   defaultExpanded?: (msg: ChatMessage) => boolean;
@@ -62,6 +67,11 @@ function effectiveExpanded(
   return defaultExpanded?.(msg) ?? true;
 }
 
+function senderInitial(sender: string): string {
+  const t = sender.trim();
+  return t ? t.charAt(0).toUpperCase() : "?";
+}
+
 function ThreadMessageRow({
   msg,
   foldKey,
@@ -69,6 +79,7 @@ function ThreadMessageRow({
   onToggle,
   foldable,
   footerSlot,
+  threadSurface = "default",
 }: {
   msg: ChatMessage;
   foldKey: string;
@@ -77,7 +88,9 @@ function ThreadMessageRow({
   foldable: boolean;
   /** Shown at bottom of expanded body only (e.g. reply/forward for last message). */
   footerSlot?: ReactNode;
+  threadSurface?: ConversationThreadSurface;
 }) {
+  const isAna = threadSurface === "inboxAna";
   const iframeSrcDoc = useMemo(
     () => trySanitizeEmailHtmlForIframe(msg.bodyHtmlSanitized),
     [msg.bodyHtmlSanitized],
@@ -92,17 +105,67 @@ function ThreadMessageRow({
   const incoming = msg.direction === "in";
   const toFromLine = incoming ? (
     msg.meta ? (
-      <span className="text-[11px] text-muted-foreground">{msg.meta}</span>
+      <span className={isAna ? "text-[12px] text-[color:var(--color-ink-faint)]" : "text-[11px] text-muted-foreground"}>
+        {msg.meta}
+      </span>
     ) : (
-      <span className="text-[11px] text-muted-foreground">To you</span>
+      <span className={isAna ? "text-[12px] text-[color:var(--color-ink-faint)]" : "text-[11px] text-muted-foreground"}>
+        To you
+      </span>
     )
   ) : (
-    <span className="text-[11px] text-muted-foreground">{msg.meta ?? "From studio"}</span>
+    <span className={isAna ? "text-[12px] text-[color:var(--color-ink-faint)]" : "text-[11px] text-muted-foreground"}>
+      {msg.meta ?? "From studio"}
+    </span>
   );
 
   const interactiveHeader = foldable && onToggle;
 
-  const headerInner = (
+  const headerInner = isAna ? (
+    <>
+      {interactiveHeader ? (
+        <span className="mt-0.5 shrink-0 text-[var(--fg-4)]" aria-hidden>
+          {expanded ? <ChevronDown className="h-4 w-4" strokeWidth={2} /> : <ChevronRight className="h-4 w-4" strokeWidth={2} />}
+        </span>
+      ) : null}
+      <div className={cn("ava", !incoming && "you")} aria-hidden>
+        {senderInitial(msg.sender)}
+      </div>
+      <div className="meta min-w-0">
+        {interactiveHeader && !expanded ? (
+          <>
+            <div className="name">
+              <span className="truncate">{msg.sender}</span>
+              <span className="addr">{toFromLine}</span>
+            </div>
+            <p className="mt-1 line-clamp-2 text-[13px] font-normal leading-[1.5] tracking-[-0.1px] text-[var(--fg-3)]">
+              {snippet}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {hasAttachments ? (
+                <span className="inline-flex items-center gap-0.5 font-[family-name:var(--font-mono)] text-[9px] uppercase tracking-[0.8px] text-[var(--fg-4)]">
+                  <Paperclip className="h-3 w-3" strokeWidth={2} aria-hidden />
+                  {msg.attachments!.length}
+                </span>
+              ) : null}
+              {hasHtml ? (
+                <span className="inline-flex items-center gap-0.5 font-[family-name:var(--font-mono)] text-[9px] uppercase tracking-[0.8px] text-[var(--fg-4)]">
+                  <FileText className="h-3 w-3" strokeWidth={2} aria-hidden />
+                  HTML
+                </span>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <div className="name">
+            <span className="truncate">{msg.sender}</span>
+            <span className="addr">{toFromLine}</span>
+          </div>
+        )}
+      </div>
+      <span className="when shrink-0">{msg.time}</span>
+    </>
+  ) : (
     <>
       {interactiveHeader ? (
         <span className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden>
@@ -150,27 +213,42 @@ function ThreadMessageRow({
       <EmailHtmlIframe srcDoc={iframeSrcDoc} expanded={expanded} />
     </EmailHtmlReadingSurface>
   ) : null;
-  const plainContent = (
+  const plainBlockNonHtml = isAna ? (
+    <div className="msg-inbox-ana-plain">
+      {msg.body.split(/\n\n+/).map((chunk, i) => (
+        <p key={i} className="whitespace-pre-wrap">
+          {chunk}
+        </p>
+      ))}
+    </div>
+  ) : (
     <span className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground">{msg.body}</span>
   );
 
   const bodyBlock =
     hasHtml && iframeSrcDoc ? (
-      <div className="min-w-0 overflow-x-clip border-t border-border/50">{htmlContent}</div>
+      <div className={cn("min-w-0 overflow-x-clip border-t", isAna ? "border-[var(--border-default)]" : "border-border/50")}>
+        {htmlContent}
+      </div>
     ) : (
-      <div className="border-t border-border/50 px-3 pb-3 pt-2">{plainContent}</div>
+      <div className={cn(!isAna && "border-t border-border/50 px-3 pb-3 pt-2")}>{plainBlockNonHtml}</div>
     );
 
   return (
-    <article className="w-full min-w-0 overflow-hidden bg-transparent">
+    <article className={cn("w-full min-w-0 overflow-hidden", isAna ? "msg" : "bg-transparent")}>
       {interactiveHeader ? (
         <button
           type="button"
           onClick={onToggle}
-          className={
-            "flex w-full min-w-0 items-start gap-2 px-3 py-2.5 text-left transition " +
-            (expanded ? "bg-muted/20 " : "hover:bg-muted/35")
-          }
+          className={cn(
+            "flex w-full min-w-0 items-center text-left transition",
+            isAna
+              ? cn(
+                  "msg-head border-0 bg-transparent p-0",
+                  expanded ? "" : "hover:opacity-95",
+                )
+              : "items-start gap-2 px-3 py-2.5 " + (expanded ? "bg-muted/20" : "hover:bg-muted/35"),
+          )}
           aria-expanded={expanded}
           aria-controls={`thread-msg-${foldKey}`}
           id={`thread-msg-hdr-${foldKey}`}
@@ -179,7 +257,10 @@ function ThreadMessageRow({
         </button>
       ) : (
         <div
-          className="flex w-full min-w-0 items-start gap-2 border-b border-border/50 bg-muted/10 px-3 py-2.5"
+          className={cn(
+            "flex w-full min-w-0 items-center",
+            isAna ? "msg-head border-0 bg-transparent" : "items-start gap-2 border-b border-border/50 bg-muted/10 px-3 py-2.5",
+          )}
           id={`thread-msg-hdr-${foldKey}`}
         >
           {headerInner}
@@ -190,11 +271,15 @@ function ThreadMessageRow({
         <div id={`thread-msg-${foldKey}`} role="region" aria-labelledby={`thread-msg-hdr-${foldKey}`}>
           {bodyBlock}
           {hasAttachments ? (
-            <div className="border-t border-border/50 px-3 py-2">
-              <MessageAttachmentChips attachments={msg.attachments!} />
+            <div
+              className={cn("border-t py-2", isAna ? "border-border px-0" : "border-border/50 px-3")}
+            >
+              <MessageAttachmentChips attachments={msg.attachments!} variant={isAna ? "inboxAna" : "default"} />
             </div>
           ) : null}
-          {footerSlot ? <div className="min-w-0 px-3 pb-3 pt-2">{footerSlot}</div> : null}
+          {footerSlot ? (
+            <div className={cn("min-w-0 pb-3 pt-2", isAna ? "px-0" : "px-3")}>{footerSlot}</div>
+          ) : null}
         </div>
       ) : null}
     </article>
@@ -241,6 +326,7 @@ function buildSegmentedRows(earlierMessages: ChatMessage[], todayMessages: ChatM
 export function ConversationFeed({
   earlierMessages,
   todayMessages,
+  threadSurface = "default",
   foldable,
   expandedMap,
   defaultExpanded,
@@ -296,6 +382,7 @@ export function ConversationFeed({
     lastMessageFooter,
     messageFooter,
     lastMessageIdInThread,
+    threadSurface,
   };
 
   function renderSegmentedList(
@@ -333,6 +420,7 @@ export function ConversationFeed({
           foldable={ctx.foldable}
           onToggle={ctx.onToggle ? () => ctx.onToggle!(foldKey) : undefined}
           footerSlot={footerSlot}
+          threadSurface={ctx.threadSurface}
         />,
       );
       lastSeg = row.seg;
@@ -379,9 +467,21 @@ export function ConversationFeed({
     messageNodes = parts;
   }
 
+  const isAnaFeed = threadSurface === "inboxAna";
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <div className="flex w-full max-w-full flex-col divide-y divide-border/50">
+    <div
+      className={cn(
+        "min-h-0 flex-1 overflow-y-auto",
+        isAnaFeed ? "thread-body" : "px-4 py-4",
+      )}
+    >
+      <div
+        className={cn(
+          "flex w-full flex-col",
+          isAnaFeed ? "" : "max-w-full divide-y divide-border/50",
+        )}
+      >
         {!hasMessages && (
           <p className="py-8 text-center text-[12px] text-muted-foreground">{emptyText}</p>
         )}

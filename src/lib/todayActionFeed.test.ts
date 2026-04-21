@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   todayActionFromDraft,
   todayActionFromEscalation,
+  todayActionFromLinkedLeadThread,
   todayActionFromTask,
   todayActionFromUnfiled,
   buildTodayActionsFromSources,
+  countTodayActionsByZenTab,
   findDraftForInboxHydration,
   todayActionHref,
+  ZEN_TODAY_TAB_LABELS,
+  ZEN_TODAY_TAB_ORDER,
+  zenTodayTabForAction,
   type OpenEscalationRow,
 } from "./todayActionFeed";
 import type { PendingDraft } from "../hooks/usePendingApprovals";
@@ -77,6 +82,28 @@ describe("todayActionFeed", () => {
     expect(a.resolution.inboxAction).toBe("review_draft");
   });
 
+  it("draft with thread but empty wedding_id still uses inbox review_draft deep link (unfiled thread)", () => {
+    const d: PendingDraft = {
+      id: "dr-u",
+      body: "x",
+      thread_id: "th-u",
+      thread_title: "Commercial ask",
+      wedding_id: "",
+      couple_names: "Unknown",
+      photographer_id: "ph",
+    };
+    const a = todayActionFromDraft(d);
+    expect(a.target).toMatchObject({
+      type: "inbox_draft_review",
+      threadId: "th-u",
+      draftId: "dr-u",
+    });
+    expect(a.route_to).toContain("action=review_draft");
+    expect(a.route_to).toContain("threadId=th-u");
+    expect(a.route_to).toContain("draftId=dr-u");
+    expect(a.resolution.weddingId).toBe("");
+  });
+
   it("unfiled thread resolution lists thread id only", () => {
     const t: UnfiledThread = {
       latestMessageBody: "full",
@@ -98,6 +125,82 @@ describe("todayActionFeed", () => {
     const a = todayActionFromUnfiled(t);
     expect(a.route_to).toBe("/inbox?threadId=unf-1");
     expect(a.resolution.threadId).toBe("unf-1");
+    expect(a.status_label).toBe("Needs filing");
+    expect(a.inbox_thread_bucket).toBe("unfiled");
+    expect(a.zen_priority_tag).toBe("Needs filing");
+  });
+
+  it("unfiled customer_lead uses Inquiry label in Today feed", () => {
+    const t: UnfiledThread = {
+      latestMessageBody: "q",
+      latestMessageHtmlSanitized: null,
+      gmailRenderHtmlRef: null,
+      latestMessageId: null,
+      latestMessageAttachments: [],
+      latestProviderMessageId: null,
+      hasGmailImport: false,
+      gmailLabelIds: null,
+      id: "lead-1",
+      title: "Quote",
+      weddingId: null,
+      sender: "c@d.com",
+      snippet: "s",
+      last_activity_at: "2026-01-15T10:00:00.000Z",
+      ai_routing_metadata: { sender_role: "customer_lead" },
+    };
+    const a = todayActionFromUnfiled(t);
+    expect(a.status_label).toBe("Inquiry");
+    expect(a.inbox_thread_bucket).toBe("inquiry");
+    expect(a.zen_priority_tag).toBe("Inquiry");
+  });
+
+  it("buildTodayActionsFromSources excludes suppressed threads from default Today feed", () => {
+    const promo: UnfiledThread = {
+      latestMessageBody: "",
+      latestMessageHtmlSanitized: null,
+      gmailRenderHtmlRef: null,
+      latestMessageId: null,
+      latestMessageAttachments: [],
+      latestProviderMessageId: null,
+      hasGmailImport: false,
+      gmailLabelIds: null,
+      id: "promo-1",
+      title: "Sale",
+      weddingId: null,
+      sender: "news@x.com",
+      snippet: "",
+      last_activity_at: "2026-01-15T10:00:00.000Z",
+      ai_routing_metadata: { routing_disposition: "promo_automated" },
+    };
+    const human: UnfiledThread = {
+      latestMessageBody: "h",
+      latestMessageHtmlSanitized: null,
+      gmailRenderHtmlRef: null,
+      latestMessageId: null,
+      latestMessageAttachments: [],
+      latestProviderMessageId: null,
+      hasGmailImport: false,
+      gmailLabelIds: null,
+      id: "hum-1",
+      title: "Hi",
+      weddingId: null,
+      sender: "a@b.com",
+      snippet: "",
+      last_activity_at: "2026-01-16T10:00:00.000Z",
+      ai_routing_metadata: { routing_disposition: "unresolved_human" },
+    };
+    const all = buildTodayActionsFromSources({
+      drafts: [],
+      unfiledThreads: [promo, human],
+      linkedLeadThreads: [],
+      tasks: [],
+      escalations: [],
+    });
+    expect(all.some((x) => x.source_id === "promo-1")).toBe(false);
+    expect(all.some((x) => x.source_id === "hum-1")).toBe(true);
+    const tabs = countTodayActionsByZenTab(all);
+    expect(tabs.needs_filing).toBeGreaterThan(0);
+    expect(tabs.review + tabs.drafts + tabs.leads + tabs.needs_filing).toBe(all.length);
   });
 
   it("task with wedding uses tab=tasks and openTask", () => {
@@ -199,9 +302,147 @@ describe("todayActionFeed", () => {
         thread_id: null,
       },
     ];
-    const all = buildTodayActionsFromSources({ drafts, unfiledThreads, tasks, escalations });
+    const all = buildTodayActionsFromSources({
+      drafts,
+      unfiledThreads,
+      linkedLeadThreads: [],
+      tasks,
+      escalations,
+    });
     expect(all.some((x) => x.action_type === "open_escalation" && x.source_id === "e1")).toBe(true);
     const esc = all.find((x) => x.source_id === "e1");
     expect(esc?.route_to).toBe("/today?escalationId=e1");
+  });
+});
+
+function baseThread(partial: Partial<UnfiledThread> & { id: string }): UnfiledThread {
+  return {
+    latestMessageBody: "",
+    latestMessageHtmlSanitized: null,
+    gmailRenderHtmlRef: null,
+    latestMessageId: null,
+    latestMessageAttachments: [],
+    latestProviderMessageId: null,
+    hasGmailImport: false,
+    gmailLabelIds: null,
+    title: "S",
+    weddingId: null,
+    sender: "a@b.com",
+    snippet: "",
+    last_activity_at: "2026-01-01T00:00:00.000Z",
+    ai_routing_metadata: null,
+    ...partial,
+  };
+}
+
+describe("Zen Today tabs", () => {
+  it("has exactly four top tabs, no ALL catch-all", () => {
+    expect(ZEN_TODAY_TAB_ORDER.join(",")).not.toMatch(/\ball\b/i);
+    expect(ZEN_TODAY_TAB_ORDER).toEqual(["review", "drafts", "leads", "needs_filing"]);
+    expect(Object.keys(ZEN_TODAY_TAB_LABELS)).toHaveLength(4);
+    expect(ZEN_TODAY_TAB_ORDER.every((id) => ZEN_TODAY_TAB_LABELS[id]?.length)).toBe(true);
+  });
+
+  it("partitions sample actions into Review, Drafts, Leads, Needs filing (tasks excluded from tab counts)", () => {
+    const actions = [
+      todayActionFromEscalation({
+        id: "e1",
+        created_at: "2026-01-20T10:00:00.000Z",
+        question_body: "Q",
+        action_key: "k",
+        wedding_id: null,
+        thread_id: null,
+      }),
+      todayActionFromDraft({
+        id: "d1",
+        body: "",
+        thread_id: "t1",
+        thread_title: "D",
+        wedding_id: "w1",
+        couple_names: "A & B",
+        photographer_id: "p",
+        created_at: "2026-01-19T10:00:00.000Z",
+      }),
+      todayActionFromUnfiled(
+        baseThread({ id: "u1", ai_routing_metadata: { sender_role: "customer_lead" } }),
+      ),
+      todayActionFromUnfiled(
+        baseThread({ id: "u2", ai_routing_metadata: { routing_disposition: "unresolved_human" } }),
+      ),
+      todayActionFromUnfiled(
+        baseThread({ id: "u3", ai_routing_metadata: { sender_role: "vendor_solicitation" } }),
+      ),
+      todayActionFromLinkedLeadThread(
+        baseThread({ id: "L1", weddingId: "w-commercial", title: "Commercial" }),
+        "Acme Co · commercial",
+      ),
+      todayActionFromTask({
+        id: "tk1",
+        title: "T",
+        due_date: "2026-02-01",
+        status: "open",
+        wedding_id: "w9",
+        couple_names: "X",
+      }),
+    ];
+    const c = countTodayActionsByZenTab(actions);
+    expect(c.review).toBe(2);
+    expect(c.drafts).toBe(1);
+    expect(c.leads).toBe(2);
+    expect(c.needs_filing).toBe(1);
+    expect(c.review + c.drafts + c.leads + c.needs_filing).toBe(actions.length - 1);
+    expect(zenTodayTabForAction(actions[0])).toBe("review");
+    expect(zenTodayTabForAction(actions[2])).toBe("leads");
+    expect(zenTodayTabForAction(actions[4])).toBe("review");
+    expect(zenTodayTabForAction(actions[5])).toBe("leads");
+    expect(zenTodayTabForAction(actions[6])).toBe(null);
+  });
+
+  it("Review merges blocked decisions and operator-review mail", () => {
+    const esc = todayActionFromEscalation({
+      id: "e2",
+      created_at: "2026-01-20T10:00:00.000Z",
+      question_body: "Blocked",
+      action_key: "policy",
+      wedding_id: null,
+      thread_id: "t-x",
+    });
+    const billing = todayActionFromUnfiled(
+      baseThread({ id: "bill", ai_routing_metadata: { sender_role: "billing_or_account_followup" } }),
+    );
+    expect(zenTodayTabForAction(esc)).toBe("review");
+    expect(zenTodayTabForAction(billing)).toBe("review");
+    const c = countTodayActionsByZenTab([esc, billing]);
+    expect(c.review).toBe(2);
+  });
+
+  it("promoted / linked pre-booking lead maps to Leads tab", () => {
+    const a = todayActionFromLinkedLeadThread(
+      baseThread({
+        id: "promo-thread",
+        weddingId: "proj-1",
+        title: "Brand shoot",
+      }),
+      "Studio client · commercial",
+    );
+    expect(a.action_type).toBe("linked_lead_thread");
+    expect(zenTodayTabForAction(a)).toBe("leads");
+  });
+
+  it("suppressed inbox thread contributes to no Today tab (omitted from feed)", () => {
+    const promo = baseThread({
+      id: "promo-only",
+      ai_routing_metadata: { routing_disposition: "promo_automated" },
+    });
+    const all = buildTodayActionsFromSources({
+      drafts: [],
+      unfiledThreads: [promo],
+      linkedLeadThreads: [],
+      tasks: [],
+      escalations: [],
+    });
+    expect(all.length).toBe(0);
+    const sum = Object.values(countTodayActionsByZenTab(all)).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(0);
   });
 });

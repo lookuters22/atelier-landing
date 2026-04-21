@@ -5,6 +5,7 @@
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+import { memoryScopeForWeddingBinding } from "./memory/memoryInsertScope.ts";
 import {
   maybeRecordPatternMapReview,
   patternFingerprintForDraftLearning,
@@ -76,6 +77,7 @@ export async function captureDraftLearningInput(
     const { error } = await supabase.from("memories").insert({
       photographer_id: input.photographerId,
       wedding_id: input.weddingId,
+      scope: memoryScopeForWeddingBinding(input.weddingId),
       type: "draft_approval_edit_learning",
       title,
       summary,
@@ -113,6 +115,7 @@ export async function captureDraftLearningInput(
   const { error } = await supabase.from("memories").insert({
     photographer_id: input.photographerId,
     wedding_id: input.weddingId,
+    scope: memoryScopeForWeddingBinding(input.weddingId),
     type: "draft_rewrite_feedback_learning",
     title,
     summary,

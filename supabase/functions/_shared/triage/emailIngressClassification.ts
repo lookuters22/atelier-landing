@@ -5,6 +5,8 @@
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { TriageIntent } from "../agents/triage.ts";
+import type { InboundSenderRoleClassification } from "../../../../src/lib/inboundSenderRoleClassifier.ts";
+import type { NonWeddingProfileFit } from "./nonWeddingInquiryProfileFit.ts";
 import { runMatchmakerAgent, type MatchmakerResult } from "../agents/matchmaker.ts";
 import {
   BOUNDED_UNRESOLVED_MATCH_APPROVAL_ESCALATION_MIN_CONFIDENCE,
@@ -443,6 +445,28 @@ export function buildAiRoutingMetadataForUnresolved(input: {
 }
 
 /**
+ * Gmail canonical post-ingest (`processInboxThreadRequiresTriage`): whether to run the non-wedding
+ * business inquiry policy router (`nonWeddingBusinessInquiryRouter`).
+ *
+ * A matchmaker **suggestion** alone must not block — `buildAiRoutingMetadataForUnresolved` returns
+ * metadata for any `matchResult.match`, including low-confidence guesses, while
+ * `nearMatchForApproval` is the real safeguard for the bounded-unresolved approval lane.
+ */
+export function shouldInvokeNonWeddingBusinessInquiryPolicyForGmailCanonical(input: {
+  finalWeddingId: string | null;
+  linkedProjectAtStart: boolean;
+  llmIntent: TriageIntent;
+  nearMatchForApproval: boolean;
+}): boolean {
+  return (
+    !input.finalWeddingId &&
+    !input.linkedProjectAtStart &&
+    input.llmIntent !== "intake" &&
+    !input.nearMatchForApproval
+  );
+}
+
+/**
  * Unlinked mail classified by LLM but no wedding to attach — visibility-first, no worker implied.
  * `confidence_score` / `reasoning` populated when the triage model exposes them (future).
  *
@@ -478,6 +502,7 @@ export function buildAiRoutingMetadataUnlinkedHumanNoRoute(input: {
 export type NonWeddingBusinessInquiryPolicyDecision =
   | "allowed_auto"
   | "allowed_draft"
+  | "allowed_promote_to_project"
   | "disallowed_decline"
   | "unclear_operator_review";
 
@@ -490,6 +515,18 @@ export function buildAiRoutingMetadataNonWeddingBusinessInquiry(input: {
   reasonCode: string;
   draftId?: string | null;
   escalationId?: string | null;
+  /** Authority / audit: playbook vs profile-derived vs conflict outcomes. */
+  decisionSource?: string;
+  profileFit?: NonWeddingProfileFit;
+  profileFitReasonCodes?: string[];
+  /** Layer-3 sender role (unlinked path only); omitted when classifier off or not run. */
+  senderRoleClassification?: InboundSenderRoleClassification | null;
+  /** Observability: flag, OpenAI call, outcome (even when role is unclear). */
+  senderRoleClassifierAuditV1?: Record<string, unknown> | null;
+  /** Set when {@link NonWeddingBusinessInquiryPolicyDecision} is `allowed_promote_to_project`. */
+  promotedProjectId?: string | null;
+  /** Row classification written to `weddings.project_type` for promoted inquiries. */
+  promotedProjectType?: string | null;
 }): Record<string, unknown> {
   const out: Record<string, unknown> = {
     classified_intent: input.llmIntent,
@@ -502,6 +539,26 @@ export function buildAiRoutingMetadataNonWeddingBusinessInquiry(input: {
   };
   if (input.draftId) out.seeded_draft_id = input.draftId;
   if (input.escalationId) out.operator_review_escalation_id = input.escalationId;
+  if (input.decisionSource) out.decision_source = input.decisionSource;
+  if (input.profileFit) out.profile_fit = input.profileFit;
+  if (input.profileFitReasonCodes && input.profileFitReasonCodes.length > 0) {
+    out.profile_fit_reason_codes = input.profileFitReasonCodes;
+  }
+  const sr = input.senderRoleClassification;
+  if (sr && sr.role) {
+    out.sender_role = sr.role;
+    out.sender_role_confidence = sr.confidence;
+    if (sr.reason && sr.reason.trim()) out.sender_role_reason = sr.reason.trim().slice(0, 500);
+  }
+  if (input.senderRoleClassifierAuditV1 && Object.keys(input.senderRoleClassifierAuditV1).length > 0) {
+    out.sender_role_classifier_audit_v1 = input.senderRoleClassifierAuditV1;
+  }
+  if (input.promotedProjectId) {
+    out.promoted_project_id = input.promotedProjectId;
+  }
+  if (input.promotedProjectType) {
+    out.project_type = input.promotedProjectType;
+  }
   return out;
 }
 

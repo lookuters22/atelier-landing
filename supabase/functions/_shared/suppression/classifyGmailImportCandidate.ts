@@ -81,6 +81,11 @@ export type GmailImportCandidateClassificationInput = {
   body?: string | null;
   /** Gmail label the operator used to stage this candidate. */
   sourceLabelName?: string | null;
+  /**
+   * Optional RFC header slice (e.g. from `inboundMetadataHeadersForClassifier`).
+   * When present, strengthens auto-submitted / list / precedence signals.
+   */
+  headers?: Record<string, string | null | undefined> | null;
 };
 
 /**
@@ -96,6 +101,7 @@ export function classifyGmailImportCandidate(
     senderRaw: input.senderRaw ?? null,
     subject: input.subject ?? null,
     body,
+    headers: input.headers ?? undefined,
   });
 
   const labelHint = gmailLabelLooksLikeBulkOrSystem(input.sourceLabelName);

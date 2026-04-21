@@ -161,7 +161,11 @@ finalize-core path and the reuse-thread path. Suppressed rows:
 
 ### 5. Manual convert RPC — SQL enforcement
 
-Migration: `supabase/migrations/20260507000000_inbound_suppression_classifier_and_convert_guard.sql`
+Migrations:
+`supabase/migrations/20260507000000_inbound_suppression_classifier_and_convert_guard.sql`
+(base helpers + `convert_unfiled_thread_to_inquiry`),
+`supabase/migrations/20260509000000_classify_inbound_suppression_transactional_parity.sql`
+(transactional receipt/billing parity with TypeScript).
 TS wrapper: `src/lib/inboxThreadLinking.ts`
   → `convertUnfiledThreadToInquiry` now returns a structured
   `ConvertUnfiledThreadToInquirySuppressionFailure` when the RPC rejects.
@@ -176,6 +180,17 @@ SQL functions:
 `convert_unfiled_thread_to_inquiry` fetches the newest inbound message,
 runs `classify_inbound_suppression`, and returns a machine-readable
 JSON error
+
+```json
+{
+  "error": "suppressed_non_client_thread",
+  "verdict": "transactional_non_client",
+  "reasons": ["subject_transactional_receipt", "body_transactional_receipt"],
+  "confidence": "high"
+}
+```
+
+(or `promotional_or_marketing` / `system_or_notification` for other suppressed cases).
 
 ```json
 {
@@ -260,7 +275,8 @@ select public.classify_inbound_suppression(
 );
 ```
 
-The JSON return is stable:
+The JSON return shape is stable; `verdict` may be `promotional_or_marketing`,
+`system_or_notification`, `transactional_non_client`, or `unknown_review_needed`.
 
 ```json
 {

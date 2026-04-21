@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useUnfiledInbox } from "../../../hooks/useUnfiledInbox";
-import { useGoogleConnectedAccount } from "../../../hooks/useInboxGmailLabels";
+import { useGoogleConnectedAccount, useInboxGmailLabels } from "../../../hooks/useInboxGmailLabels";
+import { usePendingApprovals } from "../../../hooks/usePendingApprovals";
 import { useWeddings } from "../../../hooks/useWeddings";
 import {
   adjacentWeddingIdInOrderedList,
   isEditableKeyboardTarget,
   pipelineWeddingAltVerticalDelta,
   scrollPipelineWeddingRowIntoView,
-  weddingQueuePosition,
 } from "@/lib/pipelineWeddingListNavigation";
-import { deriveVisibleInboxThreads } from "../../../lib/inboxVisibleThreads";
+import { deriveInboxListHeadCounts, deriveVisibleInboxThreads } from "../../../lib/inboxVisibleThreads";
+import { deriveUnreadFromGmailLabelIds } from "../../../lib/gmailInboxLabels";
 import { useInboxThreadMessagesPrefetch } from "../../../hooks/useInboxThreadMessagesPrefetch";
 import { useInboxMode } from "./InboxModeContext";
-import { InboxListSelectionToolbar } from "./InboxListSelectionToolbar";
 import { InboxListTabs } from "./InboxListTabs";
 import { InboxMessageRow } from "./InboxMessageRow";
 
@@ -21,7 +21,6 @@ export function InboxMessageList() {
   const {
     selection,
     selectThread,
-    backToList,
     listTab,
     setListTab,
     inboxFolder,
@@ -32,20 +31,36 @@ export function InboxMessageList() {
     inboxThreads,
     isLoading: threadsLoading,
     loadError: inboxLoadError,
-    deleteThread,
     gmailInboxModify,
-    providerMessageIdColumnUnavailable,
     refetch,
   } = useUnfiledInbox();
   const { photographerId, isLoading: authLoading } = useAuth();
   const { googleAccount } = useGoogleConnectedAccount(photographerId ?? null);
+  const { gmailLabels } = useInboxGmailLabels(photographerId ?? null, googleAccount ?? null);
+  const { drafts: pendingApprovalDrafts } = usePendingApprovals();
   const { data: weddings, isLoading: weddingsLoading, error: weddingsError } = useWeddings(photographerId ?? "");
 
   const { prefetchThreadMessages, scheduleHoverPrefetch, cancelHoverPrefetch } = useInboxThreadMessagesPrefetch();
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const weddingNamesById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of weddings ?? []) m.set(w.id, w.couple_names);
+    return m;
+  }, [weddings]);
+
+  const weddingStageById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of weddings ?? []) {
+      if (w.stage) m.set(w.id, w.stage);
+    }
+    return m;
+  }, [weddings]);
+
+  const draftThreadIds = useMemo(
+    () => new Set(pendingApprovalDrafts.map((d) => d.thread_id)),
+    [pendingApprovalDrafts],
+  );
+
   const [refreshing, setRefreshing] = useState(false);
 
   const derived = useMemo(
@@ -61,11 +76,22 @@ export function InboxMessageList() {
     [inboxThreads, weddings, inboxFolder, listTab, projectFilterWeddingId, gmailLabelFilterId],
   );
 
+  const listHeadCounts = useMemo(
+    () =>
+      deriveInboxListHeadCounts({
+        inboxThreads,
+        inboxFolder,
+        projectFilterWeddingId,
+        gmailLabelFilterId,
+      }),
+    [inboxThreads, inboxFolder, projectFilterWeddingId, gmailLabelFilterId],
+  );
+
   const visibleThreads = derived.threads;
   const orderedThreadIds = useMemo(() => visibleThreads.map((t) => t.id), [visibleThreads]);
   const selectedThreadId = selection.kind === "thread" ? selection.thread.id : null;
 
-  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listScrollRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     if (orderedThreadIds.length < 2) return;
@@ -96,23 +122,6 @@ export function InboxMessageList() {
     scrollPipelineWeddingRowIntoView(el);
   }, [selectedThreadId, orderedThreadIds]);
 
-  const threadQueuePosition = useMemo(
-    () => weddingQueuePosition(orderedThreadIds, selectedThreadId),
-    [orderedThreadIds, selectedThreadId],
-  );
-
-  useEffect(() => {
-    const allowed = new Set(visibleThreads.map((t) => t.id));
-    setSelectedIds((prev) => {
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (allowed.has(id)) next.add(id);
-      }
-      if (next.size === prev.size && [...prev].every((id) => next.has(id))) return prev;
-      return next;
-    });
-  }, [visibleThreads]);
-
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -122,144 +131,96 @@ export function InboxMessageList() {
     }
   }, [refetch]);
 
-  const countLabel = useMemo(() => {
-    if (threadQueuePosition && orderedThreadIds.length >= 2) {
-      return `${threadQueuePosition.current} / ${threadQueuePosition.total} in view`;
-    }
-    return `${visibleThreads.length} in view`;
-  }, [threadQueuePosition, orderedThreadIds.length, visibleThreads.length]);
-
-  const handleDelete = useCallback(
-    async (threadId: string) => {
-      setDeletingId(threadId);
-      try {
-        await deleteThread(threadId);
-        if (selection.kind === "thread" && selection.thread.id === threadId) {
-          backToList();
-        }
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [deleteThread, selection, backToList],
-  );
+  const listMetaLeft = useMemo(() => {
+    const n = visibleThreads.length;
+    const unread = visibleThreads.filter((t) => deriveUnreadFromGmailLabelIds(t.gmailLabelIds)).length;
+    if (n === 0) return "No threads in view";
+    return `${n} thread${n === 1 ? "" : "s"} · ${unread} unread`;
+  }, [visibleThreads]);
 
   const dataLoadError = [inboxLoadError, weddingsError].filter(Boolean).join(" · ") || null;
   const tabsDisabled = projectFilterWeddingId != null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <InboxListTabs
-        listTab={listTab}
-        onChange={setListTab}
-        disabled={tabsDisabled}
-      />
-      {tabsDisabled ? (
-        <p className="shrink-0 border-b border-border bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
-          Tabs apply when no wedding filter is selected. A wedding is selected — showing only threads for that
-          project.
-        </p>
-      ) : null}
-      {providerMessageIdColumnUnavailable ? (
-        <div
-          className="shrink-0 border-b border-border bg-muted/40 px-3 py-2 text-[11px] leading-snug text-muted-foreground"
-          role="status"
-        >
-          Inbox loaded without Gmail message ids (database migration pending). Star and read sync with Gmail may be
-          unavailable until your environment applies migration{" "}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">20260415120100_v_threads_inbox_latest_provider_message_id.sql</code>.
-        </div>
-      ) : null}
-
-      {derived.folderUsesGmailLabelMetadata && !derived.gmailLabelFilterUnsupported ? (
-        <p className="shrink-0 border-b border-border bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-          Starred, Sent, and Drafts list threads whose latest message includes Gmail label metadata. Drafts may be rare
-          in this view.
-        </p>
-      ) : null}
-
-      {!threadsLoading && !weddingsLoading && !derived.gmailLabelFilterUnsupported ? (
-        <InboxListSelectionToolbar
-          visibleThreads={visibleThreads}
-          selectedIds={selectedIds}
-          setSelectedIds={setSelectedIds}
-          onRefresh={handleRefresh}
-          refreshing={refreshing}
-          countLabel={countLabel}
-          onDeleteSelected={() => void handleBulkDelete()}
-          bulkDeleting={bulkDeleting}
+    <div className="inbox-message-list-col">
+      <div className="list-head">
+        <InboxListTabs
+          listTab={listTab}
+          onChange={setListTab}
+          disabled={tabsDisabled}
+          counts={
+            listHeadCounts.unsupported
+              ? { all: 0, unread: 0, needs_reply: 0 }
+              : { all: listHeadCounts.all, unread: listHeadCounts.unread, needs_reply: listHeadCounts.needs_reply }
+          }
         />
-      ) : null}
+        {!threadsLoading && !weddingsLoading && !derived.gmailLabelFilterUnsupported ? (
+          <>
+            <div className="list-meta">
+              <div className="left">{listMetaLeft}</div>
+              <button type="button" className="act" disabled={refreshing} onClick={() => void handleRefresh()}>
+                ↻ Sync
+              </button>
+            </div>
+          </>
+        ) : null}
+      </div>
 
-      <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+      <ul ref={listScrollRef} className="list">
         {!authLoading && !photographerId ? (
-          <div className="m-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-950 dark:text-amber-100/95" role="alert">
-            <p className="font-medium">Not signed in</p>
-          </div>
+          <li className="list-note" data-tone="warn" role="alert">
+            Sign in to load inbox.
+          </li>
         ) : null}
         {dataLoadError ? (
-          <div className="m-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12px] text-red-600" role="alert">
+          <li className="list-note" data-tone="err" role="alert">
             {dataLoadError}
-          </div>
+          </li>
         ) : null}
 
         {derived.gmailLabelFilterUnsupported ? (
-          <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
-            <p className="text-[13px] font-medium text-foreground">No Gmail label metadata on threads yet</p>
-            <p className="mt-2 max-w-sm text-[12px] text-muted-foreground">
-              Label filters apply when imported or modified messages carry{" "}
-              <span className="font-medium text-foreground/90">gmail_label_ids</span> on the latest message. Clear the
-              label in the sidebar to return to the full list.
-            </p>
-          </div>
+          <li className="list-note" role="status">
+            No threads match this label until Gmail label ids sync on messages. Clear the label filter in the sidebar.
+          </li>
         ) : null}
 
         {!derived.gmailLabelFilterUnsupported ? (
           threadsLoading || weddingsLoading ? (
-            <p className="px-4 py-8 text-[13px] text-muted-foreground">Loading…</p>
+            <li className="list-note" role="status">
+              Loading…
+            </li>
           ) : visibleThreads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-8 py-16 text-center">
-              <p className="text-[13px] text-muted-foreground">
-                {derived.folderUsesGmailLabelMetadata
-                  ? "No threads in this folder with synced Gmail labels yet."
-                  : "No messages match the current filters."}
-              </p>
-            </div>
+            <li className="list-note" role="status">
+              {derived.folderUsesGmailLabelMetadata
+                ? "No threads in this folder with synced Gmail labels yet."
+                : "No messages match the current filters."}
+            </li>
           ) : (
-            <ul className="pb-4">
-              {visibleThreads.map((t) => (
-                <InboxMessageRow
-                  key={t.id}
-                  thread={t}
-                  selected={selection.kind === "thread" && selection.thread.id === t.id}
-                  bulkSelected={selectedIds.has(t.id)}
-                  onBulkToggle={() => {
-                    setSelectedIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(t.id)) next.delete(t.id);
-                      else next.add(t.id);
-                      return next;
-                    });
-                  }}
-                  onSelect={() => {
-                    void prefetchThreadMessages(t.id);
-                    selectThread(t);
-                  }}
-                  onDelete={() => void handleDelete(t.id)}
-                  deleting={deletingId === t.id}
-                  googleConnectedAccountId={googleAccount?.id ?? null}
-                  onGmailModify={(action) =>
-                    gmailInboxModify(t.id, action, googleAccount?.id ?? null, t.latestProviderMessageId)
-                  }
-                  onHoverPrefetch={() => scheduleHoverPrefetch(t.id)}
-                  onHoverPrefetchCancel={cancelHoverPrefetch}
-                  onRowFocusPrefetch={() => void prefetchThreadMessages(t.id)}
-                />
-              ))}
-            </ul>
+            visibleThreads.map((t) => (
+              <InboxMessageRow
+                key={t.id}
+                thread={t}
+                selected={selection.kind === "thread" && selection.thread.id === t.id}
+                onSelect={() => {
+                  void prefetchThreadMessages(t.id);
+                  selectThread(t);
+                }}
+                googleConnectedAccountId={googleAccount?.id ?? null}
+                onGmailModify={(action) =>
+                  gmailInboxModify(t.id, action, googleAccount?.id ?? null, t.latestProviderMessageId)
+                }
+                onHoverPrefetch={() => scheduleHoverPrefetch(t.id)}
+                onHoverPrefetchCancel={cancelHoverPrefetch}
+                onRowFocusPrefetch={() => void prefetchThreadMessages(t.id)}
+                gmailLabelCatalog={gmailLabels}
+                linkedCoupleNames={t.weddingId ? weddingNamesById.get(t.weddingId) ?? null : null}
+                linkedWeddingStage={t.weddingId ? weddingStageById.get(t.weddingId) ?? null : null}
+                hasPendingDraft={draftThreadIds.has(t.id)}
+              />
+            ))
           )
         ) : null}
-      </div>
+      </ul>
     </div>
   );
 }

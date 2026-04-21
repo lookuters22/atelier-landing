@@ -8,13 +8,17 @@
  * **Provisional text cues (Tier B):** substring matches for `authorized_exception` / `v3_verify_case_note` / `exception`
  * are **retrieval hints only** — not durable policy semantics. Do not treat them as a full exception system.
  *
- * **Scope:** When `weddingId` is set, rows with `wedding_id === weddingId` are **primary**; `wedding_id === null`
- * (tenant-wide) memories are **fallback**, not equal peers — they sort lower until wedding-scoped rows are exhausted.
+ * **Reply-mode scope:** `scope='project'` memories from another project are **never** candidates (hard filter).
+ * `scope='person'` is allowed only when `memories.person_id` is in `replyModeParticipantPersonIds` (Slice 4).
+ * `scope='studio'` rows are fallback with a sub-cap when a wedding is in scope (Slice 2).
  */
-import type { MemoryHeader } from "./fetchMemoryHeaders.ts";
+import type { MemoryHeader, MemoryScope } from "./fetchMemoryHeaders.ts";
 
 /** Hard cap on promoted full memory rows per turn (keep orchestrator payload bounded). */
 export const MAX_SELECTED_MEMORIES = 5;
+
+/** Studio-scope rows allowed inside {@link MAX_SELECTED_MEMORIES} for reply mode (production memory plan §3). */
+export const MAX_STUDIO_MEMORIES_IN_REPLY = 3;
 
 const MIN_TOKEN_LEN = 3;
 
@@ -27,19 +31,72 @@ function normalizeHeaderWeddingId(h: MemoryHeader): string | null {
   return String(w).trim();
 }
 
+function normalizeHeaderPersonId(h: MemoryHeader): string | null {
+  const p = h.person_id;
+  if (p === undefined || p === null || String(p).trim() === "") return null;
+  return String(p).trim();
+}
+
+function normalizeParticipantSet(ids: string[] | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!ids?.length) return out;
+  for (const id of ids) {
+    const t = String(id).trim();
+    if (t.length > 0) out.add(t);
+  }
+  return out;
+}
+
 /**
- * Primary = wedding-scoped for this case; fallback = tenant-wide when wedding is in scope.
- * Neutral when no wedding context.
+ * Reply-mode candidate gate: cross-project `project` excluded; `person` only for in-thread participant ids.
  */
-function scopePrimaryRank(effectiveWeddingId: string | null, headerWeddingId: string | null): number {
+function isReplyModeSelectableHeader(
+  h: MemoryHeader,
+  effectiveWeddingId: string | null,
+  allowedPersonIds: Set<string>,
+): boolean {
+  if (h.scope === "person") {
+    const pid = normalizeHeaderPersonId(h);
+    return pid !== null && allowedPersonIds.has(pid);
+  }
+  if (h.scope === "studio") {
+    return true;
+  }
+  // project
   if (!effectiveWeddingId) {
+    return true;
+  }
+  const headerWeddingId = normalizeHeaderWeddingId(h);
+  return headerWeddingId !== null && headerWeddingId === effectiveWeddingId;
+}
+
+/**
+ * Primary = in-scope project or in-scope person; fallback = studio when wedding is in scope.
+ */
+function scopePrimaryRank(
+  effectiveWeddingId: string | null,
+  h: MemoryHeader,
+  allowedPersonIds: Set<string>,
+): number {
+  if (h.scope === "studio") {
+    return effectiveWeddingId ? 1 : 0;
+  }
+  if (h.scope === "person") {
+    const pid = normalizeHeaderPersonId(h);
+    if (pid !== null && allowedPersonIds.has(pid)) {
+      return 2;
+    }
     return 0;
   }
-  if (headerWeddingId !== null && headerWeddingId === effectiveWeddingId) {
-    return 2;
-  }
-  if (headerWeddingId === null) {
-    return 1;
+  if (h.scope === "project") {
+    if (!effectiveWeddingId) {
+      return 0;
+    }
+    const headerWeddingId = normalizeHeaderWeddingId(h);
+    if (headerWeddingId !== null && headerWeddingId === effectiveWeddingId) {
+      return 2;
+    }
+    return 0;
   }
   return 0;
 }
@@ -88,38 +145,55 @@ export type SelectRelevantMemoriesInput = {
   rawMessage: string;
   threadSummary: string | null;
   memoryHeaders: MemoryHeader[];
+  /**
+   * Thread participant `people.id` values (same as `AgentContext.replyModeParticipantPersonIds`).
+   * Person-scope headers are candidates only when `person_id` is in this set.
+   */
+  replyModeParticipantPersonIds: string[];
+};
+
+type RankedRow = {
+  id: string;
+  scope: MemoryScope;
+  scopePrimary: number;
+  provisionalCue: number;
+  keywordScore: number;
 };
 
 /**
  * Returns up to {@link MAX_SELECTED_MEMORIES} memory ids in deterministic priority order.
  * Only ids present in `memoryHeaders` can appear (cross-tenant rows cannot enter via this path).
+ *
+ * **Invariant:** With `weddingId` set, no `scope='project'` memory whose `wedding_id` differs from `weddingId`
+ * may appear. No `scope='person'` memory unless `person_id ∈ replyModeParticipantPersonIds`.
+ * With `weddingId` set, at most {@link MAX_STUDIO_MEMORIES_IN_REPLY} `scope='studio'` ids are returned
+ * (within {@link MAX_SELECTED_MEMORIES}). When `weddingId` is null, the studio sub-cap is not applied.
  */
 export function selectRelevantMemoryIdsDeterministic(input: SelectRelevantMemoriesInput): string[] {
   const effectiveWeddingId =
     typeof input.weddingId === "string" && input.weddingId.trim().length > 0 ? input.weddingId.trim() : null;
 
+  const allowedPersonIds = normalizeParticipantSet(input.replyModeParticipantPersonIds);
+
   const turnBlob = `${input.rawMessage}\n${input.threadSummary ?? ""}`;
 
   const seen = new Set<string>();
-  const rows: {
-    id: string;
-    scopePrimary: number;
-    provisionalCue: number;
-    keywordScore: number;
-  }[] = [];
+  const rows: RankedRow[] = [];
 
   for (const h of input.memoryHeaders) {
     const id = String(h.id ?? "").trim();
     if (!id || seen.has(id)) continue;
+    if (!isReplyModeSelectableHeader(h, effectiveWeddingId, allowedPersonIds)) {
+      continue;
+    }
     seen.add(id);
 
-    const headerWeddingId = normalizeHeaderWeddingId(h);
-    const scopePrimary = scopePrimaryRank(effectiveWeddingId, headerWeddingId);
+    const scopePrimary = scopePrimaryRank(effectiveWeddingId, h, allowedPersonIds);
     const combined = `${h.type}\n${h.title}\n${h.summary}`.toLowerCase();
     const provisionalCue = provisionalTextCueRank(combined);
     const keywordScore = keywordOverlapScore(`${h.type} ${h.title} ${h.summary}`, turnBlob);
 
-    rows.push({ id, scopePrimary, provisionalCue, keywordScore });
+    rows.push({ id, scope: h.scope, scopePrimary, provisionalCue, keywordScore });
   }
 
   rows.sort((a, b) => {
@@ -129,5 +203,21 @@ export function selectRelevantMemoryIdsDeterministic(input: SelectRelevantMemori
     return a.id.localeCompare(b.id);
   });
 
-  return rows.slice(0, MAX_SELECTED_MEMORIES).map((r) => r.id);
+  const out: string[] = [];
+  let studioPicked = 0;
+  /** Bounded studio fallback only when replying in a known project; unscoped threads keep legacy breadth. */
+  const studioCap = effectiveWeddingId != null ? MAX_STUDIO_MEMORIES_IN_REPLY : MAX_SELECTED_MEMORIES;
+
+  for (const r of rows) {
+    if (out.length >= MAX_SELECTED_MEMORIES) break;
+    if (r.scope === "studio" && studioPicked >= studioCap) {
+      continue;
+    }
+    out.push(r.id);
+    if (r.scope === "studio") {
+      studioPicked += 1;
+    }
+  }
+
+  return out;
 }

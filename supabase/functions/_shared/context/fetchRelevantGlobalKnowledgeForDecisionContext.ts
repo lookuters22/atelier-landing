@@ -22,6 +22,9 @@ import { truncateRagEmbeddingQuery } from "../tools/ragA5Budget.ts";
 /** Hard cap on `globalKnowledge` rows attached per turn (orchestrator payload bound). */
 export const MAX_GLOBAL_KNOWLEDGE_ROWS = 3;
 
+/** Assistant Mode B default — plan §3 (can override per call via options). */
+export const MAX_GLOBAL_KNOWLEDGE_ROWS_ASSISTANT = 5;
+
 /** RPC candidate cap — small, deterministic; ranking finishes in TS (channel preference only). */
 const MATCH_KNOWLEDGE_RPC_LIMIT = 24;
 
@@ -42,6 +45,11 @@ export type FetchRelevantGlobalKnowledgeInput = {
   rawMessage: string;
   threadSummary: string | null;
   replyChannel: AgentContext["replyChannel"];
+};
+
+export type FetchRelevantGlobalKnowledgeOptions = {
+  /** When set, caps returned rows (reply mode defaults to {@link MAX_GLOBAL_KNOWLEDGE_ROWS}). */
+  maxRows?: number;
 };
 
 function preferredDocumentTypesForChannel(
@@ -76,7 +84,9 @@ function compareCreatedAt(a: string | null, b: string | null): number {
 export async function fetchRelevantGlobalKnowledgeForDecisionContext(
   supabase: SupabaseClient,
   input: FetchRelevantGlobalKnowledgeInput,
+  options?: FetchRelevantGlobalKnowledgeOptions,
 ): Promise<Array<Record<string, unknown>>> {
+  const maxRows = options?.maxRows ?? MAX_GLOBAL_KNOWLEDGE_ROWS;
   const turnBlob = truncateRagEmbeddingQuery(`${input.rawMessage}\n${input.threadSummary ?? ""}`);
   if (!turnBlob.trim()) {
     return [];
@@ -126,7 +136,7 @@ export async function fetchRelevantGlobalKnowledgeForDecisionContext(
     return String(a.row.id).localeCompare(String(b.row.id));
   });
 
-  const picked = scored.slice(0, MAX_GLOBAL_KNOWLEDGE_ROWS);
+  const picked = scored.slice(0, maxRows);
 
   return picked.map(({ row, similarity, channelBoost }) => ({
     id: row.id,

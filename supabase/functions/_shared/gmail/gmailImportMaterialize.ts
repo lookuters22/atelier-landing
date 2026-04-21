@@ -17,6 +17,11 @@ import {
   computeGmailMaterializationBundle,
 } from "./buildGmailMaterializationArtifact.ts";
 import { classifyGmailImportCandidate } from "../suppression/classifyGmailImportCandidate.ts";
+import {
+  evaluateGroupedImportAttachmentEligibility,
+  photographerHasClientMatchingEmail,
+} from "./gmailProjectAttachmentEligibility.ts";
+import { extractSenderEmailFromRaw } from "../../../../src/lib/inboundSuppressionClassifier.ts";
 import { parseGmailImportRenderHtmlRefFromMetadata } from "./gmailPersistRenderArtifact.ts";
 import { importGmailAttachmentsForMessage } from "./gmailImportAttachments.ts";
 import type { GmailAttachmentCandidate } from "./gmailMimeAttachments.ts";
@@ -107,7 +112,7 @@ export function gmailExternalThreadKey(rawProviderThreadId: string): string {
  * Re-exported here for backwards compatibility with existing callers.
  */
 export { readInboundFromHeader } from "./readInboundFromHeader.ts";
-import { readInboundFromHeader } from "./readInboundFromHeader.ts";
+import { inboundMetadataHeadersForClassifier, readInboundFromHeader } from "./readInboundFromHeader.ts";
 
 export type ApproveMaterialization = {
   body: string;
@@ -190,6 +195,11 @@ export type MaterializeGmailImportCandidateParams = {
   gmailThreadFetchCache?: GmailThreadFetchCache | null;
   /** Grouped approval: clear import_approval_error when approving (RPC). */
   clearImportApprovalError?: boolean;
+  /**
+   * G5 Chunk 3: normalized inbound sender emails already linked to this batch
+   * wedding for the same `gmail_label_import_group_id` (plus same-chunk overlay).
+   */
+  groupedAttachmentAnchorEmails?: string[] | null;
 };
 
 export type MaterializeGmailImportCandidateResult =
@@ -207,6 +217,11 @@ export type MaterializeGmailImportCandidateResult =
       suppressed?: boolean;
       /** Machine-readable suppression verdict when `suppressed === true`. */
       suppressionVerdict?: string;
+      /** Grouped import only — false means thread must stay unfiled despite passing suppression. */
+      groupedAttachmentEligible?: boolean;
+      groupedAttachmentReason?: string;
+      groupedAttachmentEvidence?: Record<string, unknown>;
+      normalizedInboundEmail?: string | null;
     }
   | { error: string };
 
@@ -234,6 +249,7 @@ export async function materializeGmailImportCandidate(
     gmailAccountTokenCache,
     gmailThreadFetchCache,
     clearImportApprovalError = false,
+    groupedAttachmentAnchorEmails = null,
   } = params;
 
   /** Grouped batch passes chunk caches — match fallback bundle substep telemetry scope. */
@@ -262,21 +278,92 @@ export async function materializeGmailImportCandidate(
   if (existing?.id) {
     threadId = existing.id as string;
     needsThreadWeddingIdUpdate = true;
+
+    const { data: acctReuse } = await supabaseAdmin
+      .from("connected_accounts")
+      .select("email")
+      .eq("id", connectedAccountId)
+      .maybeSingle();
+
+    const reuseBundle = await loadGmailImportForApprove(row, {
+      gmailAccountTokenCache,
+      gmailThreadFetchCache,
+    });
+    const inboundFromReuse = readInboundFromHeader(reuseBundle.metadata);
+    const senderLabelReuse =
+      inboundFromReuse?.trim() ||
+      (acctReuse?.email as string | undefined)?.trim() ||
+      "Gmail";
+    const headerSliceReuse = inboundMetadataHeadersForClassifier(reuseBundle.metadata);
+    const suppressionReuse = classifyGmailImportCandidate({
+      senderRaw: inboundFromReuse ?? senderLabelReuse,
+      subject: typeof subject === "string" ? subject : null,
+      snippet: typeof row.snippet === "string" ? row.snippet : null,
+      body: reuseBundle.body,
+      sourceLabelName,
+      headers: headerSliceReuse ?? undefined,
+    });
+    const suppressedReuse = suppressionReuse.suppressed;
+
+    let groupedReuseEligibility:
+      | {
+          eligible: boolean;
+          reason: string;
+          normalizedEmail: string | null;
+          evidence?: Record<string, unknown>;
+        }
+      | null = null;
+    if (gmailLabelImportGroupId && !suppressedReuse) {
+      const norm = extractSenderEmailFromRaw(inboundFromReuse ?? senderLabelReuse);
+      const anchorReuse = new Set(groupedAttachmentAnchorEmails ?? []);
+      const knownReuse = await photographerHasClientMatchingEmail(
+        supabaseAdmin,
+        photographerId,
+        norm,
+      );
+      const evReuse = evaluateGroupedImportAttachmentEligibility({
+        normalizedSenderEmail: norm,
+        anchorNormalizedEmails: anchorReuse,
+        knownClientEmailMatch: knownReuse,
+      });
+      groupedReuseEligibility = {
+        eligible: evReuse.eligible,
+        reason: evReuse.reason,
+        normalizedEmail: norm,
+        evidence: evReuse.evidence,
+      };
+    }
+
     logGmailApproveMaterializeV1({
       photographer_id: photographerId,
       import_candidate_id: importCandidateId,
       thread_id: threadId,
       message_id: "",
-      used_prepared_artifact: false,
+      used_prepared_artifact: reuseBundle.usedPreparedArtifact,
       materialization_prepare_status: row.materialization_prepare_status as string | null,
       html_render_path: "none",
-      approve_fallback_no_prepared_artifact: false,
+      approve_fallback_no_prepared_artifact: !reuseBundle.usedPreparedArtifact,
       html_fallback_inline_not_storage: false,
       attachment_path: "none",
       grouped_batch: Boolean(gmailLabelImportGroupId),
       reuse_existing_thread: true,
     });
-    return { threadId, needsThreadWeddingIdUpdate: true, finalizedCore: false };
+    return {
+      threadId,
+      needsThreadWeddingIdUpdate: true,
+      finalizedCore: false,
+      ...(suppressedReuse
+        ? { suppressed: true, suppressionVerdict: suppressionReuse.verdict }
+        : {}),
+      ...(gmailLabelImportGroupId && !suppressedReuse && groupedReuseEligibility
+        ? {
+            groupedAttachmentEligible: groupedReuseEligibility.eligible,
+            groupedAttachmentReason: groupedReuseEligibility.reason,
+            groupedAttachmentEvidence: groupedReuseEligibility.evidence,
+            normalizedInboundEmail: groupedReuseEligibility.normalizedEmail ?? undefined,
+          }
+        : {}),
+    };
   }
 
   const { data: acct } = await supabaseAdmin
@@ -323,15 +410,44 @@ export async function materializeGmailImportCandidate(
      * to the classifier so sender local-part / domain heuristics actually fire
      * for OTA / marketing senders like `email.campaign@sg.booking.com`.
      */
+    const headerSliceNew = inboundMetadataHeadersForClassifier(msgMeta);
     const suppressionClassification = classifyGmailImportCandidate({
       senderRaw: inboundFromHeader ?? senderLabel,
       subject: typeof subject === "string" ? subject : null,
       snippet: typeof row.snippet === "string" ? row.snippet : null,
       body: bodyText,
       sourceLabelName,
+      headers: headerSliceNew ?? undefined,
     });
     const suppressed = suppressionClassification.suppressed;
-    const effectiveWeddingId = suppressed ? null : weddingId;
+    const groupedImport = Boolean(gmailLabelImportGroupId);
+
+    let groupedAttachmentEligible: boolean | undefined;
+    let groupedAttachmentReason: string | undefined;
+    let groupedAttachmentEvidence: Record<string, unknown> | undefined;
+    let normalizedInboundEmail: string | null = null;
+
+    if (groupedImport && !suppressed) {
+      normalizedInboundEmail = extractSenderEmailFromRaw(inboundFromHeader ?? senderLabel);
+      const anchorSet = new Set(groupedAttachmentAnchorEmails ?? []);
+      const knownClient = await photographerHasClientMatchingEmail(
+        supabaseAdmin,
+        photographerId,
+        normalizedInboundEmail,
+      );
+      const elig = evaluateGroupedImportAttachmentEligibility({
+        normalizedSenderEmail: normalizedInboundEmail,
+        anchorNormalizedEmails: anchorSet,
+        knownClientEmailMatch: knownClient,
+      });
+      groupedAttachmentEligible = elig.eligible;
+      groupedAttachmentReason = elig.reason;
+      groupedAttachmentEvidence = elig.evidence;
+    }
+
+    const attachmentPassesGroupedGate = !groupedImport || groupedAttachmentEligible === true;
+    const effectiveWeddingId = suppressed ? null : attachmentPassesGroupedGate ? weddingId : null;
+
     const suppressionMetadata = suppressed
       ? {
           suppression: {
@@ -345,6 +461,18 @@ export async function materializeGmailImportCandidate(
         }
       : {};
 
+    const groupedAttachmentSkipMetadata =
+      groupedImport && !suppressed && !attachmentPassesGroupedGate
+        ? {
+            grouped_attachment_eligibility: {
+              eligible: false,
+              reason: groupedAttachmentReason,
+              evidence: groupedAttachmentEvidence,
+              at: now,
+            },
+          }
+        : {};
+
     const provenance = {
       source: "gmail_label_import" as const,
       import_candidate_id: importCandidateId,
@@ -357,6 +485,7 @@ export async function materializeGmailImportCandidate(
         : {}),
       ...(materializedWeddingId ? { materialized_wedding_id: materializedWeddingId } : {}),
       ...suppressionMetadata,
+      ...groupedAttachmentSkipMetadata,
     };
 
     const importProvenance: Record<string, unknown> = {
@@ -365,6 +494,7 @@ export async function materializeGmailImportCandidate(
       materialized_at: now,
       ...(gmailLabelImportGroupId ? { gmail_label_import_group_id: gmailLabelImportGroupId } : {}),
       ...(materializedWeddingId ? { materialized_wedding_id: materializedWeddingId } : {}),
+      ...groupedAttachmentSkipMetadata,
     };
 
     const renderRef = parseGmailImportRenderHtmlRefFromMetadata(msgMeta);
@@ -649,6 +779,14 @@ export async function materializeGmailImportCandidate(
         ? {
             suppressed: true,
             suppressionVerdict: suppressionClassification.verdict,
+          }
+        : {}),
+      ...(groupedImport && !suppressed
+        ? {
+            groupedAttachmentEligible,
+            groupedAttachmentReason,
+            groupedAttachmentEvidence,
+            normalizedInboundEmail: normalizedInboundEmail ?? undefined,
           }
         : {}),
     };

@@ -1,13 +1,30 @@
 /**
- * Create inquiry-stage wedding + client from an existing canonical inbound thread (Gmail delta path).
+ * Create inquiry-stage project row (`weddings`) + client from an existing canonical inbound thread (Gmail delta path).
  * Does not insert threads/messages — attaches `threads.wedding_id` to the existing row.
  *
  * **`wedding_date` is intentionally `null`** when no verified calendar date exists (never substitutes “today”).
  * Requires DB migration `20260430192000_wedding_date_nullable_and_inquiry_rpcs.sql` (`ALTER COLUMN wedding_date DROP NOT NULL`).
+ *
+ * `project_type` defaults to `'wedding'` when omitted so existing callers keep current behavior.
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { Constants, type Database } from "../../../../src/types/database.types.ts";
 import { extractEmailAddress } from "../utils/extractEmailAddress.ts";
 import { normalizeEmail } from "../utils/normalizeEmail.ts";
+
+type WeddingProjectType = Database["public"]["Enums"]["wedding_project_type"];
+
+const ALLOWED_PROJECT_TYPES = new Set<string>(
+  Constants.public.Enums.wedding_project_type as readonly string[],
+);
+
+function resolveProjectType(projectType: WeddingProjectType | undefined): WeddingProjectType {
+  if (projectType === undefined) return "wedding";
+  if (!ALLOWED_PROJECT_TYPES.has(projectType)) {
+    throw new Error(`Invalid projectType: ${String(projectType)}`);
+  }
+  return projectType;
+}
 
 /** Postgres `not_null_violation` on `weddings.wedding_date` — DB missing nullable-date migration. */
 function isWeddingDateNotNullConstraintError(err: { code?: string; message?: string } | null | undefined): boolean {
@@ -29,9 +46,13 @@ export async function bootstrapInquiryWeddingForCanonicalThread(
     senderEmail: string | null;
     /** Thread title when present. */
     threadTitle?: string | null;
+    /** Row classification on `weddings.project_type`. Defaults to `'wedding'`. */
+    projectType?: WeddingProjectType;
   },
 ): Promise<{ weddingId: string }> {
-  const { photographerId, threadId, rawMessagePreview, senderEmail, threadTitle } = input;
+  const { photographerId, threadId, rawMessagePreview, senderEmail, threadTitle, projectType } =
+    input;
+  const resolvedProjectType = resolveProjectType(projectType);
 
   const { data: thread, error: tErr } = await supabase
     .from("threads")
@@ -60,6 +81,7 @@ export async function bootstrapInquiryWeddingForCanonicalThread(
       wedding_date: null,
       location: "TBD",
       stage: "inquiry",
+      project_type: resolvedProjectType,
       story_notes: rawMessagePreview.slice(0, 8000) || null,
     })
     .select("id")
@@ -105,3 +127,6 @@ export async function bootstrapInquiryWeddingForCanonicalThread(
 
   return { weddingId };
 }
+
+/** Alias for `bootstrapInquiryWeddingForCanonicalThread` — same behavior and signature. */
+export const bootstrapInquiryProjectForCanonicalThread = bootstrapInquiryWeddingForCanonicalThread;

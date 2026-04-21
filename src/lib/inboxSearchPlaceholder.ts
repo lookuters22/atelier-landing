@@ -20,6 +20,6 @@ export function buildInboxSearchPlaceholder(opts: {
     case "drafts":
       return "Search Drafts";
     default:
-      return "Search Inbox";
+      return "Search mail, clients, projects…";
   }
 }

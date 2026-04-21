@@ -126,4 +126,46 @@ describe("classifyGmailImportCandidate", () => {
     });
     expect(result.suppressed).toBe(true);
   });
+
+  it("classifies a merchant receipt as transactional even under a neutral inquiry label (mixed-batch safety)", () => {
+    const result = classifyGmailImportCandidate({
+      senderRaw: "Stripe <receipts@stripe.com>",
+      subject: "Receipt from ACME Photography LLC",
+      snippet: "Thank you for your payment. Amount paid $250.00.",
+      body: "Thank you for your payment. Amount paid $250.00. View your receipt online.",
+      sourceLabelName: "Inquiries",
+    });
+    expect(result.verdict).toBe("transactional_non_client");
+    expect(result.suppressed).toBe(true);
+    expect(result.reasons).toContain("subject_transactional_receipt");
+  });
+
+  it("classifies newsletter promo under neutral label as promotional", () => {
+    const result = classifyGmailImportCandidate({
+      senderRaw: "Deals <news@brand.com>",
+      subject: "This week only — 40% off prints",
+      snippet: "Unsubscribe | View in browser",
+      body: "Limited time offer. Unsubscribe at any time.",
+      sourceLabelName: "Clients",
+    });
+    expect(result.suppressed).toBe(true);
+    expect(result.verdict).toBe("promotional_or_marketing");
+  });
+
+  it("uses persisted list-unsubscribe + precedence headers when provided", () => {
+    const result = classifyGmailImportCandidate({
+      senderRaw: "Updates <hello@vendor.com>",
+      subject: "Spring collection lookbook",
+      snippet: "See what's new for spring.",
+      body: "See what's new for spring.",
+      sourceLabelName: "Inquiries",
+      headers: {
+        "list-unsubscribe": "<mailto:unsub@vendor.com>",
+        precedence: "bulk",
+      },
+    });
+    expect(result.suppressed).toBe(true);
+    expect(result.reasons).toContain("header_list_unsubscribe");
+    expect(result.reasons).toContain("header_precedence_bulk");
+  });
 });

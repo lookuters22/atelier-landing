@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
-import { ChevronDown, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import type { UnfiledThread } from "../../../hooks/useUnfiledInbox";
 import { deriveStarredFromGmailLabelIds, deriveUnreadFromGmailLabelIds } from "../../../lib/gmailInboxLabels";
-import { Button } from "../../ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../../ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
 function threadIsUnread(t: UnfiledThread): boolean {
   return deriveUnreadFromGmailLabelIds(t.gmailLabelIds) ?? false;
@@ -75,104 +67,65 @@ export function InboxListSelectionToolbar({
   const showDelete = selectionCount > 0;
 
   return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-1.5 sm:px-2.5">
-      <div className="flex min-w-0 items-center gap-0.5">
-        <div className={cn("inline-flex h-8 items-center gap-0", listEmpty && "opacity-50")}>
-          <div className="flex shrink-0 items-center">
-            <input
-              ref={checkboxRef}
-              type="checkbox"
-              disabled={listEmpty}
-              checked={allSelected}
-              onChange={onCheckboxChange}
-              className="h-3.5 w-3.5 rounded border-border"
-              aria-label={allSelected ? "Deselect all" : "Select all"}
-            />
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                disabled={listEmpty}
-                className="h-8 w-8 shrink-0 text-muted-foreground"
-                aria-label="Selection options"
-              >
-                <ChevronDown className="h-4 w-4" strokeWidth={2} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[10rem]">
-              <DropdownMenuItem
-                onSelect={() => selectIds(visibleThreads.map((t) => t.id))}
-                disabled={listEmpty}
-              >
-                All
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => selectIds([])} disabled={listEmpty}>
-                None
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => applyFilter((t) => !threadIsUnread(t))}
-                disabled={listEmpty}
-              >
-                Read
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => applyFilter((t) => threadIsUnread(t))}
-                disabled={listEmpty}
-              >
-                Unread
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => applyFilter((t) => threadIsStarred(t))}
-                disabled={listEmpty}
-              >
-                Starred
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => applyFilter((t) => !threadIsStarred(t))}
-                disabled={listEmpty}
-              >
-                Unstarred
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+    <div className="inbox-list-sel-toolbar">
+      <div className="inbox-list-sel-toolbar-left">
+        <div className={`cb${listEmpty ? " inbox-list-sel-cb-disabled" : ""}`}>
+          <input
+            ref={checkboxRef}
+            type="checkbox"
+            disabled={listEmpty}
+            checked={allSelected}
+            onChange={onCheckboxChange}
+            aria-label={allSelected ? "Deselect all" : "Select all"}
+          />
         </div>
-        <Button
+        <select
+          className="inbox-bulk-select"
+          aria-label="Restrict selection"
+          disabled={listEmpty}
+          value=""
+          onChange={(e) => {
+            const v = e.target.value;
+            e.target.value = "";
+            if (!v || listEmpty) return;
+            if (v === "all") selectIds(visibleThreads.map((t) => t.id));
+            else if (v === "none") selectIds([]);
+            else if (v === "read") applyFilter((t) => !threadIsUnread(t));
+            else if (v === "unread") applyFilter((t) => threadIsUnread(t));
+            else if (v === "starred") applyFilter((t) => threadIsStarred(t));
+            else if (v === "unstarred") applyFilter((t) => !threadIsStarred(t));
+          }}
+        >
+          <option value="">Selection…</option>
+          <option value="all">All</option>
+          <option value="none">None</option>
+          <option value="read">Read</option>
+          <option value="unread">Unread</option>
+          <option value="starred">Starred</option>
+          <option value="unstarred">Unstarred</option>
+        </select>
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 text-muted-foreground"
+          className="act inbox-list-sel-icon"
           aria-label="Refresh list"
           disabled={refreshing || bulkDeleting}
           onClick={() => void onRefresh()}
         >
-          {refreshing ? (
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-          ) : (
-            <RefreshCw className="h-4 w-4" strokeWidth={2} />
-          )}
-        </Button>
+          {refreshing ? <Loader2 className="inbox-list-sel-spin" strokeWidth={2} aria-hidden /> : <RefreshCw className="inbox-list-sel-ico" strokeWidth={2} aria-hidden />}
+        </button>
         {showDelete ? (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="act inbox-list-sel-icon inbox-list-sel-del"
             aria-label={selectionCount === 1 ? "Delete selected message" : `Delete ${selectionCount} selected messages`}
             disabled={bulkDeleting}
             onClick={onDeleteSelected}
           >
-            {bulkDeleting ? (
-              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
-            ) : (
-              <Trash2 className="h-4 w-4" strokeWidth={2} />
-            )}
-          </Button>
+            {bulkDeleting ? <Loader2 className="inbox-list-sel-spin" strokeWidth={2} aria-hidden /> : <Trash2 className="inbox-list-sel-ico" strokeWidth={2} aria-hidden />}
+          </button>
         ) : null}
       </div>
-      <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">{countLabel}</span>
+      <span className="inbox-list-sel-count">{countLabel}</span>
     </div>
   );
 }

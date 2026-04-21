@@ -1,130 +1,120 @@
 import { cn } from "@/lib/utils";
-import {
-  AnimatePresence,
-  MotionValue,
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from "framer-motion";
-import { useRef, useState } from "react";
-import { OBSIDIAN_GLASS } from "@/lib/obsidianGlass";
 
+/**
+ * Ana dashboard dock — dark frosted pill, labeled icons, Fin underline on active.
+ * Matches export/redesign/Ana Dashboard.html (no cursor-magnify; labels replace tooltips).
+ */
 export type DockItem = {
   title: string;
   icon: React.ReactNode;
   href: string;
   onClick?: () => void;
   active?: boolean;
+  /** Optional count pill (export/redesign/Ana Dashboard.html `.unread`) */
+  badge?: number;
+  /** Vertical rule before this item (e.g. before Workspace) */
+  separatorBefore?: boolean;
 };
+
+/** Glass values live in index.css (`nav.ana-floating-dock`) — literal Ana Dashboard.html `.dock` */
 
 export function FloatingDock({
   items,
   desktopClassName,
+  density = "default",
 }: {
   items: DockItem[];
   desktopClassName?: string;
+  /** Inbox: slightly more opaque bar (Ana HTML prototype). */
+  density?: "default" | "inbox";
 }) {
-  return <FloatingDockDesktop items={items} className={desktopClassName} />;
+  return (
+    <FloatingDockDesktop items={items} className={desktopClassName} density={density} />
+  );
 }
 
 function FloatingDockDesktop({
   items,
   className,
+  density,
 }: {
   items: DockItem[];
   className?: string;
+  density: "default" | "inbox";
 }) {
-  const mouseX = useMotionValue(Infinity);
-
   return (
-    <motion.div
-      onMouseMove={(e) => mouseX.set(e.pageX)}
-      onMouseLeave={() => mouseX.set(Infinity)}
-      className={cn("relative mx-auto w-fit max-w-[calc(100vw-2rem)]", className)}
+    <nav
+      aria-label="Main navigation"
+      className={cn(
+        "pointer-events-auto ana-floating-dock relative mx-auto flex max-w-[calc(100vw-1.5rem)] items-center",
+        density === "inbox" && "ana-floating-dock--inbox",
+        className,
+      )}
     >
-      {/* Top/bottom padding gives room for magnify + labels without clipping; glass stays a clipped pill behind the row. */}
-      <div className="pt-10 pb-3">
-        <div className="relative min-h-16 w-full">
-          <div
-            className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[999px] ${OBSIDIAN_GLASS}`}
-            aria-hidden
-          />
-          <div className="relative z-10 flex h-16 min-h-16 max-w-full min-w-0 items-end justify-center gap-5 px-4 pb-2.5 pt-1.5">
-            {items.map((item) => (
-              <IconContainer mouseX={mouseX} key={item.title} {...item} />
-            ))}
-          </div>
-        </div>
+      <div className="mr-1 flex h-[38px] shrink-0 items-center gap-2 border-r border-white/10 py-1 pl-1 pr-3">
+        <span
+          className="grid size-[22px] place-items-center rounded-md bg-[#ff5600] font-serif text-[14px] italic leading-none text-white shadow-[0_0_14px_rgba(255,86,0,0.55)]"
+          aria-hidden
+        >
+          a
+        </span>
+        <span className="text-[12.5px] font-medium tracking-tight text-white">Ana</span>
       </div>
-    </motion.div>
+
+      {items.map((item) => (
+        <DockItemButton key={`${item.href}-${item.title}`} {...item} />
+      ))}
+    </nav>
   );
 }
 
-function IconContainer({
-  mouseX,
+function DockItemButton({
   title,
   icon,
   onClick,
   active = false,
-}: {
-  mouseX: MotionValue;
-  title: string;
-  icon: React.ReactNode;
-  href: string;
-  onClick?: () => void;
-  active?: boolean;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  const distance = useTransform(mouseX, (val) => {
-    const bounds = ref.current?.getBoundingClientRect() ?? { x: 0, width: 0 };
-    return val - bounds.x - bounds.width / 2;
-  });
-
-  const widthTransform = useTransform(distance, [-150, 0, 150], [40, 80, 40]);
-  const heightTransform = useTransform(distance, [-150, 0, 150], [40, 80, 40]);
-  const widthTransformIcon = useTransform(distance, [-150, 0, 150], [20, 40, 20]);
-  const heightTransformIcon = useTransform(distance, [-150, 0, 150], [20, 40, 20]);
-
-  const width = useSpring(widthTransform, { mass: 0.1, stiffness: 150, damping: 12 });
-  const height = useSpring(heightTransform, { mass: 0.1, stiffness: 150, damping: 12 });
-  const widthIcon = useSpring(widthTransformIcon, { mass: 0.1, stiffness: 150, damping: 12 });
-  const heightIcon = useSpring(heightTransformIcon, { mass: 0.1, stiffness: 150, damping: 12 });
-
-  const [hovered, setHovered] = useState(false);
-
+  badge,
+  separatorBefore,
+}: DockItem) {
+  const showBadge = typeof badge === "number" && badge > 0;
   return (
-    <motion.div
-      ref={ref}
-      style={{ width, height }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={onClick}
-      className={cn(
-        "group relative flex aspect-square cursor-pointer items-center justify-center rounded-full bg-transparent transition-colors",
-        "hover:bg-white/15",
-        active && "bg-white/15",
-      )}
-    >
-      <AnimatePresence>
-        {hovered && (
-          <motion.div
-            initial={{ opacity: 0, y: 10, x: "-50%" }}
-            animate={{ opacity: 1, y: 0, x: "-50%" }}
-            exit={{ opacity: 0, y: 2, x: "-50%" }}
-            className="absolute -top-8 left-1/2 w-fit rounded-lg bg-[#0a0a0a]/80 px-2.5 py-1 text-[11px] font-normal whitespace-pre text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_20px_rgba(0,0,0,0.4)] backdrop-blur-2xl"
-          >
-            {title}
-          </motion.div>
+    <>
+      {separatorBefore ? (
+        <div
+          className="mx-1 h-5 w-px shrink-0 bg-white/10"
+          aria-hidden
+        />
+      ) : null}
+      <button
+        type="button"
+        onClick={onClick}
+        data-active={active ? "true" : "false"}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "relative flex h-[38px] min-w-[48px] shrink-0 flex-col items-center justify-center gap-[3px] rounded-[10px] px-2.5 text-left transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(0.2,0,0,1)]",
+          active
+            ? "bg-white/10 text-white"
+            : "text-white/[0.72] hover:bg-white/[0.06] hover:text-white",
         )}
-      </AnimatePresence>
-      <motion.div
-        style={{ width: widthIcon, height: heightIcon }}
-        className="flex items-center justify-center text-white transition-colors"
       >
-        {icon}
-      </motion.div>
-    </motion.div>
+        <span className="relative flex items-center justify-center [&_svg]:size-[17px] [&_svg]:shrink-0 [&_svg]:stroke-[1.7]">
+          {icon}
+          {showBadge ? (
+            <span className="absolute -right-2 -top-1.5 flex h-3 min-w-3 place-items-center rounded-full bg-[#ff5600] px-0.5 text-[9px] font-normal leading-none text-white tabular-nums">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          ) : null}
+        </span>
+        <span className="dock-label text-[10.5px] font-light leading-none tracking-[0.2px] opacity-90">
+          {title}
+        </span>
+        {active ? (
+          <span
+            className="pointer-events-none absolute -bottom-[5px] left-1/2 h-0.5 w-[18px] -translate-x-1/2 rounded-sm bg-[#ff5600] shadow-[0_0_10px_rgba(255,86,0,0.7)]"
+            aria-hidden
+          />
+        ) : null}
+      </button>
+    </>
   );
 }

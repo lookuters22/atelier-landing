@@ -31,10 +31,13 @@ function baseDc(over: Partial<DecisionContext["audience"]> = {}): DecisionContex
     crmSnapshot: emptyCrmSnapshot(),
     recentMessages: [],
     threadSummary: "Planner commission is 15% on this package.",
+    replyModeParticipantPersonIds: [],
     memoryHeaders: [
       {
         id: "h1",
         wedding_id: null,
+        person_id: null,
+        scope: "studio",
         type: "note",
         title: "Deal",
         summary: "Agency fee discussion with planner.",

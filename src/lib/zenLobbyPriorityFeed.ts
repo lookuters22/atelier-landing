@@ -5,6 +5,7 @@ export type ZenLobbyPriorityKind = "message" | "draft" | "task" | "escalation";
 
 const ACTION_TYPE_TO_KIND: Record<TodayActionType, ZenLobbyPriorityKind> = {
   unfiled_thread: "message",
+  linked_lead_thread: "message",
   draft_approval: "draft",
   open_task: "task",
   open_escalation: "escalation",

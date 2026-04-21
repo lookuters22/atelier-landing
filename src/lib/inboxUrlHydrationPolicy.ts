@@ -23,16 +23,21 @@ export function shouldSkipInboxHydrationApply(
   return processedSignature === currentPayloadSignature;
 }
 
-/** After handling `action=review_draft`, strip URL/session only on real failures — not on success. */
+/**
+ * After handling `action=review_draft`, strip URL/session only on real failures — not on success.
+ * Thread-backed drafts with no `wedding_id` still succeed (unfiled inbox); see `hasThreadBackedDraftHandoff`.
+ */
 export function shouldStripInboxUrlAfterDraftReviewHydration(args: {
   draftsFetchError: boolean;
   draftFound: boolean;
   hasUsableWeddingId: boolean;
+  hasThreadBackedHandoff: boolean;
 }): boolean {
   if (args.draftsFetchError) return true;
   if (!args.draftFound) return true;
-  if (!args.hasUsableWeddingId) return true;
-  return false;
+  if (args.hasUsableWeddingId) return false;
+  if (args.hasThreadBackedHandoff) return false;
+  return true;
 }
 
 /** Unfiled `threadId` link: keep URL when the thread is found; strip when the id is stale / not in list. */

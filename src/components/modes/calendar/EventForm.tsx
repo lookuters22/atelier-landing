@@ -2,14 +2,16 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useCalendarMode, WEDDING_OPTIONS, type EventType, type CalEvent } from "./CalendarModeContext";
+import { ChevronLeft } from "lucide-react";
+import {
+  useCalendarMode,
+  WEDDING_OPTIONS,
+  EVENT_TYPE_LABELS,
+  type EventType,
+  type CalEvent,
+} from "./CalendarModeContext";
 
-const EVENT_TYPES: { value: EventType; label: string }[] = [
-  { value: "shoot", label: "Shoot" },
-  { value: "consult", label: "Consultation" },
-  { value: "travel", label: "Travel" },
-  { value: "block", label: "Block" },
-];
+const EVENT_TYPES: EventType[] = ["shoot", "consult", "travel", "block"];
 
 const eventSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -93,113 +95,122 @@ export function EventForm(props: Props) {
     }
   };
 
-  const inputCls =
-    "mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-[13px] text-foreground outline-none focus:border-ring focus:ring-1 focus:ring-ring/30";
-  const labelCls = "block text-[12px] font-semibold text-muted-foreground";
-  const errorCls = "mt-0.5 text-[11px] text-destructive";
+  const headTitle = props.mode === "edit" ? props.event.title : "Add to calendar";
+  const headSub =
+    props.mode === "edit"
+      ? "Update details, schedule, and linked wedding."
+      : "Block time on the calendar and tie it to a wedding when it helps.";
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <h2 className="text-[14px] font-semibold text-foreground">
-          {props.mode === "edit" ? "Edit Event" : "New Event"}
-        </h2>
+    <aside className="cal-inspector ana-calendar-port flex h-full min-h-0 flex-col">
+      <div className="cal-evt-head-row shrink-0 border-b border-[var(--border-default)]">
+        <button type="button" className="cal-evt-back" onClick={closeInspector} aria-label="Back">
+          <ChevronLeft className="h-4 w-4" strokeWidth={2} />
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="eyebrow">{props.mode === "edit" ? "Edit event" : "New event"}</div>
+          <h3 className="mt-0.5 break-words">{headTitle}</h3>
+          <div className="sub mt-1 max-w-[min(100%,42ch)]">{headSub}</div>
+        </div>
+        <span className="w-9 shrink-0" aria-hidden />
+      </div>
 
-        <div className="mt-4 space-y-3">
-          <div>
-            <label className={labelCls}>
-              Title
-              <input {...register("title")} className={inputCls} placeholder="e.g. Timeline Review" />
+      <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+        <div className="cal-inspector-body min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4">
+          <div className="insp-section-head">
+            <div className="l">Details</div>
+          </div>
+          <div className="mt-2 space-y-3">
+            <label className="cal-field">
+              <span className="cal-field-lbl">Title</span>
+              <input {...register("title")} className="cal-field-inp" placeholder="e.g. Timeline review" />
+              {errors.title && <p className="cal-field-err">{errors.title.message}</p>}
             </label>
-            {errors.title && <p className={errorCls}>{errors.title.message}</p>}
+
+            <label className="cal-field">
+              <span className="cal-field-lbl">Details / notes</span>
+              <input {...register("sub")} className="cal-field-inp" placeholder="Short description" />
+            </label>
+
+            <label className="cal-field">
+              <span className="cal-field-lbl">Location</span>
+              <input {...register("location")} className="cal-field-inp" placeholder="Venue or address" />
+            </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <label className={labelCls}>
-              Date
-              <input type="date" {...register("dateISO")} className={inputCls} />
+          <div className="insp-section-head mt-6">
+            <div className="l">Schedule</div>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="cal-field sm:col-span-2">
+              <span className="cal-field-lbl">Date</span>
+              <input type="date" {...register("dateISO")} className="cal-field-inp" />
             </label>
-            <label className={labelCls}>
-              Type
-              <select {...register("type")} className={inputCls}>
+            <label className="cal-field">
+              <span className="cal-field-lbl">Start</span>
+              <input type="time" {...register("startTime")} className="cal-field-inp" />
+            </label>
+            <label className="cal-field">
+              <span className="cal-field-lbl">End</span>
+              <input type="time" {...register("endTime")} className="cal-field-inp" />
+            </label>
+            <label className="cal-field sm:col-span-2">
+              <span className="cal-field-lbl">Type</span>
+              <select {...register("type")} className="cal-field-inp">
                 {EVENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
+                  <option key={t} value={t}>
+                    {EVENT_TYPE_LABELS[t]}
+                  </option>
                 ))}
               </select>
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <label className={labelCls}>
-              Start time
-              <input type="time" {...register("startTime")} className={inputCls} />
+          <div className="insp-section-head mt-6">
+            <div className="l">Links</div>
+          </div>
+          <div className="mt-2 space-y-3">
+            <label className="cal-field">
+              <span className="cal-field-lbl">Meet URL</span>
+              <input {...register("meetUrl")} className="cal-field-inp" placeholder="https://meet.google.com/..." />
+              {errors.meetUrl && <p className="cal-field-err">{errors.meetUrl.message}</p>}
             </label>
-            <label className={labelCls}>
-              End time
-              <input type="time" {...register("endTime")} className={inputCls} />
+
+            <label className="cal-field">
+              <span className="cal-field-lbl">Link to wedding</span>
+              <select {...register("weddingId")} className="cal-field-inp">
+                {WEDDING_OPTIONS.map((o) => (
+                  <option key={o.value || "none"} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
-
-          <label className={labelCls}>
-            Details / notes
-            <input {...register("sub")} className={inputCls} placeholder="Location, notes..." />
-          </label>
-
-          <label className={labelCls}>
-            Location
-            <input {...register("location")} className={inputCls} placeholder="Venue or address" />
-          </label>
-
-          <div>
-            <label className={labelCls}>
-              Meet URL
-              <input {...register("meetUrl")} className={inputCls} placeholder="https://meet.google.com/..." />
-            </label>
-            {errors.meetUrl && <p className={errorCls}>{errors.meetUrl.message}</p>}
-          </div>
-
-          <label className={labelCls}>
-            Link to wedding
-            <select {...register("weddingId")} className={inputCls}>
-              {WEDDING_OPTIONS.map((o) => (
-                <option key={o.value || "none"} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </label>
         </div>
-      </div>
 
-      <div className="shrink-0 border-t border-border px-4 py-3">
-        <div className="flex items-center justify-between">
+        <div className="cal-inspector-foot flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--border-default)] px-[18px] py-3.5">
           {props.mode === "edit" ? (
             <button
               type="button"
-              className="rounded-lg px-3 py-2 text-[13px] font-semibold text-destructive hover:bg-destructive/10"
+              className="p-btn danger"
               onClick={() => deleteEvent(props.event.id)}
             >
               Delete
             </button>
           ) : (
-            <span />
+            <span className="min-w-[4rem]" aria-hidden />
           )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
-              onClick={closeInspector}
-            >
+          <div className="p-actions ml-auto">
+            <button type="button" className="p-btn ghost" onClick={closeInspector}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={!isValid}
-              className="rounded-lg bg-[#2563eb] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#2563eb]/90 disabled:opacity-40"
-            >
-              {props.mode === "edit" ? "Update" : "Save Event"}
+            <button type="submit" className="p-btn primary" disabled={!isValid}>
+              {props.mode === "edit" ? "Save changes" : "Save event"}
             </button>
           </div>
         </div>
-      </div>
-    </form>
+      </form>
+    </aside>
   );
 }

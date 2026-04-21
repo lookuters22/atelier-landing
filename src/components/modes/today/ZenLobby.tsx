@@ -1,67 +1,38 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { EscalationResolutionPanel } from "../../escalations/EscalationResolutionPanel";
-import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, Check, ClipboardPen, Inbox, ListTodo } from "lucide-react";
 import { openSpotlight } from "../../StudioSpotlight";
 import { useTodayActions } from "../../../hooks/useTodayActions";
-import { TiltCard } from "../../ui/TiltCard";
-import { CinematicAuraText } from "../../ui/CinematicAuraText";
+import { useTodayMetrics } from "../../../hooks/useTodayMetrics";
+import { useAuth } from "../../../context/AuthContext";
 import { cn } from "@/lib/utils";
-import { OBSIDIAN_GLASS } from "@/lib/obsidianGlass";
-import { enqueueDraftsApprovedForOutboundBatch } from "@/lib/draftApprovalClient";
-import { fireDraftsChanged } from "@/lib/events";
 import { scrollPipelineWeddingRowIntoView } from "@/lib/pipelineWeddingListNavigation";
 import { isEditableKeyboardTarget } from "@/lib/timelineThreadNavigation";
 import {
   ZEN_LOBBY_ESCALATION_ROW_BADGE,
   zenLobbyPriorityKindFromAction,
 } from "@/lib/zenLobbyPriorityFeed";
-import type { LucideIcon } from "lucide-react";
-
-const SERIF = "'Playfair Display', Georgia, serif";
-
-const PILL_OBSIDIAN =
-  "bg-[#0a0a0a]/50 text-white backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]";
-/** Light chips on obsidian panels: white fill, text matches glass body hue. */
-const PILL_LIGHT =
-  "bg-white/95 text-[#0a0a0a] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_3px_rgba(0,0,0,0.12)]";
-
-/** Compact pill — `tone="light"` for badges on dark glass; default obsidian. */
-function LandingGlassPill({
-  children,
-  className,
-  innerClassName,
-  tone = "obsidian",
-}: {
-  children: React.ReactNode;
-  className?: string;
-  innerClassName?: string;
-  tone?: "obsidian" | "light";
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex min-h-[22px] w-max max-w-full items-center justify-center gap-1.5 rounded-[999px] px-2.5 py-0.5 text-[10px] font-normal tracking-wide",
-        tone === "light" ? PILL_LIGHT : PILL_OBSIDIAN,
-        innerClassName,
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-const PULSE_MESSAGES = [
-  "Ana drafted 2 replies for your review.",
-  "You've had a busy week. Remember to rest your eyes.",
-  "5 inquiries are pending. You are doing great.",
-];
+import {
+  ZEN_TODAY_TAB_LABELS,
+  ZEN_TODAY_TAB_ORDER,
+  zenTodayTabForAction,
+  type ZenTodayTabId,
+} from "@/lib/todayActionFeed";
+import type { User } from "@supabase/supabase-js";
 
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
-const NOISE_SVG = `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
+/**
+ * **Six** full `.prow` rows in the default list viewport (sixth = tail / same opacity as `.prow.done`,
+ * Ana Dashboard.html L492). `max-height` must clip **exactly** under the 6th row—summing row heights +
+ * gap can drift from flex layout and show half of row 7/8. We anchor the cut to the **bottom edge of
+ * the 6th row** via `getBoundingClientRect`, then trim a few px (do not add `.pri-list` padding-bottom).
+ */
+const PRI_LIST_VISIBLE_ROW_CAP = 6;
+/** Trim below the 6th row’s bottom edge. Kept small so the last visible row’s border isn’t clipped. */
+const PRI_LIST_MAX_HEIGHT_FUDGE_PX = 1;
+/** Extra height below the measured cut so the last row’s border doesn’t sit flush on the clip. */
+const PRI_LIST_VIEWPORT_BOTTOM_BREATHING_ROOM_PX = 3;
 
 type ActionItem = {
   id: string;
@@ -70,33 +41,52 @@ type ActionItem = {
   detail: string;
   status: string;
   createdAt?: string;
-  /** Exact-resolution destination from `TodayAction.route_to` */
   routeTo: string;
-  /** Set for `draft_approval` rows — draft id approved via `api-resolve-draft` (A7 batch). */
-  draftSourceId?: string;
+  /** From Today unfiled actions — replaces generic "Inquiry" for message rows. */
+  zenPriorityTag?: string;
+  /** `null` when the action is not part of a Zen tab (e.g. open tasks — see pulse / sidebar). */
+  zenTab: ZenTodayTabId | null;
 };
+
+type PriTab = ZenTodayTabId;
+
+/** Ana Dashboard.html `.prow.done` — only the explicit Done row; no substring/heuristic fade. */
+function isDoneStatusLabel(status: string): boolean {
+  return status.trim().toLowerCase() === "done";
+}
+
+function firstNameFromUser(user: User | null): string {
+  if (!user) return "there";
+  const meta = user.user_metadata as Record<string, unknown> | undefined;
+  const full = (meta?.full_name ?? meta?.name ?? meta?.studio_name) as string | undefined;
+  if (full && typeof full === "string") {
+    const part = full.trim().split(/\s+/)[0];
+    if (part) return part.replace(/^[^a-zA-Z]+/, "");
+  }
+  const email = user.email;
+  if (email) {
+    const local = email.split("@")[0] ?? "";
+    if (local) return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+  return "there";
+}
 
 function formatGreeting(): string {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return "Good morning,";
+  if (h < 18) return "Good afternoon,";
+  return "Good evening,";
 }
 
-function formatDateLine(now = new Date()): string {
-  const date = now.toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-  });
-  return `${date}  •  14°C Belgrade`;
+function formatMetaDate(now: Date): string {
+  return now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
 function formatTimeHHMM(now = new Date()): string {
   return now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-/** Point on quadratic Bézier P0 — P1 — P2 at t ∈ [0, 1]. */
+/** Same quadratic as export/redesign/Ana Dashboard.html meta sun: `M 4 16 Q 45 -4 86 16` (viewBox 0 0 90 20). */
 function quadBezierPoint(
   t: number,
   p0: readonly [number, number],
@@ -109,126 +99,98 @@ function quadBezierPoint(
   return { x, y };
 }
 
-/**
- * Position t follows the local clock through the day so the dot moves every second.
- * Brightness follows a day/night curve (soft at night, peak near local noon).
- */
-function solarArcState(now: Date): { t: number; opacity: number; scale: number } {
-  const secs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-  const t = secs / 86_400;
-  const dayPhase = Math.sin(Math.PI * t);
-  const opacity = 0.36 + 0.62 * dayPhase;
-  const scale = 0.94 + 0.24 * dayPhase;
-  return { t, opacity, scale };
+const SUN_ARC_P0: [number, number] = [4, 16];
+const SUN_ARC_P1: [number, number] = [45, -4];
+const SUN_ARC_P2: [number, number] = [86, 16];
+
+/** Local day progress 0..1 from midnight → current instant (updates with `now`). */
+function dayProgressT(now: Date): number {
+  const ms =
+    ((now.getHours() * 60 + now.getMinutes()) * 60 + now.getSeconds()) * 1000 + now.getMilliseconds();
+  return ms / 86_400_000;
 }
 
-function glowAlongArc(pathT: number): number {
-  if (pathT <= 0.5) {
-    return Math.pow(Math.sin(Math.PI * pathT), 2.05);
-  }
-  const u = (pathT - 0.5) / 0.5;
-  return Math.pow(1 - u, 2.45);
-}
-
-/** Sized in `em` to match the metadata line; `now` from `useLiveClock` (1s) drives motion. */
-function SolarArc({ now }: { now: Date }) {
-  const uid = useId().replace(/:/g, "");
-  const haloId = `${uid}-halo`;
-  const bloomFilterId = `${uid}-bloom`;
-
-  /* Wide gentle arc (large Δx, modest Δy). */
-  const arcPath = "M 2 26 Q 42 -6 82 26";
-  const p0: [number, number] = [2, 26];
-  const p1: [number, number] = [42, -6];
-  const p2: [number, number] = [82, 26];
-  const { t, opacity, scale } = solarArcState(now);
-  const { x, y } = quadBezierPoint(t, p0, p1, p2);
-  const r = 5 * scale;
-  const glow = glowAlongArc(t);
-
-  /*
-   * Slot size is in `em` against the metadata `text-[10px]` so it scales with the row.
-   * viewBox is tight to the path + sun + glow — huge padding used to make `meet` shrink
-   * the real arc inside a small em box; without that, the curve reads at full slot height.
-   */
-  const vb = { x: -4, y: 2, w: 92, h: 32 };
-
+function MetaSunArc({ now }: { now: Date }) {
+  const t = dayProgressT(now);
+  const { x, y } = quadBezierPoint(t, SUN_ARC_P0, SUN_ARC_P1, SUN_ARC_P2);
   return (
-    <span className="inline-flex h-[2.15em] min-h-[2.15em] w-[8em] min-w-[8em] shrink-0 items-center overflow-visible align-middle [&>svg]:overflow-visible">
-      <svg
-        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-        width="100%"
-        height="100%"
-        fill="none"
-        overflow="visible"
-        preserveAspectRatio="xMidYMid meet"
-        className="block max-h-full"
-        aria-hidden
-      >
-        <defs>
-          <radialGradient
-            id={haloId}
-            gradientUnits="userSpaceOnUse"
-            cx={x}
-            cy={y}
-            r={r * 4.25}
-          >
-            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.35" />
-            <stop offset="35%" stopColor="#fb923c" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
-          </radialGradient>
-          <filter
-            id={bloomFilterId}
-            x="-120%"
-            y="-120%"
-            width="340%"
-            height="340%"
-            colorInterpolationFilters="sRGB"
-          >
-            <feGaussianBlur in="SourceGraphic" stdDeviation="2.35" result="blur" />
-            <feComponentTransfer in="blur" result="soft">
-              <feFuncA type="gamma" amplitude="1" exponent="1.25" offset="0" />
-            </feComponentTransfer>
-          </filter>
-        </defs>
-        <path
-          d={arcPath}
-          stroke="rgba(255, 255, 255, 0.26)"
-          strokeWidth="1.35"
-          strokeLinecap="round"
-        />
-        {/* Halo + bloom underneath; solid disc on top (no radial gradient = no “pin” in the middle) */}
-        <g opacity={opacity}>
-          <circle cx={x} cy={y} r={r * 3.9} fill={`url(#${haloId})`} opacity={0.92 * glow} />
-          <g opacity={0.78 * glow} filter={`url(#${bloomFilterId})`}>
-            {/* Same hue as core so blur has no brighter yellow core than the disc */}
-            <circle cx={x} cy={y} r={r * 1.22} fill="#fb923c" />
-          </g>
-          <circle cx={x} cy={y} r={r} fill="#ea580c" />
-        </g>
+    <span className="sun" aria-hidden>
+      <svg viewBox="0 0 90 20" preserveAspectRatio="none">
+        <path className="arc" d="M 4 16 Q 45 -4 86 16" pathLength={1} />
+        <circle className="dot" cx={x} cy={y} r={3.2} />
       </svg>
     </span>
   );
 }
 
-function formatRelativeTime(iso?: string): string {
-  if (!iso) return "just now";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
+function buildPulseLines(
+  zenTab: {
+    review: number;
+    drafts: number;
+    leads: number;
+    needs_filing: number;
+  },
+  tasksDueToday: number,
+  featuredNames: string | null,
+): string[] {
+  const lines: string[] = [];
+  if (zenTab.review > 0) {
+    lines.push(
+      zenTab.review === 1
+        ? "needs your review on one blocked decision or operator thread."
+        : `needs your review on ${zenTab.review} blocked decisions or operator threads.`,
+    );
+  }
+  if (zenTab.drafts > 0) {
+    lines.push(
+      zenTab.drafts === 1
+        ? "has one draft ready for your review."
+        : `has ${zenTab.drafts} drafts ready for your review.`,
+    );
+  }
+  if (zenTab.leads > 0) {
+    lines.push(
+      zenTab.leads === 1
+        ? "is watching one lead (inbox or pre-booking project)."
+        : `is watching ${zenTab.leads} leads (inbox or pre-booking projects).`,
+    );
+  }
+  if (zenTab.needs_filing > 0) {
+    lines.push(
+      zenTab.needs_filing === 1
+        ? "has one thread that still needs filing."
+        : `has ${zenTab.needs_filing} threads that still need filing.`,
+    );
+  }
+  if (tasksDueToday > 0) {
+    lines.push(
+      tasksDueToday === 1
+        ? "counts one task due today on your list."
+        : `counts ${tasksDueToday} tasks due today on your list.`,
+    );
+  }
+  if (featuredNames) {
+    lines.push(`notes the next wedding on your calendar: ${featuredNames}.`);
+  }
+  if (lines.length === 0) {
+    lines.push("will surface new work here as it arrives — you're caught up for now.");
+  }
+  return lines.slice(0, 6);
 }
 
-function fadingInk(iso?: string): { name: string; age: string; snippet: string } {
-  if (!iso) return { name: "text-white", age: "text-white/50", snippet: "text-white/80" };
-  const hrs = (Date.now() - new Date(iso).getTime()) / 3_600_000;
-  if (hrs < 1) return { name: "text-white", age: "text-white/50", snippet: "text-white/80" };
-  if (hrs < 4) return { name: "text-white/70", age: "text-white/40", snippet: "text-white/50" };
-  return { name: "text-white/40", age: "text-white/25", snippet: "text-white/30" };
+function AnaPulse({ lines }: { lines: string[] }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (lines.length <= 1) return;
+    const id = window.setInterval(() => setIdx((i) => (i + 1) % lines.length), 6_000);
+    return () => window.clearInterval(id);
+  }, [lines.length]);
+  const text = lines[idx] ?? "";
+  return (
+    <p className="pulse">
+      <span className="fin">Ana</span> {text}
+    </p>
+  );
 }
 
 function useLiveClock() {
@@ -238,169 +200,7 @@ function useLiveClock() {
     return () => window.clearInterval(id);
   }, []);
   const now = new Date();
-  return { dateLine: formatDateLine(now), timeHHMM: formatTimeHHMM(now), now };
-}
-
-function StudioPulse() {
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setIdx((i) => (i + 1) % PULSE_MESSAGES.length), 6_000);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="mt-4 h-6">
-      <AnimatePresence mode="wait">
-        <motion.p
-          key={idx}
-          className="text-sm italic text-white/60"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.8 }}
-        >
-          {PULSE_MESSAGES[idx]}
-        </motion.p>
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function SystemStream() {
-  return (
-    <div
-      className="mt-6 w-full overflow-hidden"
-      style={{
-        maskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
-        WebkitMaskImage: "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
-      }}
-    >
-      <p
-        className="whitespace-nowrap font-mono text-[10px] text-white/25"
-        style={{ animation: "marquee-scroll 60s linear infinite" }}
-      >
-        {"> Ana verified Invoice #1042 — auto-filed to S&J project   •   System health: nominal   •   3 threads resolved today   •   Draft queue clear   •   Calendar sync OK   •   "}
-        {"> Ana verified Invoice #1042 — auto-filed to S&J project   •   System health: nominal   •   3 threads resolved today   •   Draft queue clear   •   Calendar sync OK   •   "}
-      </p>
-    </div>
-  );
-}
-
-function CountUp({ target, duration = 600 }: { target: number; duration?: number }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    if (target === 0) {
-      setDisplay(0);
-      return;
-    }
-    const start = performance.now();
-    let raf: number;
-    function step(now: number) {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - (1 - progress) ** 3;
-      setDisplay(Math.round(target * eased));
-      if (progress < 1) raf = requestAnimationFrame(step);
-    }
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-  return <>{display}</>;
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return (parts[0]?.[0] ?? "?").toUpperCase();
-}
-
-function KpiCard({
-  card,
-  delay,
-  compact = false,
-  enrichment,
-}: {
-  card: { title: string; subtitle: string; count: number; icon: LucideIcon };
-  delay: number;
-  compact?: boolean;
-  enrichment?: { metaTag: string };
-}) {
-  const isActive = card.count > 0;
-  const showEnrichment = enrichment && isActive && !compact;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay, ease: "easeOut" }}
-    >
-      <TiltCard>
-        <div
-          className={
-            "glass-grain relative overflow-hidden rounded-xl " +
-            OBSIDIAN_GLASS +
-            " " +
-            (compact ? "p-5 " : "p-6 ") +
-            (isActive ? "" : "opacity-40")
-          }
-        >
-          <div className="relative z-10 flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <card.icon className="h-3.5 w-3.5 text-white/40" strokeWidth={1.75} />
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-white/50">
-                {card.title}
-              </span>
-            </div>
-            {showEnrichment && (
-              <LandingGlassPill tone="light">{enrichment.metaTag}</LandingGlassPill>
-            )}
-          </div>
-
-          <div className={"relative z-10 " + (showEnrichment ? "mt-4" : "mt-2.5")}>
-            <span
-              className={"font-normal leading-none tabular-nums text-white " + (compact ? "text-[28px]" : "text-[36px]")}
-              style={{ fontFamily: SERIF }}
-            >
-              <CountUp target={card.count} />
-            </span>
-            <span className={"block text-[10px] tracking-wide text-white/50 " + (showEnrichment ? "mt-1.5" : "mt-2.5")}>
-              {card.subtitle}
-            </span>
-          </div>
-        </div>
-      </TiltCard>
-    </motion.div>
-  );
-}
-
-function ArchitecturalGrid() {
-  return (
-    <svg
-      className="pointer-events-none fixed inset-0 z-[2] h-full w-full"
-      preserveAspectRatio="none"
-      aria-hidden
-    >
-      {/* Vertical split between col-5 and col-7 */}
-      <line
-        x1="42.5%"
-        y1="0"
-        x2="42.5%"
-        y2="100%"
-        stroke="rgba(255,255,255,0.05)"
-        strokeWidth="1"
-        vectorEffect="non-scaling-stroke"
-      />
-      {/* Horizontal rule at KPI-card top */}
-      <line
-        x1="0"
-        y1="280"
-        x2="100%"
-        y2="280"
-        stroke="rgba(255,255,255,0.05)"
-        strokeWidth="1"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
+  return { metaDate: formatMetaDate(now), timeHHMM: formatTimeHHMM(now), now };
 }
 
 function useIdle(timeout: number): boolean {
@@ -425,71 +225,88 @@ function useIdle(timeout: number): boolean {
   return idle;
 }
 
-const MOTES = Array.from({ length: 18 }, (_, i) => {
-  const seed = (i * 7 + 3) % 17;
-  return {
-    size: 16 + (seed % 5) * 12,
-    left: ((i * 13 + 5) % 100),
-    top: ((i * 17 + 11) % 100),
-    duration: 30 + (seed % 4) * 10,
-    delay: (i * 1.7) % 12,
-    dx: ((seed % 3) - 1) * 120,
-    dy: ((seed % 2) === 0 ? -1 : 1) * (60 + seed * 8),
-  };
-});
+function formatRelativeTime(iso?: string): string {
+  if (!iso) return "just now";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
-function AtmosphericMotes() {
+/** Matches redesign list row age: `· 42m` / `· 1h` (no trailing "ago"). */
+function formatAgeShort(iso?: string): string {
+  if (!iso) return "now";
+  const full = formatRelativeTime(iso);
+  return full.replace(/\s*ago$/, "").replace(/^just now$/, "now");
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (parts[0]?.[0] ?? "?").toUpperCase();
+}
+
+function heroWho(item: ActionItem): string {
+  if (item.detail?.trim()) return item.detail.trim();
+  return item.label.slice(0, 80);
+}
+
+function HeroMetaRow({ item }: { item: ActionItem }) {
+  const who = heroWho(item);
+  const segments: string[] = [];
+  segments.push(item.status);
+  if (item.detail?.trim() && item.detail.trim() !== who) {
+    segments.push(item.detail.trim());
+  }
+  const clip = item.label.trim();
+  if (clip.length > 0) {
+    segments.push(clip.length > 48 ? `${clip.slice(0, 48)}…` : clip);
+  }
+  const show = segments.slice(0, 3);
   return (
-    <div className="sf-bg pointer-events-none fixed inset-0 z-[1] overflow-hidden">
-      {MOTES.map((m, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full bg-white/[0.07] blur-2xl"
-          style={{
-            width: m.size,
-            height: m.size,
-            left: `${m.left}%`,
-            top: `${m.top}%`,
-            animation: `mote-drift-${i % 4} ${m.duration}s ease-in-out ${m.delay}s infinite alternate`,
-          }}
-        />
+    <div className="pri-hero-meta">
+      {show.map((seg, i) => (
+        <Fragment key={`${i}-${seg.slice(0, 8)}`}>
+          {i > 0 ? <span className="sep" aria-hidden /> : null}
+          <span>{seg}</span>
+        </Fragment>
       ))}
     </div>
   );
 }
 
-function MagneticRow({ children, className }: { children: React.ReactNode; className?: string }) {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const handleMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    if (overlayRef.current) {
-      overlayRef.current.style.opacity = "1";
-      overlayRef.current.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(255,255,255,0.08), transparent 40%)`;
-    }
-  }, []);
-  const handleLeave = useCallback(() => {
-    if (overlayRef.current) overlayRef.current.style.opacity = "0";
-  }, []);
-  return (
-    <div className={"relative z-0 hover:z-10 " + (className ?? "")} onMouseMove={handleMove} onMouseLeave={handleLeave}>
-      <div
-        ref={overlayRef}
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200"
-      />
-      {children}
-    </div>
-  );
+function heroTagFromItem(item: ActionItem): string {
+  switch (item.kind) {
+    case "escalation":
+      return "Escalation · needs your call";
+    case "draft":
+      return "Draft · review";
+    case "task":
+      return "Task · due";
+    case "message":
+      return item.zenPriorityTag?.trim() || "Inbox";
+    default:
+      return "Action";
+  }
 }
 
 export function ZenLobby() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlEscalationId = searchParams.get("escalationId");
-  const { allActions, counts } = useTodayActions();
-  const { dateLine, timeHHMM, now } = useLiveClock();
+  const { user } = useAuth();
+  const { allActions, counts, isLoading: actionsLoading } = useTodayActions();
+  const zenTab = counts.zenTabCounts;
+  const { featuredWedding, isLoading: metricsLoading } = useTodayMetrics();
+  const { metaDate, timeHHMM, now } = useLiveClock();
   const isIdle = useIdle(IDLE_TIMEOUT_MS);
+  const [priTab, setPriTab] = useState<PriTab>("review");
+
+  const firstName = useMemo(() => firstNameFromUser(user), [user]);
 
   const actionItems = useMemo<ActionItem[]>(() => {
     return allActions.map((a) => ({
@@ -500,118 +317,83 @@ export function ZenLobby() {
       status: a.status_label,
       createdAt: a.created_at,
       routeTo: a.route_to,
-      draftSourceId: a.action_type === "draft_approval" ? a.source_id : undefined,
+      zenPriorityTag: a.zen_priority_tag,
+      zenTab: zenTodayTabForAction(a),
     }));
   }, [allActions]);
 
-  const draftRowCount = useMemo(
-    () => allActions.filter((a) => a.action_type === "draft_approval").length,
-    [allActions],
+  const filteredActionItems = useMemo(
+    () => actionItems.filter((a) => a.zenTab != null && a.zenTab === priTab),
+    [actionItems, priTab],
   );
 
-  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(() => new Set());
-  const [draftBatchBusy, setDraftBatchBusy] = useState(false);
-  const [draftBatchProgress, setDraftBatchProgress] = useState<{ done: number; total: number } | null>(null);
-  const [draftBatchError, setDraftBatchError] = useState<string | null>(null);
+  useEffect(() => {
+    if (zenTab[priTab] > 0) return;
+    const next = ZEN_TODAY_TAB_ORDER.find((id) => zenTab[id] > 0);
+    if (next) setPriTab(next);
+  }, [priTab, zenTab]);
 
-  /** A7: roving keyboard focus — Arrow/j/k; Enter uses native button (same as click → navigate). */
-  const [priorityRovingIndex, setPriorityRovingIndex] = useState<number | null>(null);
-  const priorityRowActionRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const priorityListRef = useRef<HTMLDivElement>(null);
+  const heroItem = filteredActionItems[0];
+  const listItems = filteredActionItems.slice(1);
 
-  const selectedDraftIdList = useMemo(() => {
-    return allActions
-      .filter((a) => a.action_type === "draft_approval" && selectedDraftIds.has(a.source_id))
-      .map((a) => a.source_id);
-  }, [allActions, selectedDraftIds]);
-
-  const selectAllDraftRows = useCallback(() => {
-    const ids = allActions.filter((a) => a.action_type === "draft_approval").map((a) => a.source_id);
-    setSelectedDraftIds(new Set(ids));
-    setDraftBatchError(null);
+  const taskDueTodayCount = useMemo(() => {
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    return allActions.filter((a) => {
+      if (a.action_type !== "open_task" || !a.due_at) return false;
+      return new Date(a.due_at) <= end;
+    }).length;
   }, [allActions]);
 
-  const clearDraftSelection = useCallback(() => {
-    setSelectedDraftIds(new Set());
-    setDraftBatchError(null);
-  }, []);
+  const pulseLinesFixed = useMemo(
+    () => buildPulseLines(zenTab, taskDueTodayCount, featuredWedding?.couple_names ?? null),
+    [zenTab, taskDueTodayCount, featuredWedding],
+  );
 
-  const toggleDraftSelected = useCallback((sourceId: string) => {
-    setSelectedDraftIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(sourceId)) next.delete(sourceId);
-      else next.add(sourceId);
-      return next;
-    });
-    setDraftBatchError(null);
-  }, []);
+  const firstReviewDetail = useMemo(() => {
+    const a = allActions.find((x) => zenTodayTabForAction(x) === "review");
+    return a?.subtitle?.trim() ?? null;
+  }, [allActions]);
 
-  const handleBatchApproveDrafts = useCallback(async () => {
-    const ids = selectedDraftIdList;
-    if (ids.length < 2) return;
-    setDraftBatchError(null);
-    const ok = window.confirm(
-      `Approve and queue ${ids.length} drafts for send? Same path as Approvals and single-draft flows.`,
-    );
-    if (!ok) return;
+  /** Literal copy from Ana Dashboard.html `.ticker` (line ~2539); static demo text for visual parity. */
+  const tickerItems = useMemo(
+    () => [
+      { bold: "Filed", rest: " invoice #1042" },
+      { bold: "Auto-filed", rest: " 2 vendor emails" },
+      { bold: "Scheduled", rest: " consultation · Beckett" },
+      { bold: "Synced", rest: " Gmail · 14s ago" },
+    ],
+    [],
+  );
 
-    setDraftBatchBusy(true);
-    setDraftBatchProgress({ done: 0, total: ids.length });
-    try {
-      const { succeeded, failed } = await enqueueDraftsApprovedForOutboundBatch(ids, (done, total) => {
-        setDraftBatchProgress({ done, total });
-      });
-      if (succeeded.length > 0) {
-        fireDraftsChanged();
-        setSelectedDraftIds((prev) => {
-          const next = new Set(prev);
-          for (const id of succeeded) next.delete(id);
-          return next;
-        });
-      }
-      if (failed.length > 0) {
-        const detail = failed.map((f) => `${f.id.slice(0, 8)}…: ${f.message}`).join("\n");
-        setDraftBatchError(`${failed.length} failed:\n${detail}`);
-      }
-    } catch (e) {
-      setDraftBatchError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setDraftBatchBusy(false);
-      setDraftBatchProgress(null);
-    }
-  }, [selectedDraftIdList]);
-
-  /** First draft row in feed order among checkbox-selected drafts — scroll into view when selection changes. */
-  const firstSelectedDraftRowId = useMemo(() => {
-    if (selectedDraftIds.size === 0) return null;
-    for (const a of allActions) {
-      if (a.action_type !== "draft_approval") continue;
-      if (selectedDraftIds.has(a.source_id)) return a.id;
-    }
-    return null;
-  }, [allActions, selectedDraftIds]);
-
-  useLayoutEffect(() => {
-    if (!firstSelectedDraftRowId) return;
-    const el = document.querySelector(`[data-zen-priority-row="${CSS.escape(firstSelectedDraftRowId)}"]`);
-    if (!(el instanceof HTMLElement)) return;
-    scrollPipelineWeddingRowIntoView(el);
-  }, [firstSelectedDraftRowId]);
+  const [priorityRovingIndex, setPriorityRovingIndex] = useState<number | null>(null);
+  const [priListScrollTop, setPriListScrollTop] = useState(0);
+  const priorityRowActionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const priorityRegionRef = useRef<HTMLDivElement>(null);
+  const priListRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (actionItems.length === 0) {
+    if (filteredActionItems.length === 0) {
       setPriorityRovingIndex(null);
       return;
     }
     setPriorityRovingIndex((prev) => {
       if (prev === null) return null;
-      return Math.min(prev, actionItems.length - 1);
+      return Math.min(prev, filteredActionItems.length - 1);
     });
-  }, [actionItems.length]);
+  }, [filteredActionItems.length]);
 
-  const handlePriorityListKeyDownCapture = useCallback(
+  useEffect(() => {
+    setPriListScrollTop(0);
+    queueMicrotask(() => {
+      const el = priListRef.current;
+      if (el) el.scrollTop = 0;
+    });
+  }, [filteredActionItems]);
+
+  const handlePriorityRegionKeyDownCapture = useCallback(
     (e: React.KeyboardEvent) => {
-      if (actionItems.length === 0) return;
+      if (filteredActionItems.length === 0) return;
       if (isEditableKeyboardTarget(e.target)) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
 
@@ -624,7 +406,7 @@ export function ZenLobby() {
         if (priorityRovingIndex !== null) {
           e.preventDefault();
           setPriorityRovingIndex(null);
-          requestAnimationFrame(() => priorityListRef.current?.focus());
+          requestAnimationFrame(() => priorityRegionRef.current?.focus());
         }
         return;
       }
@@ -635,20 +417,20 @@ export function ZenLobby() {
       if (isDown) {
         setPriorityRovingIndex((prev) => {
           if (prev === null) return 0;
-          return Math.min(prev + 1, actionItems.length - 1);
+          return Math.min(prev + 1, filteredActionItems.length - 1);
         });
       } else {
         setPriorityRovingIndex((prev) => {
-          if (prev === null) return actionItems.length - 1;
+          if (prev === null) return filteredActionItems.length - 1;
           return Math.max(prev - 1, 0);
         });
       }
     },
-    [actionItems.length, priorityRovingIndex],
+    [filteredActionItems.length, priorityRovingIndex],
   );
 
   const activePriorityRowId =
-    priorityRovingIndex !== null ? actionItems[priorityRovingIndex]?.id : undefined;
+    priorityRovingIndex !== null ? filteredActionItems[priorityRovingIndex]?.id : undefined;
 
   useLayoutEffect(() => {
     if (priorityRovingIndex === null || !activePriorityRowId) return;
@@ -658,403 +440,322 @@ export function ZenLobby() {
     btn?.focus({ preventScroll: true });
   }, [priorityRovingIndex, activePriorityRowId]);
 
-  const endOfToday = new Date();
-  endOfToday.setHours(23, 59, 59, 999);
-  const tasksDueCount = allActions.filter((a) => {
-    if (a.action_type !== "open_task" || !a.due_at) return false;
-    return new Date(a.due_at) <= endOfToday;
-  }).length;
+  /** Cap `.pri-list` scrollport height so the default view matches the redesign’s full-row stack (no half-visible row under the last full row). */
+  useLayoutEffect(() => {
+    const listEl = priListRef.current;
+    const panelEl = priorityRegionRef.current;
+    if (!listEl || !panelEl || listItems.length === 0) {
+      if (listEl) listEl.style.maxHeight = "";
+      return;
+    }
 
-  const kpiCards: { title: string; subtitle: string; count: number; icon: LucideIcon }[] = [
-    { title: "Inquiries", subtitle: "messages", count: counts.unfiled, icon: Inbox },
-    { title: "Drafts", subtitle: "awaiting review", count: counts.drafts, icon: ClipboardPen },
-    { title: "Tasks", subtitle: "due today", count: tasksDueCount, icon: ListTodo },
-    { title: "Escalations", subtitle: "blocked", count: counts.escalations, icon: AlertTriangle },
-  ];
+    let raf = 0;
+    const apply = () => {
+      const rows = listEl.querySelectorAll<HTMLElement>(".prow");
+      if (rows.length === 0) {
+        listEl.style.maxHeight = "";
+        return;
+      }
+
+      const k = Math.min(listItems.length, PRI_LIST_VISIBLE_ROW_CAP);
+      const lastIdx = Math.min(k, rows.length) - 1;
+      const lastVis = rows[lastIdx];
+      if (!lastVis) {
+        listEl.style.maxHeight = "";
+        return;
+      }
+
+      const listBox = listEl.getBoundingClientRect();
+      const lastBox = lastVis.getBoundingClientRect();
+
+      /**
+       * Border-box span from list top through the bottom of the k-th row (padding + rows; no manual gap).
+       * Do **not** add `padding-bottom` (Ana’s `90px`) here—that space sits *below* the last row in the
+       * scroll region and was inflating the viewport by ~90px, showing most of the next card.
+       */
+      const topBorderToLastRowBottom = lastBox.bottom - listBox.top;
+      let h =
+        topBorderToLastRowBottom -
+        PRI_LIST_MAX_HEIGHT_FUDGE_PX +
+        PRI_LIST_VIEWPORT_BOTTOM_BREATHING_ROOM_PX;
+      h = Math.max(0, Math.floor(h));
+      listEl.style.maxHeight = `${h}px`;
+    };
+
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        requestAnimationFrame(apply);
+      });
+    };
+
+    schedule();
+    const ro = new ResizeObserver(schedule);
+    ro.observe(panelEl);
+    ro.observe(listEl);
+    window.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", schedule);
+      listEl.style.maxHeight = "";
+    };
+  }, [filteredActionItems, listItems.length]);
+
+  const loadingShell = actionsLoading || metricsLoading;
+
+  const leadsSubtitle = useMemo(() => {
+    if (featuredWedding?.couple_names) {
+      return `Next · ${featuredWedding.couple_names}`;
+    }
+    if (counts.leads > 0) {
+      return `${counts.leads} lead${counts.leads === 1 ? "" : "s"}`;
+    }
+    if (counts.unfiled > 0) {
+      return `${counts.unfiled} in inbox queue`;
+    }
+    return "inbox clear";
+  }, [featuredWedding, counts.leads, counts.unfiled]);
+
+  /** Bottom of the first capped viewport (Ana redesign’s “quiet” row — same opacity as `.prow.done` L492). */
+  const priStackTailIndex =
+    listItems.length > 0 ? Math.min(listItems.length, PRI_LIST_VISIBLE_ROW_CAP) - 1 : -1;
 
   return (
     <div
-      className={`relative flex h-full w-full overflow-y-auto${isIdle ? " soft-focus" : ""}`}
+      className={cn(
+        "zen-today zen-today-port relative flex h-full min-h-0 w-full flex-col overflow-hidden text-white",
+        isIdle && "zen-soft-focus",
+        loadingShell && "opacity-95",
+      )}
       onDoubleClick={openSpotlight}
     >
-      <style>{`
-        .soft-focus .sf-bg {
-          filter: blur(20px);
-          transition: filter 2s ease, opacity 2s ease;
-        }
-        .soft-focus .sf-card {
-          filter: blur(12px);
-          opacity: 0.2;
-          pointer-events: none;
-          transition: filter 1.5s ease, opacity 1.5s ease;
-        }
-        .soft-focus .sf-hero {
-          filter: drop-shadow(0 0 20px rgba(255,255,255,0.2));
-          transition: filter 1s ease;
-        }
-        .sf-bg, .sf-card, .sf-hero {
-          transition: filter 0.4s ease, opacity 0.4s ease;
-        }
-        @keyframes foil-sweep {
-          0%   { background-position: 200% center; }
-          100% { background-position: -200% center; }
-        }
-        @keyframes waiting-dot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50%      { opacity: 0.4; transform: scale(0.85); }
-        }
-        @keyframes marquee-scroll {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .glass-grain::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: inherit;
-          background: ${NOISE_SVG};
-          background-size: 128px 128px;
-          opacity: 0.04;
-          mix-blend-mode: overlay;
-          pointer-events: none;
-          z-index: 1;
-        }
-        .glass-grain::after {
-          content: '';
-          position: absolute;
-          inset: -1px;
-          border-radius: inherit;
-          background: linear-gradient(135deg, rgba(255,100,150,0.15), rgba(100,200,255,0.15), rgba(255,200,100,0.15));
-          mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          mask-composite: exclude;
-          -webkit-mask-composite: xor;
-          padding: 1px;
-          opacity: 0;
-          transition: opacity 0.5s ease;
-          pointer-events: none;
-          z-index: 2;
-        }
-        .glass-grain:hover::after {
-          opacity: 0;
-        }
-        @keyframes mote-drift-0 {
-          0% { transform: translate(0, 0); }
-          100% { transform: translate(80px, -100px); }
-        }
-        @keyframes mote-drift-1 {
-          0% { transform: translate(0, 0); }
-          100% { transform: translate(-120px, 70px); }
-        }
-        @keyframes mote-drift-2 {
-          0% { transform: translate(0, 0); }
-          100% { transform: translate(60px, 90px); }
-        }
-        @keyframes mote-drift-3 {
-          0% { transform: translate(0, 0); }
-          100% { transform: translate(-90px, -60px); }
-        }
-        /* Priority Actions: scroll works; scrollbar fully hidden (no thumb, no arrows). */
-        .zen-priority-actions-scroll-native {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .zen-priority-actions-scroll-native::-webkit-scrollbar {
-          display: none !important;
-          width: 0 !important;
-          height: 0 !important;
-          background: transparent !important;
-        }
-      `}</style>
+      <section className="today" aria-label="Today">
+        <div className={cn("today-left", isIdle && "zen-soft-target")}>
+          <div className="left-top">
+            <div className="meta">
+              <span>{metaDate}</span>
+              <span className="dot-sep" aria-hidden />
+              <span>14°C · Belgrade</span>
+              <span className="dot-sep" aria-hidden />
+              <MetaSunArc now={now} />
+              <span>{timeHHMM}</span>
+            </div>
 
-      <AtmosphericMotes />
+            <h1 className="greet">
+              <span className="muted">{formatGreeting()}</span>
+              <br />
+              <span className="name">{firstName}</span>
+            </h1>
 
-      <div className="relative z-10 mx-auto mt-16 mb-32 w-full max-w-[90rem] px-8">
-        {/* ── Asymmetric Grid ── */}
-        <div className="grid grid-cols-12 gap-16 lg:gap-24">
+            <AnaPulse lines={pulseLinesFixed} />
+          </div>
 
-          {/* ── Left Column: Header + KPI ── */}
-          <div className="col-span-12 lg:col-span-5">
-            {/* Metadata */}
-            <motion.p
-              className="flex items-center gap-2 overflow-visible text-[10px] font-medium uppercase leading-none tracking-[0.2em] text-white/50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5 }}
-            >
-              {dateLine}
-              <span className="mx-0.5">•</span>
-              <SolarArc now={now} />
-              <span className="normal-case tracking-wide">{timeHHMM}</span>
-            </motion.p>
-
-            {/* Greeting */}
-            <motion.div
-              className="sf-hero mt-5"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.05, ease: "easeOut" }}
-            >
-              <h1 style={{ fontFamily: SERIF }}>
-                <span className="block text-[56px] font-normal leading-[1.05] tracking-tight text-white drop-shadow-sm">
-                  {formatGreeting()},
-                </span>
-                <CinematicAuraText
-                  text="Elena"
-                  className="block text-[64px] font-semibold italic leading-[1.05] tracking-tight drop-shadow-sm"
-                />
-              </h1>
-              <StudioPulse />
-            </motion.div>
-
-            {/* KPI Cluster */}
-            <div className="sf-card mt-10">
-              <KpiCard
-                card={kpiCards[0]}
-                delay={0.15}
-                enrichment={{
-                  metaTag: `+${Math.max(counts.unfiled, 1)} since yesterday`,
-                }}
-              />
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <KpiCard card={kpiCards[1]} delay={0.25} compact />
-                <KpiCard card={kpiCards[2]} delay={0.3} compact />
-                <KpiCard card={kpiCards[3]} delay={0.35} compact />
+          <div className="left-bottom">
+            <div className="stat-row">
+              <div className={cn("stat", zenTab.review > 0 && "warn-stat")}>
+                <div className="stat-k">Review</div>
+                <div className={cn("stat-v", zenTab.review > 0 && "warn")}>{zenTab.review}</div>
+                <div className="stat-sub">
+                  {firstReviewDetail ?? (zenTab.review > 0 ? "needs your judgment" : "nothing queued")}
+                </div>
+              </div>
+              <div className="stat">
+                <div className="stat-k">Drafts</div>
+                <div className="stat-v">{zenTab.drafts}</div>
+                <div className="stat-sub">ready to review / send</div>
+              </div>
+              <div className="stat">
+                <div className="stat-k">Leads</div>
+                <div className={cn("stat-v", counts.leads > 0 && "attn")}>{counts.leads}</div>
+                <div className="stat-sub">{leadsSubtitle}</div>
+              </div>
+              <div className="stat">
+                <div className="stat-k">Needs filing</div>
+                <div className="stat-v">{zenTab.needs_filing}</div>
+                <div className="stat-sub">sort once for routing</div>
               </div>
             </div>
 
-            {/* System Stream */}
-            <SystemStream />
-          </div>
-
-          {/* ── Right Column: Action Feed (baseline-aligned to KPI) ── */}
-          <div className="sf-card col-span-12 min-h-0 lg:col-span-7 lg:pt-[178px]">
-            <motion.div
-              className="flex min-h-0 flex-col"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.35, ease: "easeOut" }}
-            >
-              {actionItems.length > 0 ? (
-                <>
-                  <p className="mb-3 shrink-0 pl-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">
-                    Priority Actions
-                    <span className="ml-2 font-normal tabular-nums tracking-normal text-white/40">
-                      {actionItems.length} {actionItems.length === 1 ? "item" : "items"}
-                      {selectedDraftIds.size > 0 ? (
-                        <span className="text-white/35" aria-live="polite">
-                          {" "}
-                          · {selectedDraftIds.size} draft{selectedDraftIds.size === 1 ? "" : "s"} selected
-                        </span>
-                      ) : null}
-                    </span>
-                  </p>
-                  {draftRowCount > 0 ? (
-                    <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2 pl-1 text-[11px] text-white/45">
-                      <span className="font-medium text-white/55">Drafts</span>
-                      <button
-                        type="button"
-                        onClick={selectAllDraftRows}
-                        disabled={draftBatchBusy}
-                        className="rounded border border-white/15 bg-white/5 px-2 py-0.5 text-white/80 hover:bg-white/10 disabled:opacity-50"
-                      >
-                        Select all
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearDraftSelection}
-                        disabled={draftBatchBusy || selectedDraftIds.size === 0}
-                        className="rounded border border-white/15 bg-white/5 px-2 py-0.5 hover:bg-white/10 disabled:opacity-50"
-                      >
-                        Clear
-                      </button>
-                      <span className="tabular-nums">
-                        {selectedDraftIds.size === 0 ? "None selected" : `${selectedDraftIds.size} selected`}
-                      </span>
-                    </div>
-                  ) : null}
-                  {selectedDraftIdList.length >= 2 ? (
-                    <div className="mb-2 shrink-0 space-y-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] text-white/80">
-                      <p className="text-[11px] leading-snug text-white/50">
-                        Approve multiple drafts you have already reviewed — same path as Approvals page batch.
-                      </p>
-                      <button
-                        type="button"
-                        disabled={draftBatchBusy}
-                        onClick={() => void handleBatchApproveDrafts()}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-[12px] font-semibold text-white hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Check className="h-4 w-4" strokeWidth={2} aria-hidden />
-                        {draftBatchBusy ? "Approving…" : `Approve ${selectedDraftIdList.length} selected`}
-                      </button>
-                      {draftBatchProgress ? (
-                        <p className="text-[10px] text-white/45" aria-live="polite">
-                          {draftBatchProgress.done} / {draftBatchProgress.total} queued
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {draftBatchError ? (
-                    <p
-                      className="mb-2 shrink-0 whitespace-pre-wrap rounded-md border border-red-400/30 bg-red-950/40 px-3 py-2 text-[11px] text-red-200"
-                      role="alert"
-                    >
-                      {draftBatchError}
-                    </p>
-                  ) : null}
-                  <div
-                    ref={priorityListRef}
-                    className={cn(
-                      `zen-priority-actions-scroll-native min-h-0 max-h-[min(52vh,calc(100dvh-15.5rem))] overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-xl ${OBSIDIAN_GLASS}`,
-                      "outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-white/25",
-                    )}
-                    tabIndex={priorityRovingIndex === null ? 0 : -1}
-                    role="listbox"
-                    aria-label="Priority actions"
-                    aria-activedescendant={
-                      activePriorityRowId ? `zen-priority-action-${activePriorityRowId}` : undefined
-                    }
-                    onKeyDownCapture={handlePriorityListKeyDownCapture}
-                  >
-                    <div className="flex flex-col">
-                      {actionItems.map((item, i) => {
-                        const isEscalation = item.kind === "escalation";
-                        const isDraftRow = Boolean(item.draftSourceId);
-                        const draftChecked = item.draftSourceId ? selectedDraftIds.has(item.draftSourceId) : false;
-                        const initials = getInitials(item.detail || item.label);
-                        const age = formatRelativeTime(item.createdAt);
-                        const ink = fadingInk(item.createdAt);
-                        const isLast = i === actionItems.length - 1;
-                        return (
-                          <MagneticRow key={item.id}>
-                            <div
-                              data-zen-priority-row={item.id}
-                              className={cn(
-                                "relative flex w-full items-stretch",
-                                isDraftRow && draftChecked ? "bg-white/[0.04]" : "",
-                                priorityRovingIndex === i && "z-[1] ring-2 ring-inset ring-white/25",
-                              )}
-                            >
-                              {isDraftRow && item.draftSourceId ? (
-                                <div
-                                  className="flex shrink-0 items-start pt-4 pl-3"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onKeyDown={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-white/25 bg-white/10"
-                                    checked={draftChecked}
-                                    onChange={() => {
-                                      setPriorityRovingIndex(i);
-                                      toggleDraftSelected(item.draftSourceId!);
-                                    }}
-                                    disabled={draftBatchBusy}
-                                    aria-label={`Select draft ${item.label}`}
-                                  />
-                                </div>
-                              ) : null}
-                              <motion.button
-                                ref={(el) => {
-                                  priorityRowActionRefs.current[i] = el;
-                                }}
-                                id={`zen-priority-action-${item.id}`}
-                                type="button"
-                                role="option"
-                                tabIndex={priorityRovingIndex === i ? 0 : -1}
-                                aria-selected={priorityRovingIndex === i}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.35, delay: 0.4 + i * 0.06, ease: "easeOut" }}
-                                onClick={() => {
-                                  setPriorityRovingIndex(i);
-                                  navigate(item.routeTo);
-                                }}
-                                aria-label={
-                                  isEscalation
-                                    ? `Escalation, blocked decision: ${item.label}`
-                                    : undefined
-                                }
-                                className={cn(
-                                  "relative flex min-w-0 flex-1 cursor-pointer items-center gap-4 py-3.5 pr-3 pl-2 text-left transition-colors duration-200",
-                                  "outline-none focus-visible:ring-2 focus-visible:ring-white/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
-                                  isEscalation
-                                    ? "bg-rose-950/25 hover:bg-rose-950/[0.38]"
-                                    : "hover:bg-white/[0.06]",
-                                  isLast ? "" : "border-b border-white/10",
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_3px_rgba(0,0,0,0.1)]",
-                                    isEscalation
-                                      ? "border border-white/20 bg-white/[0.92] text-rose-800"
-                                      : "bg-white/95 text-[11px] font-semibold text-[#0a0a0a]",
-                                  )}
-                                >
-                                  {isEscalation ? (
-                                    <AlertTriangle className="h-4 w-4" strokeWidth={2} aria-hidden />
-                                  ) : (
-                                    initials
-                                  )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className={`truncate text-[13px] font-medium ${ink.name}`}>
-                                    {item.detail || "Unknown"}
-                                    <span className={`ml-2 text-[11px] font-normal ${ink.age}`}>
-                                      • {age}
-                                    </span>
-                                  </p>
-                                  {isEscalation ? (
-                                    <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-rose-200/75">
-                                      Needs your approval
-                                    </p>
-                                  ) : null}
-                                  <p className={`mt-0.5 truncate text-[12px] ${ink.snippet}`}>
-                                    {item.label}
-                                  </p>
-                                </div>
-                                <LandingGlassPill
-                                  tone="light"
-                                  className={cn(
-                                    "shrink-0",
-                                    isEscalation &&
-                                      "border border-rose-300/40 bg-white/[0.97] text-rose-950/85 shadow-[inset_0_1px_0_rgba(255,255,255,1),0_1px_2px_rgba(0,0,0,0.06)]",
-                                  )}
-                                  innerClassName="gap-1.5 font-normal"
-                                >
-                                  <span
-                                    className={cn(
-                                      "h-1.5 w-1.5 shrink-0 rounded-full",
-                                      isEscalation ? "bg-rose-400/90" : "bg-orange-500",
-                                    )}
-                                    style={
-                                      isEscalation
-                                        ? undefined
-                                        : { animation: "waiting-dot 2s ease-in-out infinite" }
-                                    }
-                                  />
-                                  {isEscalation ? ZEN_LOBBY_ESCALATION_ROW_BADGE : item.status}
-                                </LandingGlassPill>
-                              </motion.button>
-                            </div>
-                          </MagneticRow>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <p className="pt-4 text-[13px] text-white/30">No pending actions</p>
-              )}
-            </motion.div>
+            <div className="ticker" aria-label="activity">
+              {tickerItems.map((t, i) => (
+                <span key={i} className="it">
+                  <b>{t.bold}</b>
+                  {t.rest}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
-      </div>
+        <div className="today-right">
+          <div
+            ref={priorityRegionRef}
+            className="pri-panel zen-pri-panel outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-inset"
+            tabIndex={priorityRovingIndex === null ? 0 : -1}
+            role="listbox"
+            aria-label="Priority actions"
+            aria-activedescendant={activePriorityRowId ? `zen-priority-action-${activePriorityRowId}` : undefined}
+            onKeyDownCapture={handlePriorityRegionKeyDownCapture}
+          >
+            <header className="pri-head">
+              <div className="pri-eyebrow">
+                <span className="fin-pulse" aria-hidden />
+                Priority · {filteredActionItems.length}{" "}
+                {filteredActionItems.length === 1 ? "item" : "items"} in this queue · updated just now
+              </div>
+              <h2 className="pri-title">
+                What needs <b>your attention</b>
+              </h2>
+
+              <div className="pri-tabs" role="tablist" aria-label="Filter priority list">
+                {ZEN_TODAY_TAB_ORDER.map((tabId) => (
+                  <button
+                    key={tabId}
+                    type="button"
+                    role="tab"
+                    className="ptab"
+                    aria-selected={priTab === tabId}
+                    data-active={priTab === tabId ? "true" : "false"}
+                    onClick={() => setPriTab(tabId)}
+                  >
+                    <span className="ptab-indicator" aria-hidden />
+                    {ZEN_TODAY_TAB_LABELS[tabId]} <span className="n">{zenTab[tabId]}</span>
+                  </button>
+                ))}
+              </div>
+            </header>
+
+            {filteredActionItems.length === 0 ? (
+              <p className="px-3 pt-6 text-[14px] text-white/45">No pending actions in this tab</p>
+            ) : (
+              <>
+                {heroItem ? (
+                  <article
+                    className={cn(
+                      "pri-hero relative",
+                      priorityRovingIndex === 0 && "ring-2 ring-inset ring-white/30",
+                    )}
+                    data-zen-priority-row={heroItem.id}
+                  >
+                    <button
+                      ref={(el) => {
+                        priorityRowActionRefs.current[0] = el;
+                      }}
+                      id={`zen-priority-action-${heroItem.id}`}
+                      type="button"
+                      role="option"
+                      tabIndex={priorityRovingIndex === 0 ? 0 : -1}
+                      aria-selected={priorityRovingIndex === 0}
+                      className="block w-full text-left"
+                      onClick={() => {
+                        setPriorityRovingIndex(0);
+                        navigate(heroItem.routeTo);
+                      }}
+                    >
+                      <div className="pri-hero-top">
+                        <span className="pri-hero-tag">
+                          <span className="sdot" aria-hidden />
+                          {heroTagFromItem(heroItem)}
+                        </span>
+                        <span className="pri-hero-age">{formatRelativeTime(heroItem.createdAt)}</span>
+                      </div>
+                      <div className="pri-hero-who">{heroWho(heroItem)}</div>
+                      <p className="pri-hero-preview">&ldquo;{heroItem.label}&rdquo;</p>
+                      <HeroMetaRow item={heroItem} />
+                    </button>
+                    <div className="pri-hero-actions">
+                      <button
+                        type="button"
+                        className="pbtn"
+                        onClick={() => {
+                          setPriorityRovingIndex(0);
+                          navigate(heroItem.routeTo);
+                        }}
+                      >
+                        Open thread →
+                      </button>
+                      <button type="button" className="pbtn ghost">
+                        Teach Ana the rule
+                      </button>
+                      <button type="button" className="pbtn ghost">
+                        Snooze 1h
+                      </button>
+                    </div>
+                  </article>
+                ) : null}
+
+                {listItems.length > 0 ? (
+                  <div
+                    className="pri-list"
+                    ref={priListRef}
+                    onScroll={(e) => setPriListScrollTop(e.currentTarget.scrollTop)}
+                  >
+                    {listItems.map((item, idx) => {
+                      const i = idx + 1;
+                      const isEscalation = item.kind === "escalation";
+                      const initials = getInitials(item.detail || item.label);
+                      const who = item.detail || "Unknown";
+                      const pillKind = isEscalation ? "warn" : item.kind === "draft" ? "fin" : "default";
+                      const rowDone = isDoneStatusLabel(item.status);
+                      const isPriStackTail =
+                        idx === priStackTailIndex && priListScrollTop < 1;
+                      return (
+                        <button
+                          key={item.id}
+                          ref={(el) => {
+                            priorityRowActionRefs.current[i] = el;
+                          }}
+                          data-zen-priority-row={item.id}
+                          id={`zen-priority-action-${item.id}`}
+                          type="button"
+                          role="option"
+                          tabIndex={priorityRovingIndex === i ? 0 : -1}
+                          aria-selected={priorityRovingIndex === i}
+                          className={cn(
+                            "prow w-full text-left",
+                            rowDone && "done",
+                            isPriStackTail && "zen-pri-stack-tail",
+                            isEscalation && "escalation",
+                            item.kind === "draft" && "fin-draft",
+                            priorityRovingIndex === i && "relative z-[1] ring-2 ring-inset ring-white/25",
+                          )}
+                          onClick={() => {
+                            setPriorityRovingIndex(i);
+                            navigate(item.routeTo);
+                          }}
+                        >
+                          <div className={cn("avatar", isEscalation && "warn")}>{initials}</div>
+                          <div style={{ minWidth: 0 }}>
+                            <div className="who">
+                              {who}
+                              <span className="age">· {formatAgeShort(item.createdAt)}</span>
+                            </div>
+                            <div className="label">{item.label}</div>
+                          </div>
+                          <span
+                            className={cn(
+                              "pill",
+                              rowDone ? "done" : pillKind === "fin" && "fin",
+                              !rowDone && pillKind === "warn" && "warn",
+                            )}
+                          >
+                            <span className="sdot" aria-hidden />
+                            {isEscalation ? ZEN_LOBBY_ESCALATION_ROW_BADGE : item.status}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       {urlEscalationId ? (
-        <div className="fixed bottom-6 left-1/2 z-[60] w-[min(100%,28rem)] -translate-x-1/2 px-4">
+        <div className="fixed bottom-24 left-1/2 z-[60] w-[min(100%,28rem)] -translate-x-1/2 px-4">
           <EscalationResolutionPanel
             escalationId={urlEscalationId}
             onResolved={() => {

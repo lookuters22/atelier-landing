@@ -1,10 +1,8 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { AnimatePresence } from "framer-motion";
 import { NavigationDock } from "../components/Dock/NavigationDock";
 import { SupportAssistantWidget } from "../components/SupportAssistantWidget";
 import { StudioSpotlight } from "../components/StudioSpotlight";
-import { PageTransition } from "../components/PageTransition";
 import { DynamicBackground } from "../components/modes/today/DynamicBackground";
 
 import { ZenLobby } from "../components/modes/today/ZenLobby";
@@ -41,7 +39,8 @@ import { InvoiceSetupProvider } from "../components/modes/settings/InvoiceSetupC
 import { SettingsPreview } from "../components/modes/settings/SettingsPreview";
 
 import { OfferBuilderSettingsProvider } from "../pages/settings/offerBuilderSettingsContext";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
+import { useCallback, type ReactNode } from "react";
 
 type Mode =
   | "today"
@@ -62,13 +61,17 @@ function detectMode(pathname: string): Mode {
   return "today";
 }
 
-const SEP_CLS = "w-[3px] bg-border/50 hover:bg-ring/40 transition-colors cursor-col-resize";
+const SEP_CLS =
+  "w-[3px] shrink-0 cursor-col-resize bg-[var(--dashboard-pane-divider)] hover:bg-[var(--dashboard-pane-divider-hover)] transition-colors";
 
 /* ------------------------------------------------------------------ */
 /*  Layout persistence                                                */
 /* ------------------------------------------------------------------ */
 
 type Layout = Record<string, number>;
+
+/** Panel ids shared by `ThreePaneShell` + `PipelineThreePaneShell` (`conceptzilla:3pane`). */
+const THREE_PANE_IDS = ["ctx", "main", "insp"] as const;
 
 function readLayout(key: string): Layout | undefined {
   try {
@@ -77,6 +80,19 @@ function readLayout(key: string): Layout | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Rejects corrupted or ID-mismatched layouts (e.g. old `ctx-pipe` keys) so panels don’t collapse to 0 width. */
+function readThreePaneLayout(key: string): Layout | undefined {
+  const parsed = readLayout(key);
+  if (!parsed || typeof parsed !== "object") return undefined;
+  for (const id of THREE_PANE_IDS) {
+    const v = parsed[id];
+    if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {
+      return undefined;
+    }
+  }
+  return parsed;
 }
 
 function writeLayout(key: string, layout: Layout) {
@@ -98,7 +114,7 @@ function ThreePaneShell({
   pane3: ReactNode;
   pane4: ReactNode;
 }) {
-  const saved = readLayout("conceptzilla:3pane");
+  const saved = readThreePaneLayout("conceptzilla:3pane");
   const handleChanged = useCallback(
     (layout: Layout) => writeLayout("conceptzilla:3pane", layout),
     [],
@@ -122,6 +138,51 @@ function ThreePaneShell({
         <div className="dashboard-inspector-pane flex h-full flex-col overflow-y-auto">{pane4}</div>
       </Panel>
     </Group>
+  );
+}
+
+/** Pipeline Ana port: inner panes manage scroll; shell stays overflow-hidden for the two-column workspace grid. */
+function PipelineThreePaneShell({
+  pane2,
+  pane3,
+  pane4,
+}: {
+  pane2: ReactNode;
+  pane3: ReactNode;
+  pane4: ReactNode;
+}) {
+  /** Must use the same panel ids as `ThreePaneShell` — layout is persisted under `conceptzilla:3pane`. */
+  const saved = readThreePaneLayout("conceptzilla:3pane");
+  const handleChanged = useCallback(
+    (layout: Layout) => writeLayout("conceptzilla:3pane", layout),
+    [],
+  );
+
+  return (
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <Group
+        className="h-full min-h-0 w-full flex-1"
+        orientation="horizontal"
+        defaultLayout={saved}
+        onLayoutChanged={handleChanged}
+      >
+        <Panel id="ctx" defaultSize="22%" minSize="16%" maxSize="32%">
+          <div className="dashboard-context-pane flex h-full min-h-0 flex-col overflow-hidden bg-[var(--color-surface-sunken)]">
+            {pane2}
+          </div>
+        </Panel>
+        <Separator className={SEP_CLS} />
+        <Panel id="main" defaultSize="50%" minSize="30%">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[var(--surface-canvas)]">{pane3}</div>
+        </Panel>
+        <Separator className={SEP_CLS} />
+        <Panel id="insp" defaultSize="28%" minSize="18%" maxSize="38%">
+          <div className="dashboard-inspector-pane flex h-full min-h-0 flex-col overflow-hidden bg-[var(--color-surface-sunken)]">
+            {pane4}
+          </div>
+        </Panel>
+      </Group>
+    </div>
   );
 }
 
@@ -175,7 +236,7 @@ function PipelineMode() {
   return (
     <PipelineModeProvider>
       <PipelineWeddingProvider>
-        <ThreePaneShell
+        <PipelineThreePaneShell
           pane2={<PipelineContextList />}
           pane3={<PipelineWorkspace />}
           pane4={<PipelineInspector />}
@@ -300,34 +361,17 @@ export function FourPaneLayout() {
   const mode = detectMode(pathname);
   const isOfferBuilderEditor = pathname.startsWith("/workspace/offer-builder/edit");
 
-  /**
-   * Route updates `mode` to "today" immediately, but AnimatePresence still shows the
-   * previous shell exiting. That shell used to sit on `bg-background`; without this,
-   * the wrapper drops bg-background at the same instant and the dark DynamicBackground
-   * shows through the fading UI — panel rails read as black.
-   */
-  const [holdShellBg, setHoldShellBg] = useState(false);
-  const prevModeRef = useRef<Mode | null>(null);
+  /** Opaque shell over `DynamicBackground` for every mode except Today (Zen lobby uses the live backdrop). */
+  const showShellBg = mode !== "today";
 
-  /** True when this navigation involves Today (either end) — use cinematic transition. */
-  const transitionInvolvesToday =
-    mode === "today" || prevModeRef.current === "today";
+  /** Ana redesign shell tokens — only /today, /inbox, /pipeline, /calendar (not manager/workspace/settings/directory). */
+  const anaMainDashboardShell =
+    mode === "today" || mode === "inbox" || mode === "pipeline" || mode === "calendar";
 
-  useEffect(() => {
-    const prev = prevModeRef.current;
-    if (mode !== "today") {
-      setHoldShellBg(false);
-    } else if (prev !== null && prev !== "today" && mode === "today") {
-      setHoldShellBg(true);
-    }
-    prevModeRef.current = mode;
-  }, [mode]);
-
-  const showShellBg = mode !== "today" || holdShellBg;
-
-  const handlePresenceExitComplete = useCallback(() => {
-    setHoldShellBg(false);
-  }, []);
+  const fourPaneRootClassName = cn(
+    "font-dashboard relative flex h-[100dvh] w-full overflow-hidden bg-background",
+    anaMainDashboardShell && "ana-main-dashboard",
+  );
 
   if (isOfferBuilderEditor) {
     return (
@@ -338,19 +382,15 @@ export function FourPaneLayout() {
   }
 
   return (
-    <div className="font-dashboard relative flex h-[100dvh] w-full overflow-hidden bg-background">
+    <div className={fourPaneRootClassName} data-route={mode}>
       <DynamicBackground />
 
-      <div className={`relative z-10 min-w-0 flex-1 h-full ${showShellBg ? "bg-background" : ""}`}>
-        <AnimatePresence mode="wait" onExitComplete={handlePresenceExitComplete}>
-          <PageTransition
-            key={mode}
-            variant={transitionInvolvesToday ? "cinematic" : "quick"}
-            longTodayEntrance={mode === "today"}
-          >
-            <ModeSwitch mode={mode} />
-          </PageTransition>
-        </AnimatePresence>
+      <div
+        className={`relative z-10 flex min-h-0 min-w-0 flex-1 flex-col h-full ${showShellBg ? "bg-background" : ""}`}
+      >
+        <div key={mode} className="dashboard-page-shell flex min-h-0 flex-1 flex-col">
+          <ModeSwitch mode={mode} />
+        </div>
       </div>
 
       <NavigationDock />

@@ -23,8 +23,56 @@ import type { ChatMessage } from "../../chat/ConversationFeed";
 import { InboxInlineReplyComposer } from "./InboxInlineReplyComposer";
 import { InboxReplyActions } from "./InboxReplyActions";
 import type { UnfiledThread } from "../../../hooks/useUnfiledInbox";
+import { cn } from "@/lib/utils";
+import { routingConfidencePercent } from "../../../lib/aiRoutingFormat";
 
 const DRAFT_SAVE_MS = 400;
+
+/** Thread-level AI routing summary — also rendered inside the scrollable feed on Inbox thread detail. */
+export function GmailThreadAiRoutingCard({
+  aiRoutingMetadata,
+  anaVisuals = false,
+  className,
+}: {
+  aiRoutingMetadata: NonNullable<UnfiledThread["ai_routing_metadata"]>;
+  anaVisuals?: boolean;
+  className?: string;
+}) {
+  const pct = routingConfidencePercent(aiRoutingMetadata.confidence_score);
+  const intentLine =
+    pct != null
+      ? `Intent: ${aiRoutingMetadata.classified_intent} · ${pct}% confidence`
+      : `Intent: ${aiRoutingMetadata.classified_intent} · confidence unavailable`;
+
+  if (anaVisuals) {
+    return (
+      <div
+        className={cn(
+          "mb-2 rounded-[var(--radius-card)] border border-[rgba(196,120,60,0.35)] bg-[rgba(255,170,120,0.08)] p-3",
+          className,
+        )}
+      >
+        <p className="mb-1 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[rgba(180,90,40,0.95)]">
+          AI routing
+        </p>
+        <p className="text-[12px] text-[var(--fg-2)]">{intentLine}</p>
+        {aiRoutingMetadata.reasoning?.trim() ? (
+          <p className="mt-1 text-[12px] leading-relaxed text-[var(--fg-3)]">{aiRoutingMetadata.reasoning.trim()}</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("mb-2 rounded-lg border border-border bg-accent/50 p-3", className)}>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">AI Routing</p>
+      <p className="text-[12px] text-muted-foreground">{intentLine}</p>
+      {aiRoutingMetadata.reasoning?.trim() ? (
+        <p className="mt-1 text-[12px] text-muted-foreground">{aiRoutingMetadata.reasoning.trim()}</p>
+      ) : null}
+    </div>
+  );
+}
 
 type ComposeMode = "idle" | "reply" | "forward";
 
@@ -87,6 +135,10 @@ export type GmailThreadInlineReplyDockProps = {
    * When true, idle Reply | Forward is not rendered here — use per-message actions + `ref.openReply()` / `openForward()`.
    */
   suppressIdleReplyActions?: boolean;
+  /** When true, the AI routing card is omitted (parent renders it inside the message feed). */
+  suppressAiRouting?: boolean;
+  /** Ana inbox: tokens from `index.css` (`.ana-draft`, routing card, reply chrome). */
+  anaVisuals?: boolean;
 };
 
 export type GmailThreadInlineReplyDockHandle = {
@@ -116,6 +168,8 @@ const GmailThreadInlineReplyDockInner = forwardRef<GmailThreadInlineReplyDockHan
       conversationPreload,
       inlineMessageLayout = false,
       suppressIdleReplyActions = false,
+      suppressAiRouting = false,
+      anaVisuals = false,
     },
     ref,
   ) {
@@ -348,16 +402,19 @@ const GmailThreadInlineReplyDockInner = forwardRef<GmailThreadInlineReplyDockHan
 
   const gutter = inlineMessageLayout ? "px-0" : "mx-5";
 
+  const routingFootMeta = useMemo(() => {
+    if (!aiRoutingMetadata) return null;
+    const pct = routingConfidencePercent(aiRoutingMetadata.confidence_score);
+    return pct != null
+      ? `${aiRoutingMetadata.classified_intent} · ${pct}%`
+      : `${aiRoutingMetadata.classified_intent} · —`;
+  }, [aiRoutingMetadata]);
+
   return (
     <>
-      {aiRoutingMetadata ? (
-        <div className={`${gutter} mb-2 rounded-lg border border-border bg-accent/50 p-3`}>
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">AI Routing</p>
-          <p className="text-[12px] text-muted-foreground">
-            Intent: {aiRoutingMetadata.classified_intent} &middot;{" "}
-            {Math.round(aiRoutingMetadata.confidence_score * 100)}% confidence
-          </p>
-          <p className="mt-1 text-[12px] text-muted-foreground">{aiRoutingMetadata.reasoning}</p>
+      {aiRoutingMetadata && !suppressAiRouting ? (
+        <div className={gutter}>
+          <GmailThreadAiRoutingCard aiRoutingMetadata={aiRoutingMetadata} anaVisuals={anaVisuals} />
         </div>
       ) : null}
 
@@ -385,13 +442,18 @@ const GmailThreadInlineReplyDockInner = forwardRef<GmailThreadInlineReplyDockHan
             onReply={() => setComposeMode("reply")}
             onForward={() => setComposeMode("forward")}
             variant={inlineMessageLayout ? "inline" : "feed"}
+            anaVisuals={anaVisuals}
           />
         )
       ) : (
         <>
           {sendError ? (
             <p
-              className="mx-5 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive"
+              className={
+                anaVisuals
+                  ? `${gutter} mb-2 rounded-md border border-[var(--color-report-red)]/35 bg-[var(--surface-raised)] px-3 py-2 text-[12px] text-[var(--color-report-red)]`
+                  : "mx-5 mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12px] text-destructive"
+              }
               role="alert"
               aria-live="polite"
             >
@@ -419,6 +481,8 @@ const GmailThreadInlineReplyDockInner = forwardRef<GmailThreadInlineReplyDockHan
             sendDisabled={composeMode === "forward" || !gmailReplyReady || Boolean(sendDisabledReason)}
             sendDisabledReason={sendDisabledReason}
             sending={sending}
+            anaVisuals={anaVisuals}
+            routingFootMeta={routingFootMeta}
           />
         </>
       )}

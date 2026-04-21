@@ -23,6 +23,7 @@
 ### 2. `weddings` (Maps to frontend `WeddingEntry`)
 - `id` (UUID, Primary Key)
 - `photographer_id` (UUID, Foreign Key)
+- `project_type` (Enum `wedding_project_type`, default `wedding`) — per-project classification; see v3 `DATABASE_SCHEMA` §5.2
 - `couple_names` (String) - *Maps to `couple`*
 - `wedding_date` (Timestamptz) - *Maps to `when`*
 - `location` (String) - *Maps to `where`*

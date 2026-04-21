@@ -34,6 +34,9 @@ describe("zenLobbyPriorityKindFromAction", () => {
       "draft",
     );
     expect(zenLobbyPriorityKindFromAction(baseAction({ action_type: "open_task" }))).toBe("task");
+    expect(
+      zenLobbyPriorityKindFromAction(baseAction({ action_type: "linked_lead_thread" })),
+    ).toBe("message");
   });
 });
 

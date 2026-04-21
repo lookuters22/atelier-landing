@@ -11,6 +11,10 @@
  *   - `supabase/functions/_shared/orchestrator/proposeClientOrchestratorCandidateActions.ts`
  *   - `src/lib/inboxReplyRecipient.ts` (UI replyability)
  *
+ * DB twin (sender + subject + body only, no optional headers):
+ *   `public.classify_inbound_suppression` — keep aligned with migrations
+ *   `20260507000000` + `20260509000000` for `convert_unfiled_thread_to_inquiry`.
+ *
  * Contract:
  *   - Pure, deterministic, no I/O, no LLM.
  *   - Safe for Deno + browser (no imports from node / dom / deno).
@@ -51,6 +55,8 @@ export type InboundSuppressionReasonCode =
   | "body_ota_promo_copy"
   | "body_newsletter_markers"
   | "subject_promo_markers"
+  | "subject_transactional_receipt"
+  | "body_transactional_receipt"
   | "empty_or_unparseable";
 
 export type InboundSuppressionInput = {
@@ -238,6 +244,58 @@ const SUBJECT_PROMO_TOKENS: readonly string[] = [
   "promo",
   "promotion",
   "limited time",
+  "special offer",
+  "exclusive offer",
+  "you're invited",
+  "you are invited",
+  "webinar",
+  "black friday",
+  "cyber monday",
+];
+
+/**
+ * Subject lines that strongly imply merchant receipt / billing / order
+ * confirmation (not a conversational client email). Kept regex-based to avoid
+ * suppressing subjects like "Invoice for deposit — Smith wedding" from a
+ * personal inbox with no other transactional signals.
+ */
+const SUBJECT_STRONG_TRANSACTIONAL_PATTERNS: readonly RegExp[] = [
+  /^\s*receipt\b/i,
+  /^\s*your\s+receipt\b/i,
+  /^\s*payment\s+receipt\b/i,
+  /^\s*payment\s+received\b/i,
+  /^\s*payment\s+confirmation\b/i,
+  /^\s*order\s+confirmation\b/i,
+  /^\s*order\s+confirmed\b/i,
+  /^\s*your\s+order\s+(has\s+been\s+)?confirm/i,
+  /^\s*billing\s+statement\b/i,
+  /^\s*tax\s+invoice\b/i,
+  /^\s*invoice\s+payment\s+received\b/i,
+  /automatic\s+payment\b/i,
+  /subscription\s+renewal\b/i,
+];
+
+/** Body snippets typical of receipts, invoices, and order confirmations. */
+const BODY_TRANSACTIONAL_RECEIPT_MARKERS: readonly string[] = [
+  "thank you for your order",
+  "thank you for your purchase",
+  "items in your order",
+  "this email confirms your purchase",
+  "your payment has been processed",
+  "amount charged to your",
+  "card ending in",
+  "transaction id:",
+  "transaction reference:",
+  "view your order",
+  "order summary",
+  "sales tax",
+  "subtotal:",
+  "total due:",
+  "amount paid:",
+  "invoice number:",
+  "invoice #",
+  "paid in full",
+  "payment successful",
 ];
 
 function toLower(s: string | null | undefined): string {
@@ -442,7 +500,7 @@ export function classifyInboundSuppression(
     }
   }
 
-  // --- 4. Subject (weak) ----------------------------------------------------
+  // --- 4. Subject (weak promo + strong transactional) -----------------------
   const subjectLower = toLower(subject);
   if (subjectLower.length > 0) {
     let subjectHit = false;
@@ -456,6 +514,36 @@ export function classifyInboundSuppression(
     if (subjectHit) {
       pushReason("subject_promo_markers");
       marketingScore += 1;
+    }
+
+    let transactionalSubject = false;
+    for (const re of SUBJECT_STRONG_TRANSACTIONAL_PATTERNS) {
+      if (re.test(subject)) {
+        transactionalSubject = true;
+        break;
+      }
+    }
+    if (transactionalSubject) {
+      pushReason("subject_transactional_receipt");
+      transactionalScore += 3;
+    } else if (
+      /\binvoice\b/i.test(subjectLower) &&
+      (systemScore > 0 || (parts && hasSystemLocalToken(parts.local)))
+    ) {
+      // Billing-platform invoice from noreply/billing/etc. — not a client's one-off subject.
+      pushReason("subject_transactional_receipt");
+      transactionalScore += 2;
+    }
+  }
+
+  // --- 4b. Body: receipt / billing copy -----------------------------------
+  if (bodyLower.length > 0) {
+    for (const m of BODY_TRANSACTIONAL_RECEIPT_MARKERS) {
+      if (bodyLower.includes(m)) {
+        pushReason("body_transactional_receipt");
+        transactionalScore += 2;
+        break;
+      }
     }
   }
 
@@ -476,7 +564,7 @@ export function classifyInboundSuppression(
     confidence = systemScore >= 5 ? "high" : "medium";
   } else if (transactionalScore >= 2) {
     verdict = "transactional_non_client";
-    confidence = "medium";
+    confidence = transactionalScore >= 4 ? "high" : "medium";
   } else if (marketingScore > 0 || systemScore > 0) {
     // Single weak signal only — don't suppress, but flag low confidence.
     verdict = "human_client_or_lead";

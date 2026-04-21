@@ -1,25 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import {
-  ContextPaneRoot,
-  PaneCountBadge,
-  PaneHeaderStrip,
-  PaneScrollRegion,
-  PaneSearchInput,
-  PaneSecondaryActionLink,
-  PANE_INSPECTOR_STATUS_PILL,
-  PANE_LEFT_LIST_CARD_TITLE,
-  PANE_SCROLL_HELPER,
-  PANE_SCROLL_HELPER_PAD,
-  PANE_SECTION_COLLAPSIBLE_TRIGGER,
-} from "@/components/panes";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  AnimatedCollapsibleContent,
-} from "@/components/ui/collapsible";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -36,37 +18,31 @@ import {
   scrollPipelineWeddingRowIntoView,
 } from "@/lib/pipelineWeddingListNavigation";
 import { formatWeddingPipelineShortDate } from "@/lib/weddingDateDisplay";
+import { projectTypeBadgeLabel } from "@/lib/projectTypeDisplay";
 import { usePipelineMode } from "./PipelineModeContext";
 
 const INQUIRY_STAGES = new Set(["inquiry", "consultation", "proposal_sent", "contract_out"]);
 const ACTIVE_STAGES = new Set(["booked", "prep"]);
 const DELIVERABLE_STAGES = new Set(["delivered", "final_balance"]);
 
-function formatStageLabel(stage: string): string {
-  return stage.replace(/_/g, " ");
+function formatStageLabel(stage: string | null | undefined): string {
+  const s = stage ?? "";
+  return s ? s.replace(/_/g, " ") : "—";
 }
 
-function stageBadgeClass(stage: string): string {
-  if (INQUIRY_STAGES.has(stage)) {
-    return "border-amber-200/80 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-100";
-  }
-  if (ACTIVE_STAGES.has(stage)) {
-    return "border-emerald-200/80 bg-emerald-50 text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-100";
-  }
-  if (DELIVERABLE_STAGES.has(stage)) {
-    return "border-violet-200/80 bg-violet-50 text-violet-900 dark:border-violet-900/40 dark:bg-violet-950/40 dark:text-violet-100";
-  }
-  if (stage === "archived") {
-    return "border-border bg-muted/60 text-muted-foreground";
-  }
-  return "border-border bg-background text-foreground";
+function stageChipClass(bucket: Bucket): "inquiry" | "active" | "deliver" | "archived" {
+  if (bucket === "inquiries") return "inquiry";
+  if (bucket === "active") return "active";
+  if (bucket === "deliverables") return "deliver";
+  return "archived";
 }
 
 type Bucket = "inquiries" | "active" | "deliverables" | "archived";
 
 const BUCKET_ORDER: Bucket[] = ["inquiries", "active", "deliverables", "archived"];
 
-function bucketForStage(stage: string): Bucket {
+function bucketForStage(stage: string | null | undefined): Bucket {
+  if (stage == null || stage === "") return "inquiries";
   if (INQUIRY_STAGES.has(stage)) return "inquiries";
   if (ACTIVE_STAGES.has(stage)) return "active";
   if (DELIVERABLE_STAGES.has(stage)) return "deliverables";
@@ -74,23 +50,40 @@ function bucketForStage(stage: string): Bucket {
   return "inquiries";
 }
 
+const BUCKET_TITLE: Record<Bucket, string> = {
+  inquiries: "Inquiries",
+  active: "Active bookings",
+  deliverables: "Deliverables",
+  archived: "Archived",
+};
+
 export function PipelineContextList() {
   const { photographerId } = useAuth();
   const { data: weddings, isLoading, error, deleteWedding } = useWeddings(photographerId ?? "");
   const { weddingId, selectWedding } = usePipelineMode();
   const [query, setQuery] = useState("");
   const listScrollRef = useRef<HTMLDivElement>(null);
+  const [collapsed, setCollapsed] = useState<Record<Bucket, boolean>>({
+    inquiries: false,
+    active: false,
+    deliverables: false,
+    archived: true,
+  });
 
   async function handleDelete(id: string, name: string) {
     if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
     await deleteWedding(id);
-    if (weddingId === id) selectWedding(null as unknown as string);
+    if (weddingId === id) selectWedding(null);
   }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return weddings;
-    return weddings.filter((w) => w.couple_names.toLowerCase().includes(q));
+    return weddings.filter((w) => {
+      const name = (w.couple_names ?? "").toLowerCase();
+      const typeLbl = (projectTypeBadgeLabel(w.project_type) ?? "").toLowerCase();
+      return name.includes(q) || typeLbl.includes(q);
+    });
   }, [weddings, query]);
 
   const buckets = useMemo(() => {
@@ -106,7 +99,6 @@ export function PipelineContextList() {
     return out;
   }, [filtered]);
 
-  // Same order as sidebar sections: inquiries -> active -> deliverables -> archived.
   const orderedWeddingIds = useMemo(() => {
     const ids: string[] = [];
     for (const b of BUCKET_ORDER) {
@@ -142,118 +134,136 @@ export function PipelineContextList() {
     scrollPipelineWeddingRowIntoView(el, root);
   }, [weddingId]);
 
-  const sections: { id: Bucket; title: string }[] = [
-    { id: "inquiries", title: "Inquiries" },
-    { id: "active", title: "Active Bookings" },
-    { id: "deliverables", title: "Deliverables" },
-    { id: "archived", title: "Archived" },
-  ];
+  useEffect(() => {
+    function onKey(e: GlobalEventHandlersEventMap["keydown"]) {
+      if (!(e.metaKey || e.ctrlKey) || String(e.key).toLowerCase() !== "k") return;
+      const t = e.target;
+      if (isEditableKeyboardTarget(t)) return;
+      e.preventDefault();
+      const input = listScrollRef.current?.querySelector<HTMLInputElement>(
+        'input[data-pipeline-search="1"]',
+      );
+      input?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
-    <ContextPaneRoot>
-      <PaneHeaderStrip>
-        <PaneSearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder="Search couples…"
-          aria-label="Search couples"
-        />
-        <PaneSecondaryActionLink to="/weddings/new" icon={Plus}>
-          Add wedding
-        </PaneSecondaryActionLink>
-      </PaneHeaderStrip>
+    <div className="ana-inbox-port ana-pipeline-port flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="pane ctx flex min-h-0 flex-1 flex-col overflow-hidden border-0">
+        <div className="pane-head">
+          <h3>
+            Pipeline{" "}
+            <button type="button" className="count">
+              {weddings.length}
+            </button>
+          </h3>
+          <label className="search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="M21 21l-4.3-4.3" />
+            </svg>
+            <input
+              data-pipeline-search="1"
+              placeholder="Search projects, names, type…"
+              value={query}
+              onChange={(ev) => setQuery(ev.target.value)}
+              aria-label="Search projects by name or type"
+            />
+            <span className="kbd">⌘K</span>
+          </label>
+        </div>
 
-      <PaneScrollRegion ref={listScrollRef}>
-        {isLoading && (
-          <p className={cn(PANE_SCROLL_HELPER_PAD, PANE_SCROLL_HELPER)}>Loading weddings...</p>
-        )}
-        {error && (
-          <p className={cn(PANE_SCROLL_HELPER_PAD, "text-[12px] text-destructive")}>Error: {error}</p>
-        )}
-        {!isLoading && !error && (
-          <div className="space-y-1">
-            {sections.map(({ id, title }) => (
-              <Collapsible key={id} defaultOpen>
-                <CollapsibleTrigger className={PANE_SECTION_COLLAPSIBLE_TRIGGER}>
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate">{title}</span>
-                    <PaneCountBadge>{buckets[id].length}</PaneCountBadge>
-                  </span>
-                  <span className="relative flex h-3.5 w-3.5 shrink-0 items-center justify-center text-muted-foreground">
-                    <ChevronRight
-                      className="absolute h-3.5 w-3.5 group-data-[state=open]:hidden"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                    <ChevronDown
-                      className="absolute hidden h-3.5 w-3.5 group-data-[state=open]:block"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                  </span>
-                </CollapsibleTrigger>
-                <AnimatedCollapsibleContent>
-                  <div className="mt-0.5 space-y-0.5 pb-2">
-                    {id === "archived" && buckets[id].length === 0 ? (
-                      <p className={cn(PANE_SCROLL_HELPER_PAD, PANE_SCROLL_HELPER)}>
-                        No archived weddings yet.
-                      </p>
-                    ) : (
-                      buckets[id].map((w) => {
-                        const selected = weddingId === w.id;
-                        return (
-                          <ContextMenu key={w.id}>
-                            <ContextMenuTrigger asChild>
-                              <button
-                                type="button"
-                                data-pipeline-wedding-row={w.id}
-                                onClick={() => selectWedding(w.id)}
-                                className={cn(
-                                  "box-border flex w-full flex-col gap-1 rounded-2xl border border-transparent px-3 py-2 text-left transition-colors",
-                                  "hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
-                                  selected && "bg-foreground/10",
-                                )}
-                              >
-                                <span className={PANE_LEFT_LIST_CARD_TITLE}>{w.couple_names}</span>
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span
-                                    className={cn(
-                                      "inline-flex max-w-full truncate rounded-full border px-1.5 py-0.5",
-                                      PANE_INSPECTOR_STATUS_PILL,
-                                      stageBadgeClass(w.stage),
-                                    )}
-                                  >
-                                    {formatStageLabel(w.stage)}
-                                  </span>
-                                  <span className={PANE_SCROLL_HELPER}>{formatWeddingPipelineShortDate(w)}</span>
-                                </div>
-                              </button>
-                            </ContextMenuTrigger>
-                            <ContextMenuContent>
-                              <ContextMenuItem onClick={() => selectWedding(w.id)}>
-                                <ExternalLink className="mr-1.5 h-3 w-3" />
-                                Open project
-                              </ContextMenuItem>
-                              <ContextMenuSeparator />
-                              <ContextMenuItem
-                                variant="destructive"
-                                onClick={() => handleDelete(w.id, w.couple_names)}
-                              >
-                                <Trash2 className="mr-1.5 h-3 w-3" />
-                                Delete project
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        );
-                      })
-                    )}
-                  </div>
-                </AnimatedCollapsibleContent>
-              </Collapsible>
-            ))}
-          </div>
-        )}
-      </PaneScrollRegion>
-    </ContextPaneRoot>
+        <nav ref={listScrollRef} className="ctx-nav" style={{ paddingTop: 4 }}>
+          {isLoading && (
+            <p className="px-3 py-4 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-wide text-[var(--fg-4)]">
+              Loading projects…
+            </p>
+          )}
+          {error && (
+            <p className="px-3 py-2 font-[family-name:var(--font-sans)] text-[12px] text-[var(--color-report-red)]">
+              {error}
+            </p>
+          )}
+          {!isLoading &&
+            !error &&
+            BUCKET_ORDER.map((bucket) => {
+              const rows = buckets[bucket];
+              const isCollapsed = collapsed[bucket];
+              return (
+                <div key={bucket}>
+                  <button
+                    type="button"
+                    className="wed-group"
+                    data-collapsed={isCollapsed ? "true" : "false"}
+                    onClick={() => setCollapsed((c) => ({ ...c, [bucket]: !c[bucket] }))}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    <span>{BUCKET_TITLE[bucket]}</span>
+                    <span className="gc">{rows.length}</span>
+                  </button>
+                  {!isCollapsed ? (
+                    <div className="wed-group-body">
+                      {bucket === "archived" && rows.length === 0 ? (
+                        <p className="px-2 py-2 font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-wide text-[var(--fg-4)]">
+                          No archived projects yet.
+                        </p>
+                      ) : (
+                        rows.map((w) => {
+                          const selected = weddingId === w.id;
+                          const chipClass = stageChipClass(bucket);
+                          const typeChip = projectTypeBadgeLabel(w.project_type);
+                          return (
+                            <ContextMenu key={w.id}>
+                              <ContextMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  data-pipeline-wedding-row={w.id}
+                                  data-active={selected ? "true" : undefined}
+                                  onClick={() => selectWedding(w.id)}
+                                  className="wed-row"
+                                >
+                                  <div className="couple">{w.couple_names}</div>
+                                  <div className="meta-line">
+                                    <span className={cn("stage-chip", chipClass)}>{formatStageLabel(w.stage)}</span>
+                                    {typeChip ? (
+                                      <span
+                                        className={cn("stage-chip", "archived")}
+                                        data-project-type-chip="1"
+                                        title="Project type"
+                                      >
+                                        {typeChip}
+                                      </span>
+                                    ) : null}
+                                    <span>{formatWeddingPipelineShortDate(w)}</span>
+                                  </div>
+                                </button>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent>
+                                <ContextMenuItem onClick={() => selectWedding(w.id)}>
+                                  <ExternalLink className="mr-1.5 h-3 w-3" />
+                                  Open project
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem variant="destructive" onClick={() => handleDelete(w.id, w.couple_names)}>
+                                  <Trash2 className="mr-1.5 h-3 w-3" />
+                                  Delete project
+                                </ContextMenuItem>
+                              </ContextMenuContent>
+                            </ContextMenu>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+        </nav>
+      </div>
+    </div>
   );
 }

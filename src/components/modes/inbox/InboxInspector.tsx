@@ -1,18 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  AlertTriangle,
-  CalendarClock,
-  ChevronsLeft,
-  ChevronsRight,
-  ExternalLink,
-  Link2,
-  MapPin,
-  MessageSquare,
-  Plus,
-  SlidersHorizontal,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useAuth } from "../../../context/AuthContext";
 import { useUnfiledInbox } from "../../../hooks/useUnfiledInbox";
 import { useWeddings } from "../../../hooks/useWeddings";
@@ -22,119 +9,69 @@ import {
   updateThreadAutomationMode,
 } from "../../../lib/threadAutomationModeClient";
 import { useInboxMode } from "./InboxModeContext";
-import { useInboxLayout } from "./InboxLayoutContext";
-import { getPipelineMoneyLine } from "../../../data/weddingFinancials";
-import { ProjectStoryAndNotes } from "../../shared/ProjectStoryAndNotes";
-import { extractCoupleNamesForNewInquiry } from "../../../lib/inquiryCoupleNameExtract";
-import { InboxSenderContactActions } from "./InboxSenderContactActions";
+import { routingConfidencePercent } from "../../../lib/aiRoutingFormat";
+import type { Tables } from "../../../types/database.types";
+import type { UnfiledThread } from "../../../hooks/useUnfiledInbox";
 import {
-  PaneInspectorEmptyState,
-  PaneInspectorFrame,
-  PaneInspectorScrollBody,
-  PaneInspectorSectionTitle,
-  PaneQuietCard,
-  PANE_INSPECTOR_IDLE_LIST_CARD,
-  PANE_INSPECTOR_META_LABEL,
-  PANE_INSPECTOR_SECONDARY,
-  PANE_INSPECTOR_TITLE,
-} from "@/components/panes";
+  REDESIGN_AI_CONFIDENCE_LABEL,
+  REDESIGN_AI_INTENT,
+  REDESIGN_AI_REASON,
+  REDESIGN_EVENT_DATE,
+  REDESIGN_EVENT_GUESTS,
+  REDESIGN_EVENT_LOCATION,
+  REDESIGN_EVENT_PACKAGE,
+  REDESIGN_INSPECTOR_LINKED_H4,
+  REDESIGN_INSPECTOR_LINKED_P,
+} from "./inboxRedesignLiterals";
 
-function formatStageLabel(stage: string): string {
-  return stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function packageSummary(w: Pick<Tables<"weddings">, "package_name" | "contract_value">): string {
+  const name = w.package_name?.trim() ?? "";
+  const val = w.contract_value;
+  if (name && val != null) return `${name} · ${val}`;
+  if (name) return name;
+  if (val != null) return String(val);
+  return REDESIGN_EVENT_PACKAGE;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-export function InboxInspector() {
-  const layout = useInboxLayout();
-
-  if (layout?.inspectorCollapsed) {
-    return (
-      <div className="flex h-full min-h-0 flex-col items-center justify-center bg-background px-0.5">
-        <button
-          type="button"
-          onClick={layout.expandInspector}
-          className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
-          title="Expand Ana panel"
-          aria-label="Expand Ana panel"
-        >
-          <ChevronsLeft className="h-5 w-5" strokeWidth={2} />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      {layout ? (
-        <div className="flex shrink-0 items-center justify-end px-2 py-1.5">
-          <button
-            type="button"
-            onClick={layout.collapseInspector}
-            className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground"
-            title="Collapse Ana panel"
-            aria-label="Collapse Ana panel"
-          >
-            <ChevronsRight className="h-4 w-4" strokeWidth={2} />
-          </button>
-        </div>
-      ) : null}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <InboxInspectorBody />
-      </div>
-    </div>
-  );
-}
-
-function InboxInspectorBody() {
-  const { selection } = useInboxMode();
-
-  if (selection.kind === "none") return <IdleState />;
-  if (selection.kind === "thread") return <LinkerState />;
-  return <CrmState />;
-}
-
-function IdleState() {
-  return (
-    <PaneInspectorEmptyState
-      icon={<MessageSquare className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />}
-      message="Select a thread or project to view details."
-    />
-  );
-}
-
-function LinkerState() {
-  const { selection } = useInboxMode();
+/**
+ * Literal structure from `Ana Dashboard.html` `<aside class="pane inspector last">` / `.inspector-body`.
+ * Live values replace copy only where available; otherwise redesign strings stay verbatim.
+ */
+function InspectorRedesignBody({
+  thread,
+  projectWedding,
+}: {
+  thread: UnfiledThread | null;
+  projectWedding: Tables<"weddings"> | null;
+}) {
   const { photographerId } = useAuth();
-  const { activeWeddings, linkThread, convertThreadToInquiry } = useUnfiledInbox();
   const { data: weddings } = useWeddings(photographerId ?? "");
-  const [showLinker, setShowLinker] = useState(false);
-  const [linkingId, setLinkingId] = useState<string | null>(null);
-  const [converting, setConverting] = useState(false);
-  const [convertError, setConvertError] = useState<string | null>(null);
+  const { activeWeddings } = useUnfiledInbox();
+
   const [automationMode, setAutomationMode] = useState<ThreadAutomationMode | null>(null);
   const [automationLoading, setAutomationLoading] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
 
-  const threadId = selection.kind === "thread" ? selection.thread.id : "";
-  const thread = selection.kind === "thread" ? selection.thread : null;
+  const assignedFromThread =
+    thread?.weddingId != null
+      ? (weddings ?? []).find((w) => w.id === thread.weddingId) ??
+        activeWeddings.find((w) => w.id === thread.weddingId) ??
+        null
+      : null;
+
+  const wedding = projectWedding ?? assignedFromThread;
+
+  const threadId = thread?.id ?? "";
 
   useEffect(() => {
-    if (!threadId) return;
+    if (!threadId) {
+      setAutomationMode("draft_only");
+      setAutomationLoading(false);
+      return;
+    }
     let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (!cancelled) {
-        setAutomationLoading(true);
-        setAutomationError(null);
-      }
-    });
+    setAutomationLoading(true);
+    setAutomationError(null);
     void supabase
       .from("threads")
       .select("automation_mode")
@@ -144,10 +81,10 @@ function LinkerState() {
         if (cancelled) return;
         if (error) {
           setAutomationError(error.message);
-          setAutomationMode("auto");
+          setAutomationMode("draft_only");
         } else {
           const m = data?.automation_mode as ThreadAutomationMode | undefined;
-          setAutomationMode(m ?? "auto");
+          setAutomationMode(m ?? "draft_only");
         }
         setAutomationLoading(false);
       });
@@ -168,296 +105,182 @@ function LinkerState() {
     }
   }
 
-  if (selection.kind !== "thread" || !thread) return null;
-  const selectedThread = thread;
-  const meta = selectedThread.ai_routing_metadata;
-  const assignedWedding = selectedThread.weddingId
-    ? weddings.find((w) => w.id === selectedThread.weddingId) ??
-      activeWeddings.find((w) => w.id === selectedThread.weddingId) ??
-      null
-    : null;
+  const meta = thread?.ai_routing_metadata;
+  const intentLine = meta?.classified_intent?.trim() || REDESIGN_AI_INTENT;
+  const confPct = meta != null ? routingConfidencePercent(meta.confidence_score) : null;
+  const confLabel = confPct != null ? `${confPct}%` : REDESIGN_AI_CONFIDENCE_LABEL;
+  const confBarPct = confPct ?? 87;
+  const reasonText = meta?.reasoning?.trim() || REDESIGN_AI_REASON;
 
-  async function handleLink(weddingId: string) {
-    setLinkingId(weddingId);
-    await linkThread(selectedThread.id, weddingId);
-    setLinkingId(null);
-    setShowLinker(false);
-  }
+  const linkedH4 = wedding?.couple_names?.trim() || REDESIGN_INSPECTOR_LINKED_H4;
+  const linkedP = wedding?.story_notes?.trim() || REDESIGN_INSPECTOR_LINKED_P;
+  const pipelineTo = wedding?.id ? `/pipeline/${wedding.id}` : "/pipeline";
 
-  async function handleConvertToInquiry() {
-    setConvertError(null);
-    setConverting(true);
-    const extracted = extractCoupleNamesForNewInquiry({
-      threadTitle: selectedThread.title,
-      latestInboundBody: selectedThread.latestMessageBody,
-      snippet: selectedThread.snippet,
-      sender: selectedThread.sender,
-    });
-    const result = await convertThreadToInquiry(selectedThread.id, {
-      coupleNames: extracted.coupleNames,
-      leadClientName: extracted.leadClientName,
-    });
-    setConverting(false);
-    if (!result.ok) {
-      setConvertError(result.error);
-      return;
-    }
-  }
+  const eventDate = wedding?.wedding_date ? formatDateUk(wedding.wedding_date) : REDESIGN_EVENT_DATE;
+  const eventLoc = wedding?.location?.trim() || REDESIGN_EVENT_LOCATION;
+  const eventPkg = wedding ? packageSummary(wedding) : REDESIGN_EVENT_PACKAGE;
+  const eventGuests = REDESIGN_EVENT_GUESTS;
+
+  const autoMode = automationMode ?? "draft_only";
 
   return (
-    <PaneInspectorFrame>
-      <PaneInspectorScrollBody>
-        {/* Unassigned warning */}
-        {assignedWedding ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[13px] font-medium text-emerald-900">Linked to a project</p>
-                <p className="mt-1 text-[12px] leading-relaxed text-emerald-800/80">
-                  This thread still stays in Inbox, and it is also linked to{" "}
-                  <span className="font-medium text-emerald-950">{assignedWedding?.couple_names ?? "a project"}</span>.
-                </p>
-              </div>
-              {selectedThread.weddingId ? (
-                <Link
-                  to={`/pipeline/${selectedThread.weddingId}`}
-                  className="shrink-0 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-[12px] font-semibold text-emerald-900 transition hover:bg-emerald-100"
-                >
-                  Open project
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" strokeWidth={1.75} />
-              <div>
-                <p className="text-[13px] font-medium text-amber-900">
-                  This thread is unassigned
-                </p>
-                <p className="mt-1 text-[12px] leading-relaxed text-amber-800/80">
-                  Link it to an existing project or convert it into a new inquiry.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+    <>
+      <div className="card-ana linked">
+        <div className="eyebrow">Linked project</div>
+        <h4>{linkedH4}</h4>
+        <p>{linkedP}</p>
+        <Link className="open-link" to={pipelineTo}>
+          Open in Pipeline →
+        </Link>
+      </div>
 
-        {/* Action buttons */}
-        <div className="space-y-2">
-          {!assignedWedding ? (
-            <>
+      <div>
+        <div className="insp-label">Event</div>
+        <div className="kv">
+          <div className="row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+              <rect x="3" y="5" width="18" height="16" rx="1" />
+              <path d="M3 10h18M8 3v4M16 3v4" />
+            </svg>
+            <div>
+              <div className="k">Date</div>
+              <div className="v">{eventDate}</div>
+            </div>
+          </div>
+          <div className="row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <div>
+              <div className="k">Location</div>
+              <div className="v">{eventLoc}</div>
+            </div>
+          </div>
+          <div className="row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+              <path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+            <div>
+              <div className="k">Package</div>
+              <div className="v">{eventPkg}</div>
+            </div>
+          </div>
+          <div className="row">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+            </svg>
+            <div>
+              <div className="k">Guests</div>
+              <div className="v">{eventGuests}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ai-reason" style={{ ["--ana-inspector-conf-pct" as string]: `${confBarPct}%` }}>
+        <div className="insp-label">Ana&apos;s reasoning</div>
+        <div className="kv" style={{ gap: 6 }}>
+          <div>
+            <span className="insp-label" style={{ color: "var(--fg-2)", margin: 0 }}>
+              Intent:
+            </span>{" "}
+            <span style={{ fontSize: 13, color: "var(--fg-1)" }}>{intentLine}</span>
+          </div>
+          <div>
+            <span className="insp-label" style={{ color: "var(--fg-2)", margin: 0 }}>
+              Confidence:
+            </span>{" "}
+            <span style={{ fontSize: 13, color: "var(--fg-1)" }}>{confLabel}</span>
+          </div>
+        </div>
+        <div className="conf-bar">
+          <i />
+        </div>
+        <p className="reason">{reasonText}</p>
+      </div>
+
+      <div>
+        <div className="insp-label">Outbound automation</div>
+        {automationLoading ? null : (
+          <div className="auto-mode">
+            <div className="auto-seg">
               <button
                 type="button"
-                onClick={() => void handleConvertToInquiry()}
-                disabled={converting}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563eb] px-4 py-2.5 text-[12px] font-semibold text-white transition hover:bg-[#2563eb]/90 disabled:opacity-50"
+                data-active={autoMode === "auto" ? "true" : "false"}
+                onClick={() => void handleAutomationChange("auto")}
+                disabled={!thread}
               >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                {converting ? "Creating…" : "Convert to New Inquiry"}
+                Auto
               </button>
-              {convertError ? (
-                <p className="text-[11px] text-destructive">{convertError}</p>
-              ) : null}
-            </>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setShowLinker(!showLinker)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-[12px] font-semibold text-foreground transition hover:bg-accent"
-          >
-            <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
-            {assignedWedding ? "Move to Different Project" : "Link to Existing Project"}
-          </button>
-        </div>
-
-        {/* Linker dropdown */}
-        {showLinker && (
-          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
-            <PaneInspectorSectionTitle className="mb-0">Select a project</PaneInspectorSectionTitle>
-            {activeWeddings.length === 0 ? (
-              <p className={cn("mt-2", PANE_INSPECTOR_SECONDARY)}>No active projects found.</p>
-            ) : (
-              <ul className="mt-2 max-h-[200px] overflow-y-auto">
-                {activeWeddings.map((w) => (
-                  <li key={w.id}>
-                    <button
-                      type="button"
-                      onClick={() => handleLink(w.id)}
-                      disabled={linkingId !== null}
-                      className="flex w-full items-center gap-2.5 rounded-md border border-transparent py-2 text-left text-[12px] transition-colors hover:bg-muted/20 disabled:opacity-50 dark:hover:bg-white/[0.06]"
-                    >
-                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2563eb]/10 text-[9px] font-semibold text-[#2563eb]">
-                        {w.couple_names.charAt(0)}
-                      </div>
-                      <span className="font-medium text-foreground">{w.couple_names}</span>
-                      {linkingId === w.id && (
-                        <span className="ml-auto text-[11px] text-muted-foreground">Linking…</span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {/* Phase 11 Step 11B — outbound control: thread automation mode */}
-        <PaneQuietCard>
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
-            <PaneInspectorSectionTitle className="mb-0">Outbound automation</PaneInspectorSectionTitle>
-          </div>
-          <p className={cn("mt-1.5", PANE_INSPECTOR_SECONDARY)}>
-            Controls how Ana handles this thread after send (draft queue vs full auto). Phase 11B inbox slice.
-          </p>
-          {automationLoading ? (
-            <p className={cn("mt-2", PANE_INSPECTOR_SECONDARY)}>Loading mode…</p>
-          ) : (
-            <label className="mt-2 block text-[13px]">
-              <span className="sr-only">Automation mode</span>
-              <select
-                value={automationMode ?? "auto"}
-                onChange={(e) => void handleAutomationChange(e.target.value as ThreadAutomationMode)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-2 py-2 text-[13px] text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              <button
+                type="button"
+                data-active={autoMode === "draft_only" ? "true" : "false"}
+                onClick={() => void handleAutomationChange("draft_only")}
+                disabled={!thread}
               >
-                <option value="auto">Auto — AI may draft and queue outbound per policy</option>
-                <option value="draft_only">Draft only — AI drafts; you approve all sends</option>
-                <option value="human_only">Human only — no AI drafts on this thread</option>
-              </select>
-            </label>
-          )}
-          {automationError ? (
-            <p className="mt-2 text-[12px] text-red-600">{automationError}</p>
-          ) : null}
-        </PaneQuietCard>
-
-        {/* Sender info */}
-        <div>
-          <PaneInspectorSectionTitle>Sender</PaneInspectorSectionTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 text-[13px] font-medium text-foreground">
-              {selectedThread.sender || "Unknown"}
-            </p>
-            {selectedThread.sender ? (
-              <InboxSenderContactActions sender={selectedThread.sender} />
-            ) : null}
-          </div>
-        </div>
-
-        {/* AI suggestion */}
-        {meta && (
-          <div>
-            <PaneInspectorSectionTitle>AI Suggestion</PaneInspectorSectionTitle>
-            <div className="space-y-1.5 text-[12px]">
-              <p>
-                <span className="text-muted-foreground">Intent:</span>{" "}
-                {meta.classified_intent}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Confidence:</span>{" "}
-                {Math.round(meta.confidence_score * 100)}%
-              </p>
-              <p className="leading-relaxed text-muted-foreground">{meta.reasoning}</p>
+                Draft only
+              </button>
+              <button
+                type="button"
+                data-active={autoMode === "human_only" ? "true" : "false"}
+                onClick={() => void handleAutomationChange("human_only")}
+                disabled={!thread}
+              >
+                Human only
+              </button>
             </div>
+            <p className="auto-desc">
+              Ana will keep drafting replies for your approval on this thread. She won&apos;t send anything without you.
+            </p>
           </div>
         )}
-      </PaneInspectorScrollBody>
-    </PaneInspectorFrame>
+        {automationError ? (
+          <p className="insp-mini-err" role="alert">
+            {automationError}
+          </p>
+        ) : null}
+      </div>
+    </>
   );
 }
 
-function CrmState() {
+function formatDateUk(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+export function InboxInspector() {
+  return (
+    <aside className="inspector pane last flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="pane-head">
+        <h3>Context</h3>
+      </div>
+      <div className="inspector-body min-h-0 flex-1">
+        <InboxInspectorInner />
+      </div>
+    </aside>
+  );
+}
+
+function InboxInspectorInner() {
   const { selection } = useInboxMode();
   const { photographerId } = useAuth();
   const { data: weddings } = useWeddings(photographerId ?? "");
 
-  if (selection.kind !== "project") return null;
-
-  const wedding = weddings.find((w) => w.id === selection.projectId);
-
-  if (!wedding) {
-    return (
-      <PaneInspectorEmptyState
-        icon={<MessageSquare className="h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />}
-        message="Project not found."
-      />
-    );
+  if (selection.kind === "thread") {
+    return <InspectorRedesignBody thread={selection.thread} projectWedding={null} />;
   }
 
-  const moneyLine = getPipelineMoneyLine(wedding.id);
+  if (selection.kind === "project") {
+    const w = weddings?.find((x) => x.id === selection.projectId) ?? null;
+    return <InspectorRedesignBody thread={null} projectWedding={w} />;
+  }
 
-  return (
-    <PaneInspectorFrame>
-      <PaneInspectorScrollBody>
-        {/* Project header */}
-        <div>
-          <h2 className={PANE_INSPECTOR_TITLE}>{wedding.couple_names}</h2>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <span
-              className={cn(
-                "inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize",
-                stageBadge(wedding.stage),
-              )}
-            >
-              {formatStageLabel(wedding.stage)}
-            </span>
-          </div>
-        </div>
-
-        {/* Key details */}
-        <div className="space-y-3">
-          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
-            <div className="flex items-start gap-2.5">
-              <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-              <div>
-                <p className={PANE_INSPECTOR_META_LABEL}>Event Date</p>
-                <p className="mt-0.5 text-[13px] text-foreground">{formatDate(wedding.wedding_date)}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
-            <div className="flex items-start gap-2.5">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-              <div>
-                <p className={PANE_INSPECTOR_META_LABEL}>Location</p>
-                <p className="mt-0.5 text-[13px] text-foreground">{wedding.location}</p>
-              </div>
-            </div>
-          </div>
-
-          {moneyLine && (
-            <div className={PANE_INSPECTOR_IDLE_LIST_CARD}>
-              <p className={PANE_INSPECTOR_META_LABEL}>Financials</p>
-              <p className="mt-0.5 text-[13px] text-foreground">{moneyLine}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Open in Pipeline link */}
-        <Link
-          to={`/pipeline/${wedding.id}`}
-          className={cn(
-            PANE_INSPECTOR_IDLE_LIST_CARD,
-            "flex items-center justify-between text-[13px] font-medium text-foreground transition-colors hover:bg-muted/25 dark:hover:bg-white/[0.08]",
-          )}
-        >
-          Open in Pipeline
-          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
-        </Link>
-
-        <ProjectStoryAndNotes projectId={wedding.id} />
-      </PaneInspectorScrollBody>
-    </PaneInspectorFrame>
-  );
-}
-
-function stageBadge(stage: string): string {
-  const INQUIRY = new Set(["inquiry", "consultation", "proposal_sent", "contract_out"]);
-  const ACTIVE = new Set(["booked", "prep"]);
-  if (INQUIRY.has(stage)) return "border-amber-200/80 bg-amber-50 text-amber-900";
-  if (ACTIVE.has(stage)) return "border-emerald-200/80 bg-emerald-50 text-emerald-900";
-  return "border-border bg-muted/60 text-muted-foreground";
+  return <InspectorRedesignBody thread={null} projectWedding={null} />;
 }

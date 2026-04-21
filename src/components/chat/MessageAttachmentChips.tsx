@@ -28,7 +28,14 @@ function storageBucket(a: ChatAttachmentRow): string {
   return MESSAGE_ATTACHMENT_MEDIA_BUCKET;
 }
 
-export function MessageAttachmentChips({ attachments }: { attachments: ChatAttachmentRow[] }) {
+export function MessageAttachmentChips({
+  attachments,
+  variant = "default",
+}: {
+  attachments: ChatAttachmentRow[];
+  /** Tighter chips for Ana inbox thread messages. */
+  variant?: "default" | "inboxAna";
+}) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const open = useCallback(async (a: ChatAttachmentRow) => {
@@ -52,6 +59,11 @@ export function MessageAttachmentChips({ attachments }: { attachments: ChatAttac
 
   if (attachments.length === 0) return null;
 
+  const chipCls =
+    variant === "inboxAna"
+      ? "msg-attach-chip inline-flex max-w-full items-center gap-1.5 text-left transition disabled:opacity-60"
+      : "inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-background/80 px-2 py-1 text-left text-[11px] font-medium text-foreground shadow-sm transition hover:bg-accent disabled:opacity-60";
+
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {attachments.map((a) => (
@@ -60,7 +72,7 @@ export function MessageAttachmentChips({ attachments }: { attachments: ChatAttac
           type="button"
           onClick={() => void open(a)}
           disabled={loadingId === a.id}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-background/80 px-2 py-1 text-left text-[11px] font-medium text-foreground shadow-sm transition hover:bg-accent disabled:opacity-60"
+          className={chipCls}
           title={displayName(a)}
         >
           {loadingId === a.id ? (

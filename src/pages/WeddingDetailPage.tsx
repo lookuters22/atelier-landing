@@ -44,12 +44,15 @@ export function mapRowToEntry(row: Tables<"weddings">): WeddingEntry {
           maximumFractionDigits: 0,
         }).format(v);
 
-  const stage = row.stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const rawStage = row.stage ?? "";
+  const stage = rawStage
+    ? rawStage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    : "—";
 
   return {
-    couple: row.couple_names,
+    couple: row.couple_names ?? "",
     when,
-    where: row.location,
+    where: row.location ?? "",
     stage,
     package: row.package_name ?? "\u2014",
     value: fmt(row.contract_value),

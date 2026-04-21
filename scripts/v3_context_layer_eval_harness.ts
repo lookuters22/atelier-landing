@@ -489,6 +489,7 @@ async function seedForCondition(
   const { error: me } = await supabase.from("memories").insert({
     photographer_id: photographerId,
     wedding_id: weddingId,
+    scope: "project",
     type: V3_VERIFY_MEMORY_TYPE,
     title: `CTX eval case note (${runId})`,
     summary: memSummary.slice(0, 500),

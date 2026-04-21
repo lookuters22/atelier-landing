@@ -632,6 +632,9 @@ export const triageFunction = inngest.createFunction(
           reasonCode: nonWeddingBusinessInquiryOutcome.reasonCode,
           draftId: nonWeddingBusinessInquiryOutcome.draftId,
           escalationId: nonWeddingBusinessInquiryOutcome.escalationId,
+          decisionSource: nonWeddingBusinessInquiryOutcome.decisionSource,
+          profileFit: nonWeddingBusinessInquiryOutcome.profileFit,
+          profileFitReasonCodes: nonWeddingBusinessInquiryOutcome.profileFitReasonCodes,
         });
 
         await step.run("persist-non-wedding-business-inquiry-routing-metadata", async () => {

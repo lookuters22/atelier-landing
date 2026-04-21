@@ -1,3 +1,8 @@
+/**
+ * DayPicker wrapper for popovers / generic date picking elsewhere in the app.
+ * The Calendar mode left pane uses a custom mini calendar in `CalendarContextList`
+ * (Ana redesign `.mini-cal` — see `index.css` under `.ana-calendar-port .mini-cal`).
+ */
 import * as React from "react"
 import {
   ChevronDownIcon,

@@ -54,6 +54,8 @@ export function sanitizeAgentContextForOrchestratorPrompt(ctx: AgentContext): Re
   const memoryHeaders = ctx.memoryHeaders.map((h) => ({
     id: h.id,
     wedding_id: h.wedding_id,
+    person_id: h.person_id,
+    scope: h.scope,
     type: h.type,
     title: h.title,
     summary: truncate(h.summary, MAX_MEMORY_SUMMARY_CHARS),
