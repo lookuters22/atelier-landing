@@ -58,6 +58,19 @@ describe("insertAuthorizedCaseExceptionForOperatorAssistant", () => {
           },
         };
       }
+      if (table === "operator_assistant_write_audit") {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: { id: "audit-ace-1" },
+                  error: null,
+                }),
+            }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     });
 
@@ -73,8 +86,10 @@ describe("insertAuthorizedCaseExceptionForOperatorAssistant", () => {
     });
 
     expect(out.id).toBe("ace-1");
+    expect(out.auditId).toBe("audit-ace-1");
     expect(tables[0]).toBe("weddings");
     expect(tables).toContain("playbook_rules");
     expect(tables.filter((t) => t === "authorized_case_exceptions").length).toBeGreaterThanOrEqual(2);
+    expect(tables).toContain("operator_assistant_write_audit");
   });
 });

@@ -15,8 +15,11 @@ import { IDLE_OPERATOR_QUERY_ENTITY_RESOLUTION } from "../../context/resolveOper
 import { deriveAssistantPlaybookCoverageSummary } from "../../../../../src/lib/deriveAssistantPlaybookCoverageSummary.ts";
 import { getAssistantAppCatalogForContext } from "../../../../../src/lib/operatorAssistantAppCatalog.ts";
 import {
+  bulkTriageSpecialistToolPayload,
   executeOperatorReadOnlyLookupTool,
+  investigationSpecialistToolPayload,
   MAX_PROJECT_DETAIL_STORY_NOTES_CHARS,
+  maxOperatorLookupToolCallsPerTurn,
   OPERATOR_READ_ONLY_LOOKUP_TOOLS,
   projectDetailsPayloadFromFocusedFacts,
 } from "./operatorAssistantReadOnlyLookupTools.ts";
@@ -57,6 +60,12 @@ function minimalCtx(): AssistantContext {
     operatorInquiryCountSnapshot: IDLE_ASSISTANT_INQUIRY_COUNT_SNAPSHOT,
     operatorCalendarSnapshot: IDLE_ASSISTANT_CALENDAR_SNAPSHOT,
     operatorTriage: IDLE_OPERATOR_ANA_TRIAGE,
+    escalationResolverFocus: null,
+    offerBuilderSpecialistFocus: null,
+    invoiceSetupSpecialistFocus: null,
+    investigationSpecialistFocus: null,
+    playbookAuditSpecialistFocus: null,
+    bulkTriageSpecialistFocus: null,
     retrievalLog: {
       mode: "assistant_query",
       queryDigest: { charLength: 1, fingerprint: "ab" },
@@ -80,6 +89,48 @@ function minimalCtx(): AssistantContext {
     },
   };
 }
+
+describe("maxOperatorLookupToolCallsPerTurn / bulkTriageSpecialistToolPayload (S6)", () => {
+  it("uses bulk triage cap when bulk triage focus is set", () => {
+    const ctx: AssistantContext = {
+      ...minimalCtx(),
+      bulkTriageSpecialistFocus: { toolPayload: { mode: "bulk_triage_queue_v1" } },
+    };
+    expect(maxOperatorLookupToolCallsPerTurn(ctx)).toBe(4);
+  });
+
+  it("bulk triage payload names mode and triage behavior", () => {
+    const p = bulkTriageSpecialistToolPayload();
+    expect(p.mode).toBe("bulk_triage_queue_v1");
+    expect(p.maxLookupToolCallsThisTurn).toBe(4);
+    expect(p.triageBehavior).toBeDefined();
+  });
+});
+
+describe("maxOperatorLookupToolCallsPerTurn / investigationSpecialistToolPayload (S4)", () => {
+  it("uses the default read-only lookup cap without investigation focus", () => {
+    expect(maxOperatorLookupToolCallsPerTurn(minimalCtx())).toBe(3);
+  });
+
+  it("raises the cap when investigation specialist focus is set", () => {
+    const ctx: AssistantContext = {
+      ...minimalCtx(),
+      investigationSpecialistFocus: { toolPayload: { mode: "deep_search_investigation_v1" } },
+    };
+    expect(maxOperatorLookupToolCallsPerTurn(ctx)).toBe(5);
+  });
+
+  it("investigation payload names mode, tool list, and evidence discipline", () => {
+    const p = investigationSpecialistToolPayload();
+    expect(p.mode).toBe("deep_search_investigation_v1");
+    expect(p.maxLookupToolCallsThisTurn).toBe(5);
+    expect(p.defaultMaxLookupToolCalls).toBe(3);
+    expect(Array.isArray(p.readOnlyLookupToolNames)).toBe(true);
+    expect((p.readOnlyLookupToolNames as string[]).length).toBe(OPERATOR_READ_ONLY_LOOKUP_TOOLS.length);
+    expect(typeof p.evidenceDiscipline).toBe("string");
+    expect(typeof p.notInScope).toBe("string");
+  });
+});
 
 describe("executeOperatorReadOnlyLookupTool", () => {
   it("exposes operator_lookup_thread_messages and operator_lookup_draft in the tool list", () => {

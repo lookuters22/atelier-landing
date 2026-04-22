@@ -3,7 +3,10 @@
  * No writes; tenant-scoped; reuses existing context helpers.
  */
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import type { AssistantContext, AssistantFocusedProjectFacts } from "../../../../../src/types/assistantContext.types.ts";
+import type {
+  AssistantContext,
+  AssistantFocusedProjectFacts,
+} from "../../../../../src/types/assistantContext.types.ts";
 import { fetchAssistantQueryEntityIndex } from "../../context/fetchAssistantQueryEntityIndex.ts";
 import {
   resolveOperatorQueryEntitiesFromIndex,
@@ -40,6 +43,58 @@ import { mapInvoiceTemplateToAssistantRead, MAX_INVOICE_FOOTER_TOOL_CHARS } from
 
 export const MAX_LOOKUP_TOOL_QUERY_CHARS = 200;
 export const MAX_LOOKUP_TOOL_CALLS_PER_TURN = 3;
+/** S4 — investigation mode allows more read-only lookups in one assistant turn (still bounded). */
+export const MAX_LOOKUP_TOOL_CALLS_INVESTIGATION_MODE = 5;
+/** S6 — bulk queue triage mode: slightly higher cap to drill into a few threads while staying bounded. */
+export const MAX_LOOKUP_TOOL_CALLS_BULK_TRIAGE_MODE = 4;
+
+export function maxOperatorLookupToolCallsPerTurn(ctx: AssistantContext): number {
+  if (ctx.investigationSpecialistFocus) return MAX_LOOKUP_TOOL_CALLS_INVESTIGATION_MODE;
+  if (ctx.bulkTriageSpecialistFocus) return MAX_LOOKUP_TOOL_CALLS_BULK_TRIAGE_MODE;
+  return MAX_LOOKUP_TOOL_CALLS_PER_TURN;
+}
+
+/** Static contract JSON for {@link AssistantContext.bulkTriageSpecialistFocus} (S6). */
+export function bulkTriageSpecialistToolPayload(): Record<string, unknown> {
+  const readOnlyLookupToolNames = OPERATOR_READ_ONLY_LOOKUP_TOOLS.map((t) => t.function.name);
+  return {
+    didRun: true,
+    mode: "bulk_triage_queue_v1",
+    groundedInContext: [
+      "**Operator queue / Today** block: counts, samples, topActions — same bounded snapshot as the dashboard feed (not a hidden priority engine).",
+      "**Queue highlights** when present — deterministic from that snapshot (F5), not ML scoring.",
+    ],
+    triageBehavior: {
+      groupAndPrioritize: "Use only evidence in Context; say when counts are zero or samples are truncated.",
+      perItem: "Recommend explicit next steps per row without claiming unseen message bodies.",
+      proposals: "At most **one** proposedAction this turn — operator confirms individually; no silent multi-row writes.",
+    },
+    readOnlyLookupToolNames,
+    maxLookupToolCallsThisTurn: MAX_LOOKUP_TOOL_CALLS_BULK_TRIAGE_MODE,
+    defaultMaxLookupToolCalls: MAX_LOOKUP_TOOL_CALLS_PER_TURN,
+    notInScope: [
+      "Autonomous queue draining",
+      "Batch RPCs or multi-row updates",
+      "Invented urgency ranks beyond the snapshot",
+    ],
+  };
+}
+
+/** Static contract JSON for {@link AssistantContext.investigationSpecialistFocus} (S4). */
+export function investigationSpecialistToolPayload(): Record<string, unknown> {
+  const readOnlyLookupToolNames = OPERATOR_READ_ONLY_LOOKUP_TOOLS.map((t) => t.function.name);
+  return {
+    didRun: true,
+    mode: "deep_search_investigation_v1",
+    readOnlyLookupToolNames,
+    maxLookupToolCallsThisTurn: MAX_LOOKUP_TOOL_CALLS_INVESTIGATION_MODE,
+    defaultMaxLookupToolCalls: MAX_LOOKUP_TOOL_CALLS_PER_TURN,
+    evidenceDiscipline:
+      "Cite only Context blocks and read-only tool JSON from this turn. Label **facts** (quoted fields) vs **inference**. If something was not retrieved, say so — do not invent CRM rows, email bodies, counts, or escalations.",
+    notInScope:
+      "Not bulk triage, not web search, not hidden confidence — only tenant-scoped tools listed in readOnlyLookupToolNames.",
+  };
+}
 /** Max characters of `storyNotes` in tool JSON (row may be longer; slice contract: ~400 char excerpt). */
 export const MAX_PROJECT_DETAIL_STORY_NOTES_CHARS = 400;
 

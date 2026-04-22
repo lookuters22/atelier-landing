@@ -250,7 +250,7 @@ function formatOperatorStateSummary(s: AssistantOperatorStateSummary): string {
     "(**Read-only snapshot** — same sources as the operator Today / Zen feed. **Counts and named samples** are the only queue evidence; **do not invent** items, sends, or SLA urgency. Suggest next steps; do not assert completions.)",
   );
   lines.push("");
-  lines.push("### Snapshot-derived priorities (from counts only)");
+  lines.push("### Snapshot-derived priorities (counts + samples; evidence-backed)");
   for (const h of s.queueHighlights) {
     lines.push(`- ${h}`);
   }
@@ -656,6 +656,72 @@ export function formatAssistantContextForOperatorLlm(
     }),
   );
   parts.push("");
+
+  if (ctx.escalationResolverFocus) {
+    parts.push("## Escalation resolver (specialist mode — pinned)");
+    parts.push(
+      "*(S1 — single pinned **escalation_requests** row. Help the operator interpret evidence and draft resolution text. **Do not** claim the escalation is closed until they confirm on a card. If **selectionNote** is not **ok** or **escalation.status** is not **open**, explain and **do not** emit an **escalation_resolve** proposal.)*",
+    );
+    parts.push("```json");
+    parts.push(clip(JSON.stringify(ctx.escalationResolverFocus.toolPayload), 14_000));
+    parts.push("```");
+    parts.push("");
+  }
+
+  if (ctx.offerBuilderSpecialistFocus) {
+    parts.push("## Offer builder specialist (pinned project)");
+    parts.push(
+      "*(S2 — single pinned **studio_offer_builder_projects** row. Prioritize this document for naming / outline questions. **No** raw **puck_data** or layout edits in chat. Bounded **metadata** changes use **offer_builder_change_proposal** only when **selectionNote** is **ok** and **project_id** matches the pin. If **selectionNote** is not **ok**, explain incomplete or denied access — **do not** emit that proposal kind.)*",
+    );
+    parts.push("```json");
+    parts.push(clip(JSON.stringify(ctx.offerBuilderSpecialistFocus.toolPayload), 14_000));
+    parts.push("```");
+    parts.push("");
+  }
+
+  if (ctx.invoiceSetupSpecialistFocus) {
+    parts.push("## Invoice setup specialist (pinned template lane)");
+    parts.push(
+      "*(S3 — tenant **studio_invoice_setup** row (one per photographer). Prioritize grounded template fields; **logo** is summary-only — **no** binary or **logoDataUrl** in chat. **invoice_setup_change_proposal** only when **selectionNote** is **ok** (saved row). If **no_invoice_setup_row**, explain — **do not** emit that proposal kind.)*",
+    );
+    parts.push("```json");
+    parts.push(clip(JSON.stringify(ctx.invoiceSetupSpecialistFocus.toolPayload), 14_000));
+    parts.push("```");
+    parts.push("");
+  }
+
+  if (ctx.investigationSpecialistFocus) {
+    parts.push("## Deep search / investigation mode (S4)");
+    parts.push(
+      "*(Read-first lane: chain **operator_lookup_*** tools on purpose; **cite** tool JSON and Context; **say unknown** when evidence was not fetched — **no** invented email bodies, counts, or money. **Not** bulk triage. Higher read-only tool budget this turn — see **maxLookupToolCallsThisTurn** in the JSON.)*",
+    );
+    parts.push("```json");
+    parts.push(clip(JSON.stringify(ctx.investigationSpecialistFocus.toolPayload), 14_000));
+    parts.push("```");
+    parts.push("");
+  }
+
+  if (ctx.playbookAuditSpecialistFocus) {
+    parts.push("## Rule authoring / audit mode (S5)");
+    parts.push(
+      "*(Playbook policy lane: use **Playbook** + coverage summary + **Authorized case exceptions** in Context. **playbook_rule_candidate** only for staged reusable rules — confirm in chat; promote on **Rule candidates (review)**. **No** direct **playbook_rules** edits. Server drops other proposal kinds in this mode.)*",
+    );
+    parts.push("```json");
+    parts.push(clip(JSON.stringify(ctx.playbookAuditSpecialistFocus.toolPayload), 14_000));
+    parts.push("```");
+    parts.push("");
+  }
+
+  if (ctx.bulkTriageSpecialistFocus) {
+    parts.push("## Bulk queue triage mode (S6)");
+    parts.push(
+      "*(Today / operator queue lane: use **Operator queue / Today** counts, samples, **topActions**, and **queue highlights** only — bounded like the dashboard. Discuss multiple items on purpose; **at most one** confirmable **proposedActions** entry this turn. No batch automation.)*",
+    );
+    parts.push("```json");
+    parts.push(clip(JSON.stringify(ctx.bulkTriageSpecialistFocus.toolPayload), 14_000));
+    parts.push("```");
+    parts.push("");
+  }
 
   if (typeof weatherMd === "string" && weatherMd.trim().length > 0) {
     parts.push("## Weather lookup (external tool — Open-Meteo)");

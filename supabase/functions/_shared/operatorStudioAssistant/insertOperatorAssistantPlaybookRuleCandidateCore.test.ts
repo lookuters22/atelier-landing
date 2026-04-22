@@ -4,21 +4,36 @@ import { insertPlaybookRuleCandidateForOperatorAssistant } from "./insertOperato
 describe("insertPlaybookRuleCandidateForOperatorAssistant", () => {
   it("inserts into playbook_rule_candidates with service client (not playbook_rules)", async () => {
     const fromMock = vi.fn().mockImplementation((table: string) => {
-      expect(table).toBe("playbook_rule_candidates");
-      return {
-        insert: (row: { proposed_action_key?: string }) => {
-          expect((row as { proposed_action_key: string }).proposed_action_key).toBe("key_a");
-          return {
+      if (table === "playbook_rule_candidates") {
+        return {
+          insert: (row: { proposed_action_key?: string }) => {
+            expect((row as { proposed_action_key: string }).proposed_action_key).toBe("key_a");
+            return {
+              select: () => ({
+                single: () =>
+                  Promise.resolve({
+                    data: { id: "cand-1" },
+                    error: null,
+                  }),
+              }),
+            };
+          },
+        };
+      }
+      if (table === "operator_assistant_write_audit") {
+        return {
+          insert: () => ({
             select: () => ({
               single: () =>
                 Promise.resolve({
-                  data: { id: "cand-1" },
+                  data: { id: "audit-cand-1" },
                   error: null,
                 }),
             }),
-          };
-        },
-      };
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
     });
 
     const supabase = { from: fromMock } as never;
@@ -34,6 +49,7 @@ describe("insertPlaybookRuleCandidateForOperatorAssistant", () => {
     });
 
     expect(out.id).toBe("cand-1");
+    expect(out.auditId).toBe("audit-cand-1");
   });
 
   it("verifies wedding ownership before insert when weddingId is set", async () => {
@@ -65,6 +81,18 @@ describe("insertPlaybookRuleCandidateForOperatorAssistant", () => {
           }),
         };
       }
+      if (table === "operator_assistant_write_audit") {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () => {
+                order.push("audit");
+                return Promise.resolve({ data: { id: "audit-c2" }, error: null });
+              },
+            }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     });
 
@@ -78,6 +106,6 @@ describe("insertPlaybookRuleCandidateForOperatorAssistant", () => {
       proposedChannel: null,
       weddingId: "w1",
     });
-    expect(order).toEqual(["weddings", "candidates"]);
+    expect(order).toEqual(["weddings", "candidates", "audit"]);
   });
 });

@@ -10,6 +10,30 @@ import { mapInvoiceTemplateToAssistantRead, MAX_INVOICE_FOOTER_CONTEXT_CHARS } f
 const NO_ROW_NOTE =
   "No `studio_invoice_setup` row for this tenant in this read — use **Settings → Invoice setup** in the app if the studio has not saved template data yet.";
 
+const S3_PIN_EVIDENCE_NOTE =
+  "Grounded from **studio_invoice_setup** for this tenant. **Logo** is summary-only (hasLogo / mime / size) — **never** raw image bytes in chat or proposals.";
+
+/** Compact JSON for S3 specialist context / LLM (same read as normal `studioInvoiceSetup`, re-serialized for the pin block). */
+export function invoiceSetupSpecialistToolPayload(read: AssistantStudioInvoiceSetupRead): Record<string, unknown> {
+  return {
+    didRun: true,
+    selectionNote: read.hasRow ? "ok" : "no_invoice_setup_row",
+    template: {
+      hasRow: read.hasRow,
+      updatedAt: read.updatedAt,
+      legalName: read.legalName,
+      invoicePrefix: read.invoicePrefix,
+      paymentTerms: read.paymentTerms,
+      accentColor: read.accentColor,
+      footerNote: read.footerNote,
+      footerNoteTruncated: read.footerNoteTruncated,
+      logo: read.logo,
+    },
+    readNote: read.note,
+    evidenceNote: S3_PIN_EVIDENCE_NOTE,
+  };
+}
+
 export async function fetchAssistantStudioInvoiceSetupRead(
   supabase: SupabaseClient<Database>,
   photographerId: string,

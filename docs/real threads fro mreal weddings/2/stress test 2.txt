@@ -1,0 +1,49 @@
+1. Notepad Extractions (Fluid Memory)
+The background memory worker needs to catch some highly specific, non-standard constraints from this thread and pin them to Chanthima's dossier:
+
+Dual-Project Reality: Chanthima is booking two separate weddings simultaneously (Cambodia and Italy).
+
+Contractual Customizations: The agreement was explicitly modified to include "1000+ edited photos," and clauses 13 & 14 were adjusted for a specific 30-photo exception.
+
+Billing & Banking Constraints: Her primary billing address and passport are Cambodian. Crucial routing note: Her bank blocks direct transfers to Serbian accounts. All future invoices must be routed through the UK bank account.
+
+Communication Habits: She uses Instagram DMs to send visual inspiration and WhatsApp to send logistical documents (timelines) directly to Danilo.
+
+⚡ 2. Tool Triggers (The Orchestrator)
+Here is where the Orchestrator would need to fire its specific tools to navigate this interaction successfully:
+
+Pre-Flight (Entity Resolution):
+
+Trigger: [Tue, Oct 29, 2024]
+
+Action: Ana needs to recognize that a single email thread is being used to discuss two distinct database files (Wedding_ID_Cambodia and Wedding_ID_Italy). The system must map both contexts so Ana doesn't accidentally send the Cambodia invoice for the Italy event.
+
+Tool: check_calendar & generate_meeting:
+
+Trigger: [Thu, Oct 24, 2024] and [Fri, Dec 20, 2024]
+
+Action: Ping the calendar and generate Zoom links for the initial consultation and the pre-wedding prep call.
+
+Tool: escalate_to_boss:
+
+Trigger 1: [Mon, Oct 28, 2024 at 6:09 PM] Chanthima states, "we’ve agreed on 1000+ edited photos" and has a question about a contract clause. (AI must halt: It cannot negotiate deliverables or interpret legal contract clauses on its own).
+
+Trigger 2: [Mon, Jan 13, 2025 at 12:47 PM] Chanthima states her bank won't let her transfer to Serbia and asks for a US account. (AI must halt: It cannot authorize new banking routes or invent account numbers. The boss must step in to offer the UK account).
+
+🚨 3. Architecture Gaps (Where the humans got messy)
+This thread highlighted three major blind spots where a standard AI would trip over itself. Here is how we tighten the architecture:
+
+Gap A: The Multi-Channel Sync Problem (The "Silo" Effect)
+On January 22nd, Ana emails Chanthima asking for the wedding timeline. Chanthima politely replies with it, but Ana then has to send an awkward apology because Danilo already received the timeline via WhatsApp.
+
+The Fix: Magic Manager needs a simple "Mute/Override" toggle on the dashboard. If the photographer gets a deliverable via Instagram or WhatsApp while out shooting, they need to be able to tap a button on their phone that tells the AI: "I have the timeline. Stop asking for it." Otherwise, Ana looks disconnected from the rest of the team.
+
+Gap B: The Real-Life Emergency (The Global Pause)
+On December 25th, Ana has to reschedule a call because Danilo's son broke his arm. An AI cannot predict real-life human emergencies.
+
+The Fix: The system needs a "Global Emergency Pause" button. If a photographer has a personal emergency, they hit this button, and the Inngest queue instantly freezes all outgoing automated emails (like payment reminders or timeline requests) so the AI doesn't appear insensitive by demanding a deposit while the boss is at the hospital.
+
+Gap C: The Dual-Event Thread
+Chanthima is discussing both her Cambodia and Italy weddings in the exact same email chain. If the AI relies strictly on thread_id to know what to talk about, it will completely mix up the pricing and dates.
+
+The Fix: The Orchestrator's prompt needs a strict disambiguation rule. If the Entity Resolution detects two active weddings for the same email address, the AI must explicitly clarify which event it is referencing in every single draft (e.g., "I've attached the invoice for the Cambodia travel expenses specifically...").

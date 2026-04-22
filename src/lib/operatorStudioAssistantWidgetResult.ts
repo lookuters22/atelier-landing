@@ -8,6 +8,9 @@ import { normalizeOfferBuilderChangeProposalsForWidget } from "./operatorAssista
 import { normalizeStudioProfileChangeProposalsForWidget } from "./operatorAssistantStudioProfileChangeProposalFromLlm.ts";
 import type {
   OperatorAssistantProposedActionAuthorizedCaseException,
+  OperatorAssistantProposedActionCalendarEventCreate,
+  OperatorAssistantProposedActionCalendarEventReschedule,
+  OperatorAssistantProposedActionEscalationResolve,
   OperatorAssistantProposedActionInvoiceSetupChangeProposal,
   OperatorAssistantProposedActionMemoryNote,
   OperatorAssistantProposedActionOfferBuilderChangeProposal,
@@ -53,6 +56,12 @@ export type OperatorStudioAssistantAssistantDisplay =
       offerBuilderChangeProposals: OperatorAssistantProposedActionOfferBuilderChangeProposal[];
       /** Invoice PDF template (bounded fields) — confirm enqueues `invoice_setup_change_proposals` only; no live apply in widget. */
       invoiceSetupChangeProposals: OperatorAssistantProposedActionInvoiceSetupChangeProposal[];
+      /** F3 — simple `calendar_events` create; confirm inserts a row. */
+      calendarEventCreateProposals: OperatorAssistantProposedActionCalendarEventCreate[];
+      /** F3 — narrow reschedule; confirm updates start/end only. */
+      calendarEventRescheduleProposals: OperatorAssistantProposedActionCalendarEventReschedule[];
+      /** S1 — queue dashboard resolution after operator confirms (same path as Today / Record resolution). */
+      escalationResolveProposals: OperatorAssistantProposedActionEscalationResolve[];
     };
 
 const OPERATOR_RIBBON_COPY =
@@ -92,6 +101,9 @@ export function buildOperatorStudioAssistantAssistantDisplay(
   const studioProfileChangeProposals = normalizeStudioProfileChangeProposalsForWidget(payload.proposedActions);
   const offerBuilderChangeProposals = normalizeOfferBuilderChangeProposalsForWidget(payload.proposedActions);
   const invoiceSetupChangeProposals = normalizeInvoiceSetupChangeProposalsForWidget(payload.proposedActions);
+  const calendarEventCreateProposals = normalizeCalendarEventCreateProposals(payload.proposedActions);
+  const calendarEventRescheduleProposals = normalizeCalendarEventRescheduleProposals(payload.proposedActions);
+  const escalationResolveProposals = normalizeEscalationResolveProposals(payload.proposedActions);
 
   return {
     kind: "answer",
@@ -105,6 +117,9 @@ export function buildOperatorStudioAssistantAssistantDisplay(
     studioProfileChangeProposals,
     offerBuilderChangeProposals,
     invoiceSetupChangeProposals,
+    calendarEventCreateProposals,
+    calendarEventRescheduleProposals,
+    escalationResolveProposals,
   };
 }
 
@@ -293,6 +308,95 @@ function normalizeAuthorizedCaseExceptionProposals(
       targetPlaybookRuleId,
       effectiveUntil,
       notes,
+    });
+  }
+  return out;
+}
+
+const CAL_EVENT_TYPES = ["about_call", "timeline_call", "gallery_reveal", "other"] as const;
+
+function normalizeCalendarEventCreateProposals(raw: unknown): OperatorAssistantProposedActionCalendarEventCreate[] {
+  if (!Array.isArray(raw)) return [];
+  const out: OperatorAssistantProposedActionCalendarEventCreate[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || (x as { kind?: string }).kind !== "calendar_event_create") continue;
+    const o = x as Record<string, unknown>;
+    const title = typeof o.title === "string" ? o.title.trim() : "";
+    if (!title || title.length > 500) continue;
+    const startMs = Date.parse(typeof o.startTime === "string" ? o.startTime : String(o.start_time ?? ""));
+    const endMs = Date.parse(typeof o.endTime === "string" ? o.endTime : String(o.end_time ?? ""));
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) continue;
+    if (endMs - startMs > 24 * 60 * 60 * 1000) continue;
+    let eventType: (typeof CAL_EVENT_TYPES)[number] = "other";
+    const et = o.eventType ?? o.event_type;
+    if (typeof et === "string" && (CAL_EVENT_TYPES as readonly string[]).includes(et)) {
+      eventType = et as (typeof CAL_EVENT_TYPES)[number];
+    }
+    let weddingId: string | null = null;
+    const wRaw = o.weddingId ?? o.wedding_id;
+    if (typeof wRaw === "string" && wRaw.trim()) {
+      if (!CASE_EXC_UUID_RE.test(wRaw.trim())) continue;
+      weddingId = wRaw.trim();
+    }
+    out.push({
+      kind: "calendar_event_create",
+      title,
+      startTime: new Date(startMs).toISOString(),
+      endTime: new Date(endMs).toISOString(),
+      eventType,
+      weddingId,
+    });
+  }
+  return out;
+}
+
+function normalizeCalendarEventRescheduleProposals(raw: unknown): OperatorAssistantProposedActionCalendarEventReschedule[] {
+  if (!Array.isArray(raw)) return [];
+  const out: OperatorAssistantProposedActionCalendarEventReschedule[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || (x as { kind?: string }).kind !== "calendar_event_reschedule") continue;
+    const o = x as Record<string, unknown>;
+    const calendarEventIdRaw = o.calendarEventId ?? o.calendar_event_id;
+    if (typeof calendarEventIdRaw !== "string" || !CASE_EXC_UUID_RE.test(calendarEventIdRaw.trim())) continue;
+    const calendarEventId = calendarEventIdRaw.trim();
+    const startMs = Date.parse(typeof o.startTime === "string" ? o.startTime : String(o.start_time ?? ""));
+    const endMs = Date.parse(typeof o.endTime === "string" ? o.endTime : String(o.end_time ?? ""));
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) continue;
+    if (endMs - startMs > 24 * 60 * 60 * 1000) continue;
+    out.push({
+      kind: "calendar_event_reschedule",
+      calendarEventId,
+      startTime: new Date(startMs).toISOString(),
+      endTime: new Date(endMs).toISOString(),
+    });
+  }
+  return out;
+}
+
+const ESC_RESOLVE_MAX_SUMMARY = 2000;
+const ESC_RESOLVE_MAX_REPLY = 8000;
+
+function normalizeEscalationResolveProposals(raw: unknown): OperatorAssistantProposedActionEscalationResolve[] {
+  if (!Array.isArray(raw)) return [];
+  const out: OperatorAssistantProposedActionEscalationResolve[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || (x as { kind?: string }).kind !== "escalation_resolve") continue;
+    const o = x as Record<string, unknown>;
+    const escalationId = typeof o.escalationId === "string" ? o.escalationId.trim() : "";
+    if (!CASE_EXC_UUID_RE.test(escalationId)) continue;
+    const resolutionSummary = typeof o.resolutionSummary === "string" ? o.resolutionSummary.trim() : "";
+    if (!resolutionSummary || resolutionSummary.length > ESC_RESOLVE_MAX_SUMMARY) continue;
+    let photographerReplyRaw: string | null = null;
+    if (typeof o.photographerReplyRaw === "string" && o.photographerReplyRaw.trim().length > 0) {
+      const reply = o.photographerReplyRaw.trim();
+      if (reply.length > ESC_RESOLVE_MAX_REPLY) continue;
+      photographerReplyRaw = reply;
+    }
+    out.push({
+      kind: "escalation_resolve",
+      escalationId,
+      resolutionSummary,
+      photographerReplyRaw,
     });
   }
   return out;

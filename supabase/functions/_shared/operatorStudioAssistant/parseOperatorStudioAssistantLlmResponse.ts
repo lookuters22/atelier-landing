@@ -9,6 +9,11 @@ import { tryParseLlmProposedAuthorizedCaseException } from "./validateOperatorAs
 import { tryParseLlmProposedOfferBuilderChange } from "../../../../src/lib/operatorAssistantOfferBuilderChangeProposalFromLlm.ts";
 import { tryParseLlmProposedStudioProfileChange } from "../../../../src/lib/operatorAssistantStudioProfileChangeProposalFromLlm.ts";
 import { tryParseLlmProposedInvoiceSetupChange } from "../../../../src/lib/operatorAssistantInvoiceSetupChangeProposalFromLlm.ts";
+import {
+  tryParseLlmProposedCalendarEventCreate,
+  tryParseLlmProposedCalendarEventReschedule,
+} from "./validateOperatorAssistantCalendarEventPayload.ts";
+import { tryParseLlmProposedEscalationResolve } from "./validateOperatorAssistantEscalationResolvePayload.ts";
 
 export type ReadOnlyLookupToolOutcome = {
   name: string;
@@ -114,10 +119,25 @@ export function parseOperatorStudioAssistantLlmResponse(rawContent: string): Ope
         actions.push(inv.value);
         continue;
       }
+      const calC = tryParseLlmProposedCalendarEventCreate(item);
+      if (calC.ok) {
+        actions.push(calC.value);
+        continue;
+      }
+      const calR = tryParseLlmProposedCalendarEventReschedule(item);
+      if (calR.ok) {
+        actions.push(calR.value);
+        continue;
+      }
+      const esc = tryParseLlmProposedEscalationResolve(item);
+      if (esc.ok) {
+        actions.push(esc.value);
+        continue;
+      }
       console.warn(
         JSON.stringify({
           type: "operator_studio_assistant_dropped_proposal",
-          reason: `${rule.reason}; ${task.reason}; ${mem.reason}; ${exc.reason}; ${sp.reason}; ${ob.reason}; ${inv.reason}`,
+          reason: `${rule.reason}; ${task.reason}; ${mem.reason}; ${exc.reason}; ${sp.reason}; ${ob.reason}; ${inv.reason}; ${calC.reason}; ${calR.reason}; ${esc.reason}`,
         }),
       );
     }

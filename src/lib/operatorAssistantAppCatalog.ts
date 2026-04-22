@@ -93,6 +93,7 @@ export const APP_ROUTES: AppRouteEntry[] = [
   { path: "/workspace/invoices", title: "Invoices PDF", purpose: "Inv" },
   { path: "/workspace/invoice-setup/proposals", title: "Invoice setup proposals (review)", purpose: "Q" },
   { path: "/workspace/offer-builder", title: "Offer hub", purpose: "Off" },
+  { path: "/workspace/offer-builder/proposals", title: "Offer builder proposals (review)", purpose: "Q" },
   { path: "/workspace/offer-builder/edit/:projectId", title: "Offer edit", purpose: "1 offer" },
   { path: "/workspace/playbook-rule-candidates", title: "Rule candidates", purpose: "Review" },
   { path: "/workspace/studio-profile-review", title: "Studio profile (review)", purpose: "Prof" },

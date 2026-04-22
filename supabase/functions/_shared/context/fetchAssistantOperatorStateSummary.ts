@@ -64,47 +64,157 @@ function sampleUnlinkedTitlesForBucket(
     }));
 }
 
+export type DeriveOperatorQueueHighlightsOptions = {
+  /** Compare task due dates to this instant’s UTC calendar day. Defaults to `new Date()`. */
+  now?: Date;
+};
+
+function utcCalendarYmd(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function taskDueYmd(dueDate: string): string | null {
+  const m = String(dueDate ?? "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1]! : null;
+}
+
+function clipHighlightTitle(title: string, max = 96): string {
+  const t = title.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function topActionIdPrefix(id: string): string | null {
+  const i = id.indexOf(":");
+  if (i <= 0) return null;
+  return id.slice(0, i);
+}
+
+function humanKindForTopActionPrefix(prefix: string): string {
+  switch (prefix) {
+    case "open_escalation":
+      return "open escalation";
+    case "draft_approval":
+      return "draft pending approval";
+    case "open_task":
+      return "open task";
+    case "unfiled_thread":
+      return "unfiled inbox thread";
+    case "linked_lead_thread":
+      return "linked open-lead thread";
+    default:
+      return "queued action";
+  }
+}
+
 /**
- * Deterministic priority hints from counts only (Slice 3 refinement). Exported for tests.
+ * F5 — evidence-backed queue priorities: blocking vs triage, top-of-feed sample, overdue tasks (UTC dates).
+ * No SLA model; uses the same counts and samples as the operator snapshot.
  */
 export function deriveOperatorQueueHighlights(
   counts: AssistantOperatorStateSummary["counts"],
+  samples: AssistantOperatorStateSummary["samples"],
+  options?: DeriveOperatorQueueHighlightsOptions,
 ): string[] {
-  const lines: string[] = [];
+  const now = options?.now ?? new Date();
+  const todayYmd = utcCalendarYmd(now);
   const c = counts;
-  if (c.openEscalations > 0) {
-    lines.push(
-      `Open escalations: ${c.openEscalations} — typically highest-touch; **Review** Zen tab (with operator-review threads).`,
-    );
+
+  const allZero =
+    c.pendingApprovalDrafts === 0 &&
+    c.openTasks === 0 &&
+    c.openEscalations === 0 &&
+    c.linkedOpenLeads === 0 &&
+    c.unlinked.inquiry === 0 &&
+    c.unlinked.needsFiling === 0 &&
+    c.unlinked.operatorReview === 0 &&
+    c.unlinked.suppressed === 0;
+
+  if (allZero) {
+    return [
+      "All snapshot counters are zero — no drafts, tasks, escalations, or inbox-queue threads in this read. Do not invent backlog; data may have changed after snapshot time.",
+    ];
   }
-  if (c.unlinked.operatorReview > 0) {
-    lines.push(`Unlinked operator-review threads: ${c.unlinked.operatorReview} — **Review** Zen tab.`);
+
+  const lines: string[] = [];
+  lines.push(
+    "**Evidence scope:** Lines below use this snapshot’s **counts** and **named samples** (Today feed recency, task due dates). Not an SLA score or external priority model.",
+  );
+
+  const blocking: string[] = [];
+  if (c.openEscalations > 0) {
+    blocking.push(
+      `open escalations **${c.openEscalations}** (feed marks these **Blocked** until resolved)`,
+    );
   }
   if (c.pendingApprovalDrafts > 0) {
-    lines.push(`Drafts pending your approval: ${c.pendingApprovalDrafts} — **Drafts** Zen tab.`);
+    blocking.push(`drafts pending approval **${c.pendingApprovalDrafts}**`);
   }
-  if (c.openTasks > 0) {
+  if (c.unlinked.operatorReview > 0) {
+    blocking.push(`unlinked operator-review threads **${c.unlinked.operatorReview}**`);
+  }
+  if (blocking.length > 0) {
     lines.push(
-      `Open tasks: ${c.openTasks} — **Tasks** in Today (**not** included in Zen tab totals).`,
+      `**Usually decide-first (blocking / decision queue):** ${blocking.join("; ")}. Zen **Review** tab total **${c.zenTabs.review}** (items mapped to Review — see app feed rules; **Drafts** are separate).`,
     );
   }
-  if (c.unlinked.inquiry > 0) {
+
+  const head = samples.topActions[0];
+  if (head) {
+    const prefix = topActionIdPrefix(head.id);
+    const kind = prefix ? humanKindForTopActionPrefix(prefix) : "queued item";
     lines.push(
-      `Unlinked inquiry threads: ${c.unlinked.inquiry} — **Leads** Zen tab (with linked open leads).`,
+      `**Most recent in Today feed** (mixed actions, recency sort): [${head.typeLabel}] ${clipHighlightTitle(head.title)} — \`${head.id}\` (kind: ${kind}).`,
     );
   }
-  if (c.linkedOpenLeads > 0) {
-    lines.push(`Linked open-lead threads (pre-booking): ${c.linkedOpenLeads} — **Leads** Zen tab.`);
+
+  const overdueTasks = samples.openTasks.filter((t) => {
+    const ymd = taskDueYmd(t.dueDate);
+    return ymd != null && ymd < todayYmd;
+  });
+  if (overdueTasks.length > 0) {
+    const eg = overdueTasks
+      .slice(0, 2)
+      .map((t) => `${clipHighlightTitle(t.title, 72)} (\`${t.id}\`)`)
+      .join("; ");
+    const tail = overdueTasks.length > 2 ? ` — _+${overdueTasks.length - 2} more overdue in task samples_` : "";
+    lines.push(
+      `**Overdue tasks** (due date **before** UTC day **${todayYmd}**): **${overdueTasks.length}** in snapshot — e.g. ${eg}${tail}.`,
+    );
+  }
+
+  const triage: string[] = [];
+  if (c.unlinked.inquiry > 0 || c.linkedOpenLeads > 0) {
+    triage.push(
+      `leads surface: unlinked inquiry **${c.unlinked.inquiry}**, linked open-lead threads **${c.linkedOpenLeads}** → Zen **Leads** **${c.zenTabs.leads}**`,
+    );
   }
   if (c.unlinked.needsFiling > 0) {
-    lines.push(`Unlinked needs-filing threads: ${c.unlinked.needsFiling} — **Needs filing** Zen tab.`);
+    triage.push(`needs filing **${c.unlinked.needsFiling}** → Zen **Needs filing** **${c.zenTabs.needs_filing}**`);
   }
-  if (lines.length === 0) {
+  if (c.pendingApprovalDrafts > 0) {
+    triage.push(`drafts tab **${c.zenTabs.drafts}** (pending-approval drafts)`);
+  }
+  if (triage.length > 0) {
+    lines.push(`**Triage / volume** (often busy but not the same as an open escalation): ${triage.join("; ")}.`);
+  }
+
+  if (c.openTasks > 0) {
     lines.push(
-      "All snapshot counters are zero — no drafts, tasks, escalations, or inbox-queue threads in this read. Do not invent backlog; data may have changed after snapshot time.",
+      `**Open tasks:** **${c.openTasks}** — Today **Tasks** list (**not** included in Zen tab totals).`,
     );
   }
-  return lines.slice(0, 8);
+
+  if (c.unlinked.suppressed > 0) {
+    lines.push(
+      `**Suppressed** unlinked threads in inbox projection: **${c.unlinked.suppressed}** (excluded from Today priority samples).`,
+    );
+  }
+
+  return lines.slice(0, 10);
 }
 
 const IDLE_OPERATOR_STATE_COUNTS: AssistantOperatorStateSummary["counts"] = {
@@ -116,20 +226,22 @@ const IDLE_OPERATOR_STATE_COUNTS: AssistantOperatorStateSummary["counts"] = {
   zenTabs: { review: 0, drafts: 0, leads: 0, needs_filing: 0 },
 };
 
+const IDLE_OPERATOR_STATE_SAMPLES: AssistantOperatorStateSummary["samples"] = {
+  pendingDrafts: [],
+  openEscalations: [],
+  openTasks: [],
+  topActions: [],
+  linkedLeads: [],
+  unlinkedBuckets: { inquiry: [], needsFiling: [], operatorReview: [] },
+};
+
 /** Placeholder for tests / stubs when operator state is not loaded. */
 export const IDLE_ASSISTANT_OPERATOR_STATE_SUMMARY: AssistantOperatorStateSummary = {
   fetchedAt: "1970-01-01T00:00:00.000Z",
   sourcesNote: "",
   counts: IDLE_OPERATOR_STATE_COUNTS,
-  queueHighlights: deriveOperatorQueueHighlights(IDLE_OPERATOR_STATE_COUNTS),
-  samples: {
-    pendingDrafts: [],
-    openEscalations: [],
-    openTasks: [],
-    topActions: [],
-    linkedLeads: [],
-    unlinkedBuckets: { inquiry: [], needsFiling: [], operatorReview: [] },
-  },
+  samples: IDLE_OPERATOR_STATE_SAMPLES,
+  queueHighlights: deriveOperatorQueueHighlights(IDLE_OPERATOR_STATE_COUNTS, IDLE_OPERATOR_STATE_SAMPLES),
 };
 
 function actionSampleLabel(a: TodayAction): string {
@@ -315,27 +427,29 @@ export async function fetchAssistantOperatorStateSummary(
     },
   };
 
+  const samples: AssistantOperatorStateSummary["samples"] = {
+    pendingDrafts: draftSamples,
+    openEscalations: escalationSamples,
+    openTasks: taskSamples,
+    topActions,
+    linkedLeads: linkedLeadSamples,
+    unlinkedBuckets: {
+      inquiry: sampleUnlinkedTitlesForBucket(unlinkedNonSuppressed, "inquiry", MAX_SAMPLES_PER_UNLINKED_BUCKET),
+      needsFiling: sampleUnlinkedTitlesForBucket(unlinkedNonSuppressed, "unfiled", MAX_SAMPLES_PER_UNLINKED_BUCKET),
+      operatorReview: sampleUnlinkedTitlesForBucket(
+        unlinkedNonSuppressed,
+        "operator_review",
+        MAX_SAMPLES_PER_UNLINKED_BUCKET,
+      ),
+    },
+  };
+
   return {
     fetchedAt,
     sourcesNote:
       "Aligned with the Today / Zen action feed: v_pending_approval_drafts, v_open_tasks_with_wedding, open escalation_requests, v_threads_inbox_latest_message, deriveInboxThreadBucket, INQUIRY_STAGES.",
     counts,
-    queueHighlights: deriveOperatorQueueHighlights(counts),
-    samples: {
-      pendingDrafts: draftSamples,
-      openEscalations: escalationSamples,
-      openTasks: taskSamples,
-      topActions,
-      linkedLeads: linkedLeadSamples,
-      unlinkedBuckets: {
-        inquiry: sampleUnlinkedTitlesForBucket(unlinkedNonSuppressed, "inquiry", MAX_SAMPLES_PER_UNLINKED_BUCKET),
-        needsFiling: sampleUnlinkedTitlesForBucket(unlinkedNonSuppressed, "unfiled", MAX_SAMPLES_PER_UNLINKED_BUCKET),
-        operatorReview: sampleUnlinkedTitlesForBucket(
-          unlinkedNonSuppressed,
-          "operator_review",
-          MAX_SAMPLES_PER_UNLINKED_BUCKET,
-        ),
-      },
-    },
+    samples,
+    queueHighlights: deriveOperatorQueueHighlights(counts, samples),
   };
 }

@@ -1839,6 +1839,60 @@ export type Database = {
           },
         ]
       }
+      operator_assistant_write_audit: {
+        Row: {
+          created_at: string
+          detail: Json
+          entity_id: string
+          entity_table: string
+          id: string
+          operation: string
+          photographer_id: string
+          source: string
+          undone_at: string | null
+          undone_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          entity_id: string
+          entity_table: string
+          id?: string
+          operation: string
+          photographer_id: string
+          source?: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          entity_id?: string
+          entity_table?: string
+          id?: string
+          operation?: string
+          photographer_id?: string
+          source?: string
+          undone_at?: string | null
+          undone_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_assistant_write_audit_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operator_assistant_write_audit_undone_by_fkey"
+            columns: ["undone_by"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       studio_offer_builder_projects: {
         Row: {
           created_at: string

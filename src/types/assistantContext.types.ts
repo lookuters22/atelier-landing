@@ -80,8 +80,8 @@ export type AssistantOperatorStateSummary = {
     };
   };
   /**
-   * Deterministic lines derived **only** from `counts` (Slice 3 refinement). For prompt grounding;
-   * not a separate data fetch.
+   * Deterministic priority lines from **counts + samples** (F5 queue urgency refinement).
+   * Blocking vs triage framing, top-of-feed sample, overdue tasks (UTC due-date vs snapshot day) — no SLA scoring.
    */
   queueHighlights: string[];
   samples: {
@@ -638,6 +638,51 @@ export const IDLE_ASSISTANT_STUDIO_INVOICE_SETUP: AssistantStudioInvoiceSetupRea
   note: "",
 };
 
+/**
+ * S1 — specialist escalation resolver: pinned `escalation_requests` id + same provenance shape as
+ * `operator_lookup_escalation` (JSON), for grounded resolver-mode prompts only.
+ */
+export type AssistantEscalationResolverFocus = {
+  pinnedEscalationId: string;
+  toolPayload: Record<string, unknown>;
+};
+
+/**
+ * S2 — specialist offer-builder mode: one pinned `studio_offer_builder_projects` id + grounded row snapshot JSON.
+ */
+export type AssistantOfferBuilderSpecialistFocus = {
+  pinnedProjectId: string;
+  toolPayload: Record<string, unknown>;
+};
+
+/**
+ * S3 — specialist invoice-template mode: tenant `studio_invoice_setup` snapshot (one row per photographer; no secondary id).
+ */
+export type AssistantInvoiceSetupSpecialistFocus = {
+  toolPayload: Record<string, unknown>;
+};
+
+/**
+ * S4 — deep search / investigation mode: explicit read-first lane; higher read-only tool budget; no extra pinned entity.
+ */
+export type AssistantInvestigationSpecialistFocus = {
+  toolPayload: Record<string, unknown>;
+};
+
+/**
+ * S5 — rule authoring / audit mode: policy lane; playbook + coverage grounding; staged candidates only.
+ */
+export type AssistantPlaybookAuditSpecialistFocus = {
+  toolPayload: Record<string, unknown>;
+};
+
+/**
+ * S6 — bulk queue triage mode: intentional multi-item Today/queue workflow; grounded snapshot only.
+ */
+export type AssistantBulkTriageSpecialistFocus = {
+  toolPayload: Record<string, unknown>;
+};
+
 export type AssistantContext = {
   readonly clientFacingForbidden: true;
   photographerId: string;
@@ -744,6 +789,30 @@ export type AssistantContext = {
    * Slice A2 — deterministic triage v1 (hint + telemetry only). `reason` is for logs, not the LLM prompt.
    */
   operatorTriage: OperatorAnaTriage;
+  /**
+   * S1 — when set, Ana runs in **escalation resolver** specialist mode for this single id (explicit client entry).
+   */
+  escalationResolverFocus: AssistantEscalationResolverFocus | null;
+  /**
+   * S2 — when set, Ana runs in **offer builder specialist** mode for this single offer project (explicit client entry).
+   */
+  offerBuilderSpecialistFocus: AssistantOfferBuilderSpecialistFocus | null;
+  /**
+   * S3 — when set, Ana runs in **invoice setup / PDF template** specialist mode for this tenant (explicit client entry).
+   */
+  invoiceSetupSpecialistFocus: AssistantInvoiceSetupSpecialistFocus | null;
+  /**
+   * S4 — when set, Ana runs in **deep search / investigation** mode (read-only tools first; evidence-first replies).
+   */
+  investigationSpecialistFocus: AssistantInvestigationSpecialistFocus | null;
+  /**
+   * S5 — when set, Ana runs in **rule authoring / audit** mode (playbook coverage + review-first rule candidates only).
+   */
+  playbookAuditSpecialistFocus: AssistantPlaybookAuditSpecialistFocus | null;
+  /**
+   * S6 — when set, Ana runs in **bulk queue / Today triage** mode (bounded snapshot; at most one confirmable proposal per turn).
+   */
+  bulkTriageSpecialistFocus: AssistantBulkTriageSpecialistFocus | null;
 };
 
 export type BuildAssistantContextInput = {
@@ -752,6 +821,30 @@ export type BuildAssistantContextInput = {
   focusedWeddingId?: string | null;
   /** When set and owned by tenant, person-scope memories for this person are included. */
   focusedPersonId?: string | null;
+  /**
+   * S1 — optional pinned escalation UUID (tenant-scoped). Loads provenance into {@link AssistantContext.escalationResolverFocus}.
+   */
+  escalationResolverEscalationId?: string | null;
+  /**
+   * S2 — optional pinned offer-builder project UUID (`studio_offer_builder_projects.id`, tenant-scoped).
+   */
+  offerBuilderSpecialistProjectId?: string | null;
+  /**
+   * S3 — invoice PDF template specialist mode. Mutually exclusive with {@link escalationResolverEscalationId} and {@link offerBuilderSpecialistProjectId}.
+   */
+  invoiceSetupSpecialist?: boolean;
+  /**
+   * S4 — investigation / deep-read mode. Mutually exclusive with S1–S3 specialist entry flags.
+   */
+  investigationSpecialist?: boolean;
+  /**
+   * S5 — rule authoring / audit mode. Mutually exclusive with S1–S4 specialist entry flags.
+   */
+  playbookAuditSpecialist?: boolean;
+  /**
+   * S6 — bulk Today / queue triage mode. Mutually exclusive with S1–S5 specialist entry flags.
+   */
+  bulkTriageSpecialist?: boolean;
   /**
    * Slice 6 — optional client round-trip carry-forward from the previous response (`emittedAtEpochMs` + captured focus + data).
    */

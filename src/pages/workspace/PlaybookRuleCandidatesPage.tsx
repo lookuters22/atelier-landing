@@ -8,6 +8,7 @@ import {
 } from "@/lib/fetchPlaybookRuleCandidates";
 import { reviewPlaybookRuleCandidate } from "@/lib/reviewPlaybookRuleCandidate";
 import { cn } from "@/lib/utils";
+import { openAnaWithPlaybookAuditMode } from "@/components/SupportAssistantWidget";
 
 function formatWhen(iso: string): string {
   try {
@@ -106,6 +107,19 @@ export function PlaybookRuleCandidatesPage() {
             <code className="rounded bg-muted px-1 py-0.5 text-[10px]">review_playbook_rule_candidate</code> (via a secure
             edge function) — this updates status and, on approve, promotes to your playbook.
           </span>
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={() => openAnaWithPlaybookAuditMode()}
+            className="rounded-md border border-emerald-500/35 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-950 hover:bg-emerald-500/15 dark:text-emerald-100"
+          >
+            Ask Ana — rule audit mode
+          </button>
+          <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+            Opens the assistant in a playbook-focused lane: coverage and gaps use your Context rules; new policy stages
+            as candidates only.
+          </p>
         </div>
       </header>
 

@@ -160,32 +160,74 @@ describe("fetchAssistantOperatorStateSummary", () => {
   });
 });
 
+const EMPTY_SAMPLES = {
+  pendingDrafts: [],
+  openEscalations: [],
+  openTasks: [],
+  topActions: [],
+  linkedLeads: [],
+  unlinkedBuckets: { inquiry: [], needsFiling: [], operatorReview: [] },
+} as const;
+
 describe("deriveOperatorQueueHighlights", () => {
-  it("orders touch-heavy lines and uses only count inputs", () => {
-    const h = deriveOperatorQueueHighlights({
+  it("F5: frames blocking vs triage and cites top-of-feed sample from snapshots", () => {
+    const counts = {
       pendingApprovalDrafts: 1,
       openTasks: 2,
       openEscalations: 1,
       linkedOpenLeads: 0,
       unlinked: { inquiry: 0, needsFiling: 3, operatorReview: 1, suppressed: 0 },
       zenTabs: { review: 2, drafts: 1, leads: 0, needs_filing: 3 },
-    });
-    expect(h[0]).toMatch(/escalations/i);
-    expect(h.join(" ")).toMatch(/operator-review|Review/i);
-    expect(h.join(" ")).toMatch(/Drafts/i);
-    expect(h.join(" ")).toMatch(/Tasks/i);
-    expect(h.join(" ")).toMatch(/Needs filing/i);
+    };
+    const samples = {
+      ...EMPTY_SAMPLES,
+      topActions: [
+        { id: "open_escalation:esc-1", title: "Need policy sign-off", typeLabel: "Escalation" },
+      ],
+    };
+    const h = deriveOperatorQueueHighlights(counts, samples);
+    expect(h[0]).toMatch(/Evidence scope/i);
+    expect(h.some((l) => /decide-first|blocking/i.test(l))).toBe(true);
+    expect(h.some((l) => /Most recent in Today feed/i.test(l))).toBe(true);
+    expect(h.join("\n")).toMatch(/Need policy sign-off/);
+    expect(h.some((l) => /Triage|volume|needs filing/i.test(l))).toBe(true);
+    expect(h.some((l) => /Open tasks/i.test(l))).toBe(true);
   });
 
-  it("emits a single honesty line when all counters are zero", () => {
-    const h = deriveOperatorQueueHighlights({
+  it("F5: surfaces overdue tasks from sample due dates (UTC day)", () => {
+    const counts = {
       pendingApprovalDrafts: 0,
-      openTasks: 0,
+      openTasks: 2,
       openEscalations: 0,
       linkedOpenLeads: 0,
       unlinked: { inquiry: 0, needsFiling: 0, operatorReview: 0, suppressed: 0 },
       zenTabs: { review: 0, drafts: 0, leads: 0, needs_filing: 0 },
-    });
+    };
+    const samples = {
+      ...EMPTY_SAMPLES,
+      openTasks: [
+        { id: "task-old", title: "Stale follow-up", dueDate: "2026-01-01", subtitle: null },
+        { id: "task-future", title: "Later", dueDate: "2030-12-01", subtitle: null },
+      ],
+    };
+    const h = deriveOperatorQueueHighlights(counts, samples, { now: new Date("2026-06-15T12:00:00.000Z") });
+    expect(h.some((l) => /Overdue tasks/i.test(l))).toBe(true);
+    expect(h.some((l) => /task-old/.test(l))).toBe(true);
+    expect(h.join("\n")).not.toMatch(/task-future/);
+  });
+
+  it("emits a single honesty line when all counters are zero", () => {
+    const h = deriveOperatorQueueHighlights(
+      {
+        pendingApprovalDrafts: 0,
+        openTasks: 0,
+        openEscalations: 0,
+        linkedOpenLeads: 0,
+        unlinked: { inquiry: 0, needsFiling: 0, operatorReview: 0, suppressed: 0 },
+        zenTabs: { review: 0, drafts: 0, leads: 0, needs_filing: 0 },
+      },
+      { ...EMPTY_SAMPLES },
+    );
     expect(h).toHaveLength(1);
     expect(h[0]).toMatch(/zero|Do not invent/i);
   });

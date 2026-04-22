@@ -2,6 +2,12 @@
  * Operator dashboard - "Ask Ana" studio assistant (Mode B).
  *
  * POST JSON: { queryText: string, focusedWeddingId?: string | null, focusedPersonId?: string | null,
+ *   escalationResolverEscalationId?: string | null (S1 — pinned escalation UUID for resolver mode),
+ *   offerBuilderSpecialistProjectId?: string | null (S2 — pinned studio_offer_builder_projects.id),
+ *   invoiceSetupSpecialist?: boolean (S3 — invoice template specialist),
+ *   investigationSpecialist?: boolean (S4 — investigation / deep-read; mutually exclusive with S1–S3),
+ *   playbookAuditSpecialist?: boolean (S5 — rule authoring / audit; mutually exclusive with S1–S4),
+ *   bulkTriageSpecialist?: boolean (S6 — bulk Today / queue triage; mutually exclusive with S1–S5),
  *   conversation?: Array<{ role: "user" | "assistant"; content: string }>,
  *   carryForward?: (Slice 6) prior-turn pointer from the last response }
  *
@@ -104,6 +110,12 @@ Deno.serve(async (req) => {
       queryText: body.queryText as string | undefined,
       focusedWeddingId: (body.focusedWeddingId as string | null | undefined) ?? null,
       focusedPersonId: (body.focusedPersonId as string | null | undefined) ?? null,
+      escalationResolverEscalationId: (body.escalationResolverEscalationId as string | null | undefined) ?? null,
+      offerBuilderSpecialistProjectId: (body.offerBuilderSpecialistProjectId as string | null | undefined) ?? null,
+      invoiceSetupSpecialist: body.invoiceSetupSpecialist === true,
+      investigationSpecialist: body.investigationSpecialist === true,
+      playbookAuditSpecialist: body.playbookAuditSpecialist === true,
+      bulkTriageSpecialist: body.bulkTriageSpecialist === true,
       conversation: body.conversation,
       carryForward: body.carryForward,
     };

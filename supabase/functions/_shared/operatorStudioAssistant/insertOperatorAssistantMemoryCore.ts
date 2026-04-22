@@ -4,12 +4,13 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { Database } from "../../../../src/types/database.types.ts";
 import type { ValidatedOperatorAssistantMemoryPayload } from "./validateOperatorAssistantMemoryPayload.ts";
+import { recordOperatorAssistantWriteAudit } from "./recordOperatorAssistantWriteAudit.ts";
 
 export async function insertMemoryForOperatorAssistant(
   supabase: SupabaseClient,
   photographerId: string,
   body: ValidatedOperatorAssistantMemoryPayload,
-): Promise<{ id: string }> {
+): Promise<{ id: string; auditId: string }> {
   if (body.memoryScope === "project" && body.weddingId) {
     const { data, error } = await supabase
       .from("weddings")
@@ -59,5 +60,17 @@ export async function insertMemoryForOperatorAssistant(
   if (!row?.id) {
     throw new Error("insert did not return id");
   }
-  return { id: String(row.id) };
+  const id = String(row.id);
+  const { auditId } = await recordOperatorAssistantWriteAudit(supabase, photographerId, {
+    operation: "memory_create",
+    entityTable: "memories",
+    entityId: id,
+    detail: {
+      memoryScope: body.memoryScope,
+      title: body.title,
+      weddingId: body.weddingId ?? null,
+      personId: body.personId ?? null,
+    },
+  });
+  return { id, auditId };
 }

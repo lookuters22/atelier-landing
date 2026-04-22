@@ -1,8 +1,9 @@
-import { ChevronLeft, Download, Eye, Save } from "lucide-react";
+import { ChevronLeft, Download, Eye, MessageCircle, Save } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { openAnaWithOfferBuilderProject } from "../../components/SupportAssistantWidget";
 import { useOfferBuilderShell } from "./offerBuilderShellContext";
 
-export function OfferBuilderUnifiedBar() {
+export function OfferBuilderUnifiedBar(props: { offerProjectId: string }) {
   const navigate = useNavigate();
   const { commands } = useOfferBuilderShell();
 
@@ -25,6 +26,15 @@ export function OfferBuilderUnifiedBar() {
       </p>
 
       <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => openAnaWithOfferBuilderProject(props.offerProjectId)}
+          title="Open Ana in offer-builder specialist mode for this document"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[12px] font-semibold text-foreground transition-colors hover:bg-accent"
+        >
+          <MessageCircle className="h-3.5 w-3.5" strokeWidth={1.75} />
+          Ana
+        </button>
         <button
           type="button"
           onClick={() => commands?.togglePreview()}

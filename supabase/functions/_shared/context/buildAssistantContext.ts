@@ -70,7 +70,23 @@ import {
 } from "../operatorStudioAssistant/operatorAssistantCarryForward.ts";
 import { fetchAssistantStudioBusinessProfile } from "./fetchAssistantStudioBusinessProfile.ts";
 import { fetchAssistantStudioOfferBuilderRead } from "./fetchAssistantStudioOfferBuilderRead.ts";
-import { fetchAssistantStudioInvoiceSetupRead } from "./fetchAssistantStudioInvoiceSetupRead.ts";
+import {
+  fetchAssistantStudioInvoiceSetupRead,
+  invoiceSetupSpecialistToolPayload,
+} from "./fetchAssistantStudioInvoiceSetupRead.ts";
+import {
+  escalationProvenanceToolPayload,
+  fetchAssistantEscalationProvenance,
+} from "./fetchAssistantEscalationProvenance.ts";
+import {
+  fetchAssistantOfferBuilderProjectPin,
+  offerBuilderProjectPinToolPayload,
+} from "../../../../src/lib/fetchAssistantOfferBuilderProjectPin.ts";
+import {
+  bulkTriageSpecialistToolPayload,
+  investigationSpecialistToolPayload,
+} from "../operatorStudioAssistant/tools/operatorAssistantReadOnlyLookupTools.ts";
+import { playbookAuditSpecialistToolPayload } from "../operatorStudioAssistant/tools/operatorAssistantPlaybookAuditSpecialist.ts";
 
 function normalizeOptionalUuid(id: string | null | undefined): string | null {
   if (id == null) return null;
@@ -152,6 +168,41 @@ export async function buildAssistantContext(
     queryText,
     Date.now(),
   );
+
+  const escalationPinRequested = normalizeOptionalUuid(input.escalationResolverEscalationId ?? null);
+  const offerBuilderPinRaw = normalizeOptionalUuid(input.offerBuilderSpecialistProjectId ?? null);
+  /** S2 — ignored when S1 escalation pin is set (client validated mutual exclusion; defense in depth). */
+  const offerBuilderPinRequested = escalationPinRequested ? null : offerBuilderPinRaw;
+  /** S3 — invoice specialist; ignored when S1 or S2 pin is set. */
+  const invoiceSetupSpecialistRequested =
+    input.invoiceSetupSpecialist === true && !escalationPinRequested && !offerBuilderPinRequested;
+  const rawInvestigationSpecialist = input.investigationSpecialist === true;
+  const rawPlaybookAuditSpecialist = input.playbookAuditSpecialist === true;
+  const rawBulkTriageSpecialist = input.bulkTriageSpecialist === true;
+  /** S4 — investigation; mutually exclusive with S1–S3, S5, S6. */
+  const investigationSpecialistRequested =
+    rawInvestigationSpecialist &&
+    !escalationPinRequested &&
+    !offerBuilderPinRequested &&
+    !invoiceSetupSpecialistRequested &&
+    !rawPlaybookAuditSpecialist &&
+    !rawBulkTriageSpecialist;
+  /** S5 — rule audit; mutually exclusive with S1–S4 and S6. */
+  const playbookAuditSpecialistRequested =
+    rawPlaybookAuditSpecialist &&
+    !escalationPinRequested &&
+    !offerBuilderPinRequested &&
+    !invoiceSetupSpecialistRequested &&
+    !rawInvestigationSpecialist &&
+    !rawBulkTriageSpecialist;
+  /** S6 — bulk queue triage; mutually exclusive with S1–S5. */
+  const bulkTriageSpecialistRequested =
+    rawBulkTriageSpecialist &&
+    !escalationPinRequested &&
+    !offerBuilderPinRequested &&
+    !invoiceSetupSpecialistRequested &&
+    !rawInvestigationSpecialist &&
+    !rawPlaybookAuditSpecialist;
 
   const scopesQueried: AssistantRetrievalLog["scopesQueried"] = [
     "studio_profile",
@@ -441,6 +492,62 @@ export async function buildAssistantContext(
     summary: h.summary,
   }));
 
+  let escalationResolverFocus: AssistantContext["escalationResolverFocus"] = null;
+  if (escalationPinRequested) {
+    scopesQueried.push("escalation_resolver");
+    const snap = await fetchAssistantEscalationProvenance(supabase, tenantPhotographerId, escalationPinRequested);
+    escalationResolverFocus = {
+      pinnedEscalationId: escalationPinRequested,
+      toolPayload: escalationProvenanceToolPayload(snap),
+    };
+  }
+
+  let offerBuilderSpecialistFocus: AssistantContext["offerBuilderSpecialistFocus"] = null;
+  if (offerBuilderPinRequested) {
+    scopesQueried.push("offer_builder_specialist");
+    const pinSnap = await fetchAssistantOfferBuilderProjectPin(
+      supabase,
+      tenantPhotographerId,
+      offerBuilderPinRequested,
+    );
+    offerBuilderSpecialistFocus = {
+      pinnedProjectId: offerBuilderPinRequested,
+      toolPayload: offerBuilderProjectPinToolPayload(pinSnap),
+    };
+  }
+
+  let invoiceSetupSpecialistFocus: AssistantContext["invoiceSetupSpecialistFocus"] = null;
+  if (invoiceSetupSpecialistRequested) {
+    scopesQueried.push("invoice_setup_specialist");
+    invoiceSetupSpecialistFocus = {
+      toolPayload: invoiceSetupSpecialistToolPayload(studioInvoiceSetup),
+    };
+  }
+
+  let investigationSpecialistFocus: AssistantContext["investigationSpecialistFocus"] = null;
+  if (investigationSpecialistRequested) {
+    scopesQueried.push("investigation_specialist");
+    investigationSpecialistFocus = {
+      toolPayload: investigationSpecialistToolPayload(),
+    };
+  }
+
+  let playbookAuditSpecialistFocus: AssistantContext["playbookAuditSpecialistFocus"] = null;
+  if (playbookAuditSpecialistRequested) {
+    scopesQueried.push("playbook_audit_specialist");
+    playbookAuditSpecialistFocus = {
+      toolPayload: playbookAuditSpecialistToolPayload(),
+    };
+  }
+
+  let bulkTriageSpecialistFocus: AssistantContext["bulkTriageSpecialistFocus"] = null;
+  if (bulkTriageSpecialistRequested) {
+    scopesQueried.push("bulk_triage_specialist");
+    bulkTriageSpecialistFocus = {
+      toolPayload: bulkTriageSpecialistToolPayload(),
+    };
+  }
+
   return {
     clientFacingForbidden: true,
     photographerId: tenantPhotographerId,
@@ -473,5 +580,11 @@ export async function buildAssistantContext(
     globalKnowledge,
     retrievalLog,
     operatorTriage,
+    escalationResolverFocus,
+    offerBuilderSpecialistFocus,
+    invoiceSetupSpecialistFocus,
+    investigationSpecialistFocus,
+    playbookAuditSpecialistFocus,
+    bulkTriageSpecialistFocus,
   };
 }

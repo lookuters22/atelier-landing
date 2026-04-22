@@ -26,7 +26,10 @@ import { consumeOperatorAssistantSseStream } from "../lib/operatorStudioAssistan
 import { getSupabaseEdgeFunctionErrorMessage } from "../lib/supabaseEdgeFunctionErrorMessage.ts";
 import {
   addConsumedProposalKey,
+  calendarEventCreateProposalKey,
+  calendarEventRescheduleProposalKey,
   caseExceptionProposalKey,
+  escalationResolveProposalKey,
   isProposalKeyConsumed,
   memoryProposalKey,
   invoiceSetupChangeProposalKey,
@@ -35,6 +38,8 @@ import {
   studioProfileChangeProposalKey,
   taskProposalKey,
 } from "../lib/operatorAnaProposalConsumedState.ts";
+import { resolveEscalationViaDashboard } from "../lib/escalationResolutionClient.ts";
+import { fireDataChanged } from "../lib/events.ts";
 import { buildInvoiceSetupChangeProposalV1ForConfirm } from "../lib/operatorAssistantInvoiceSetupChangeProposalFromLlm.ts";
 import { buildOfferBuilderChangeProposalV1ForConfirm } from "../lib/operatorAssistantOfferBuilderChangeProposalFromLlm.ts";
 import { buildStudioProfileChangeProposalV1ForConfirm } from "../lib/operatorAssistantStudioProfileChangeProposalFromLlm.ts";
@@ -43,6 +48,9 @@ import { insertOfferBuilderChangeProposal } from "../lib/insertOfferBuilderChang
 import { insertStudioProfileChangeProposal } from "../lib/insertStudioProfileChangeProposal.ts";
 import type {
   OperatorAssistantProposedActionAuthorizedCaseException,
+  OperatorAssistantProposedActionCalendarEventCreate,
+  OperatorAssistantProposedActionCalendarEventReschedule,
+  OperatorAssistantProposedActionEscalationResolve,
   OperatorAssistantProposedActionInvoiceSetupChangeProposal,
   OperatorAssistantProposedActionMemoryNote,
   OperatorAssistantProposedActionOfferBuilderChangeProposal,
@@ -123,9 +131,49 @@ function AssistantDevRetrievalBlock(props: { scopes: string[]; memoryIds: string
 }
 
 const ANA_QUERY_EVENT = "ana-widget:open-with-query";
+const ANA_ESCALATION_RESOLVER_EVENT = "ana-widget:open-with-escalation-resolver";
+const ANA_OFFER_BUILDER_SPECIALIST_EVENT = "ana-widget:open-with-offer-builder-specialist";
+const ANA_INVOICE_SETUP_SPECIALIST_EVENT = "ana-widget:open-with-invoice-setup-specialist";
+const ANA_INVESTIGATION_SPECIALIST_EVENT = "ana-widget:open-with-investigation-specialist";
+const ANA_PLAYBOOK_AUDIT_SPECIALIST_EVENT = "ana-widget:open-with-playbook-audit-specialist";
+const ANA_BULK_TRIAGE_SPECIALIST_EVENT = "ana-widget:open-with-bulk-triage-specialist";
 
 export function openAnaWithQuery(query: string) {
   window.dispatchEvent(new CustomEvent(ANA_QUERY_EVENT, { detail: { query } }));
+}
+
+/** S1 — open Ana in escalation resolver mode for one tenant-owned `escalation_requests` row (UUID). */
+export function openAnaWithEscalation(escalationId: string) {
+  const id = String(escalationId ?? "").trim();
+  if (!id) return;
+  window.dispatchEvent(new CustomEvent(ANA_ESCALATION_RESOLVER_EVENT, { detail: { escalationId: id } }));
+}
+
+/** S2 — open Ana in offer-builder specialist mode for one `studio_offer_builder_projects` row (UUID). */
+export function openAnaWithOfferBuilderProject(projectId: string) {
+  const id = String(projectId ?? "").trim();
+  if (!id) return;
+  window.dispatchEvent(new CustomEvent(ANA_OFFER_BUILDER_SPECIALIST_EVENT, { detail: { projectId: id } }));
+}
+
+/** S3 — open Ana in invoice PDF template specialist mode (tenant `studio_invoice_setup` lane). */
+export function openAnaWithInvoiceSetupSpecialist() {
+  window.dispatchEvent(new CustomEvent(ANA_INVOICE_SETUP_SPECIALIST_EVENT));
+}
+
+/** S4 — open Ana in deep search / investigation mode (read-first, multi-tool evidence lane). */
+export function openAnaWithInvestigationMode() {
+  window.dispatchEvent(new CustomEvent(ANA_INVESTIGATION_SPECIALIST_EVENT));
+}
+
+/** S5 — open Ana in rule authoring / audit mode (playbook coverage + review-first rule candidates only). */
+export function openAnaWithPlaybookAuditMode() {
+  window.dispatchEvent(new CustomEvent(ANA_PLAYBOOK_AUDIT_SPECIALIST_EVENT));
+}
+
+/** S6 — open Ana in bulk Today / queue triage mode (grounded snapshot; one confirmable proposal per turn). */
+export function openAnaWithBulkTriageMode() {
+  window.dispatchEvent(new CustomEvent(ANA_BULK_TRIAGE_SPECIALIST_EVENT));
 }
 
 type PanelDir = { v: "above" | "below"; h: "alignRight" | "alignLeft" };
@@ -202,6 +250,24 @@ export function SupportAssistantWidget() {
   const [consumedProposalKeysByMessageId, setConsumedProposalKeysByMessageId] = useState<Record<string, string[]>>(
     {},
   );
+  /** P4: last confirmed Ana calendar write — bounded undo via `undo-operator-assistant-write`. */
+  const [pendingCalendarUndo, setPendingCalendarUndo] = useState<{
+    auditId: string;
+    kind: "create" | "reschedule";
+  } | null>(null);
+  const [undoingCalendarAuditId, setUndoingCalendarAuditId] = useState<string | null>(null);
+  /** S1 — pinned escalation id for resolver mode (explicit entry only; cleared when panel closes). */
+  const [escalationResolverPin, setEscalationResolverPin] = useState<string | null>(null);
+  /** S2 — pinned offer-builder project id (mutually exclusive with S1 in API; cleared when panel closes). */
+  const [offerBuilderSpecialistPin, setOfferBuilderSpecialistPin] = useState<string | null>(null);
+  /** S3 — invoice template specialist (boolean flag; cleared when panel closes). */
+  const [invoiceSetupSpecialist, setInvoiceSetupSpecialist] = useState(false);
+  /** S4 — investigation / deep-read mode (cleared when panel closes). */
+  const [investigationSpecialist, setInvestigationSpecialist] = useState(false);
+  /** S5 — rule authoring / audit mode (cleared when panel closes). */
+  const [playbookAuditSpecialist, setPlaybookAuditSpecialist] = useState(false);
+  /** S6 — bulk queue / Today triage mode (cleared when panel closes). */
+  const [bulkTriageSpecialist, setBulkTriageSpecialist] = useState(false);
   const [dir, setDir] = useState<PanelDir>({ v: "above", h: "alignRight" });
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -245,6 +311,12 @@ export function SupportAssistantWidget() {
       setAnaTyping(false);
       setMessages((m) => m.filter((x) => !isAssistantInFlightLine(x)));
       carryForwardRef.current = null;
+      setEscalationResolverPin(null);
+      setOfferBuilderSpecialistPin(null);
+      setInvoiceSetupSpecialist(false);
+      setInvestigationSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(false);
     }
   }, [open, cancelPacedReveal]);
 
@@ -397,6 +469,10 @@ export function SupportAssistantWidget() {
     if (confirmingProposalKey || isProposalKeyConsumed(consumedProposalKeysByMessageId, assistantMessageId, key)) {
       return;
     }
+    if (offerBuilderSpecialistPin && p.project_id.trim() !== offerBuilderSpecialistPin) {
+      alert("This proposal does not match the pinned offer project. Exit offer mode or use the matching card.");
+      return;
+    }
     setConfirmingProposalKey(key);
     try {
       const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -455,6 +531,112 @@ export function SupportAssistantWidget() {
     }
   }
 
+  async function confirmCalendarEventCreateProposal(
+    assistantMessageId: string,
+    p: OperatorAssistantProposedActionCalendarEventCreate,
+  ) {
+    const key = calendarEventCreateProposalKey(p);
+    if (confirmingProposalKey || isProposalKeyConsumed(consumedProposalKeysByMessageId, assistantMessageId, key)) {
+      return;
+    }
+    setConfirmingProposalKey(key);
+    try {
+      const { data, error } = await supabase.functions.invoke("insert-operator-assistant-calendar-event", {
+        body: {
+          operation: "create",
+          title: p.title,
+          startTime: p.startTime,
+          endTime: p.endTime,
+          eventType: p.eventType,
+          weddingId: p.weddingId ?? null,
+        },
+      });
+      if (error) {
+        const detail = await getSupabaseEdgeFunctionErrorMessage(error, data);
+        throw new Error(detail);
+      }
+      const eid = (data as { calendarEventId?: string } | null)?.calendarEventId;
+      const auditEventId = (data as { auditEventId?: string } | null)?.auditEventId;
+      if (auditEventId) {
+        setPendingCalendarUndo({ auditId: auditEventId, kind: "create" });
+      }
+      setConsumedProposalKeysByMessageId((prev) => addConsumedProposalKey(prev, assistantMessageId, key));
+      alert(
+        eid
+          ? `Calendar event created. ID: ${eid} — open Calendar in the app to verify times.`
+          : "Calendar event created.",
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Could not create calendar event: ${msg}`);
+    } finally {
+      setConfirmingProposalKey(null);
+    }
+  }
+
+  async function confirmCalendarEventRescheduleProposal(
+    assistantMessageId: string,
+    p: OperatorAssistantProposedActionCalendarEventReschedule,
+  ) {
+    const key = calendarEventRescheduleProposalKey(p);
+    if (confirmingProposalKey || isProposalKeyConsumed(consumedProposalKeysByMessageId, assistantMessageId, key)) {
+      return;
+    }
+    setConfirmingProposalKey(key);
+    try {
+      const { data, error } = await supabase.functions.invoke("insert-operator-assistant-calendar-event", {
+        body: {
+          operation: "reschedule",
+          calendarEventId: p.calendarEventId,
+          startTime: p.startTime,
+          endTime: p.endTime,
+        },
+      });
+      if (error) {
+        const detail = await getSupabaseEdgeFunctionErrorMessage(error, data);
+        throw new Error(detail);
+      }
+      const eid = (data as { calendarEventId?: string } | null)?.calendarEventId;
+      const auditEventId = (data as { auditEventId?: string } | null)?.auditEventId;
+      if (auditEventId) {
+        setPendingCalendarUndo({ auditId: auditEventId, kind: "reschedule" });
+      }
+      setConsumedProposalKeysByMessageId((prev) => addConsumedProposalKey(prev, assistantMessageId, key));
+      alert(
+        eid
+          ? `Event rescheduled. ID: ${eid} — confirm times in Calendar.`
+          : "Event rescheduled.",
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Could not reschedule event: ${msg}`);
+    } finally {
+      setConfirmingProposalKey(null);
+    }
+  }
+
+  async function undoPendingAnaCalendarWrite() {
+    const pending = pendingCalendarUndo;
+    if (!pending) return;
+    setUndoingCalendarAuditId(pending.auditId);
+    try {
+      const { data, error } = await supabase.functions.invoke("undo-operator-assistant-write", {
+        body: { auditId: pending.auditId },
+      });
+      if (error) {
+        const detail = await getSupabaseEdgeFunctionErrorMessage(error, data);
+        throw new Error(detail);
+      }
+      setPendingCalendarUndo(null);
+      alert("Last Ana calendar change was undone.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Could not undo calendar change: ${msg}`);
+    } finally {
+      setUndoingCalendarAuditId(null);
+    }
+  }
+
   async function confirmAuthorizedCaseExceptionProposal(
     assistantMessageId: string,
     p: OperatorAssistantProposedActionAuthorizedCaseException,
@@ -491,6 +673,41 @@ export function SupportAssistantWidget() {
     }
   }
 
+  async function confirmEscalationResolveProposal(
+    assistantMessageId: string,
+    p: OperatorAssistantProposedActionEscalationResolve,
+  ) {
+    const key = escalationResolveProposalKey(p);
+    if (confirmingProposalKey || isProposalKeyConsumed(consumedProposalKeysByMessageId, assistantMessageId, key)) {
+      return;
+    }
+    if (escalationResolverPin !== p.escalationId) {
+      alert("This resolution does not match the pinned escalation. Exit resolver mode and try again.");
+      return;
+    }
+    const ok = window.confirm(
+      "Queue this resolution on the dashboard? Processing runs in the background (same path as Today → Record resolution).",
+    );
+    if (!ok) return;
+    setConfirmingProposalKey(key);
+    try {
+      const { jobId } = await resolveEscalationViaDashboard({
+        escalationId: p.escalationId,
+        resolutionSummary: p.resolutionSummary,
+        photographerReplyRaw: p.photographerReplyRaw ?? undefined,
+      });
+      setConsumedProposalKeysByMessageId((prev) => addConsumedProposalKey(prev, assistantMessageId, key));
+      fireDataChanged("escalations");
+      fireDataChanged("inbox");
+      alert(`Resolution queued. Job id: ${jobId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      alert(`Could not queue resolution: ${msg}`);
+    } finally {
+      setConfirmingProposalKey(null);
+    }
+  }
+
   const dragX = useMotionValue(0);
   const dragY = useMotionValue(0);
   const isDragging = useRef(false);
@@ -515,11 +732,95 @@ export function SupportAssistantWidget() {
     function handleAnaQuery(e: Event) {
       const query = (e as CustomEvent).detail?.query;
       if (!query) return;
+      setEscalationResolverPin(null);
+      setOfferBuilderSpecialistPin(null);
+      setInvoiceSetupSpecialist(false);
+      setInvestigationSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(false);
       pendingQuery.current = query;
       setOpen(true);
     }
+    function handleAnaEscalationResolver(e: Event) {
+      const id = (e as CustomEvent).detail?.escalationId;
+      if (typeof id !== "string" || !id.trim()) return;
+      pendingQuery.current = null;
+      setOfferBuilderSpecialistPin(null);
+      setInvoiceSetupSpecialist(false);
+      setInvestigationSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(false);
+      setEscalationResolverPin(id.trim());
+      setOpen(true);
+    }
+    function handleAnaOfferBuilderSpecialist(e: Event) {
+      const id = (e as CustomEvent).detail?.projectId;
+      if (typeof id !== "string" || !id.trim()) return;
+      pendingQuery.current = null;
+      setEscalationResolverPin(null);
+      setInvoiceSetupSpecialist(false);
+      setInvestigationSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(false);
+      setOfferBuilderSpecialistPin(id.trim());
+      setOpen(true);
+    }
+    function handleAnaInvoiceSetupSpecialist() {
+      pendingQuery.current = null;
+      setEscalationResolverPin(null);
+      setOfferBuilderSpecialistPin(null);
+      setInvestigationSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(false);
+      setInvoiceSetupSpecialist(true);
+      setOpen(true);
+    }
+    function handleAnaInvestigationSpecialist() {
+      pendingQuery.current = null;
+      setEscalationResolverPin(null);
+      setOfferBuilderSpecialistPin(null);
+      setInvoiceSetupSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(false);
+      setInvestigationSpecialist(true);
+      setOpen(true);
+    }
+    function handleAnaPlaybookAuditSpecialist() {
+      pendingQuery.current = null;
+      setEscalationResolverPin(null);
+      setOfferBuilderSpecialistPin(null);
+      setInvoiceSetupSpecialist(false);
+      setInvestigationSpecialist(false);
+      setBulkTriageSpecialist(false);
+      setPlaybookAuditSpecialist(true);
+      setOpen(true);
+    }
+    function handleAnaBulkTriageSpecialist() {
+      pendingQuery.current = null;
+      setEscalationResolverPin(null);
+      setOfferBuilderSpecialistPin(null);
+      setInvoiceSetupSpecialist(false);
+      setInvestigationSpecialist(false);
+      setPlaybookAuditSpecialist(false);
+      setBulkTriageSpecialist(true);
+      setOpen(true);
+    }
     window.addEventListener(ANA_QUERY_EVENT, handleAnaQuery);
-    return () => window.removeEventListener(ANA_QUERY_EVENT, handleAnaQuery);
+    window.addEventListener(ANA_ESCALATION_RESOLVER_EVENT, handleAnaEscalationResolver);
+    window.addEventListener(ANA_OFFER_BUILDER_SPECIALIST_EVENT, handleAnaOfferBuilderSpecialist);
+    window.addEventListener(ANA_INVOICE_SETUP_SPECIALIST_EVENT, handleAnaInvoiceSetupSpecialist);
+    window.addEventListener(ANA_INVESTIGATION_SPECIALIST_EVENT, handleAnaInvestigationSpecialist);
+    window.addEventListener(ANA_PLAYBOOK_AUDIT_SPECIALIST_EVENT, handleAnaPlaybookAuditSpecialist);
+    window.addEventListener(ANA_BULK_TRIAGE_SPECIALIST_EVENT, handleAnaBulkTriageSpecialist);
+    return () => {
+      window.removeEventListener(ANA_QUERY_EVENT, handleAnaQuery);
+      window.removeEventListener(ANA_ESCALATION_RESOLVER_EVENT, handleAnaEscalationResolver);
+      window.removeEventListener(ANA_OFFER_BUILDER_SPECIALIST_EVENT, handleAnaOfferBuilderSpecialist);
+      window.removeEventListener(ANA_INVOICE_SETUP_SPECIALIST_EVENT, handleAnaInvoiceSetupSpecialist);
+      window.removeEventListener(ANA_INVESTIGATION_SPECIALIST_EVENT, handleAnaInvestigationSpecialist);
+      window.removeEventListener(ANA_PLAYBOOK_AUDIT_SPECIALIST_EVENT, handleAnaPlaybookAuditSpecialist);
+      window.removeEventListener(ANA_BULK_TRIAGE_SPECIALIST_EVENT, handleAnaBulkTriageSpecialist);
+    };
   }, []);
 
   useEffect(() => {
@@ -532,7 +833,16 @@ export function SupportAssistantWidget() {
 
   async function submitQuestion(overrideText?: string) {
     const text = (overrideText ?? question).trim();
-    if (!text) return;
+    if (
+      !text &&
+      !escalationResolverPin &&
+      !offerBuilderSpecialistPin &&
+      !invoiceSetupSpecialist &&
+      !investigationSpecialist &&
+      !playbookAuditSpecialist &&
+      !bulkTriageSpecialist
+    )
+      return;
     if (!operatorAssistantStreamingV1Enabled() && isSubmitting) return;
 
     const myGen = ++submitGenRef.current;
@@ -560,6 +870,12 @@ export function SupportAssistantWidget() {
       focusedPersonId: null,
       ...(conversation.length > 0 ? { conversation } : {}),
       ...(carryForwardRef.current ? { carryForward: carryForwardRef.current } : {}),
+      ...(escalationResolverPin ? { escalationResolverEscalationId: escalationResolverPin } : {}),
+      ...(offerBuilderSpecialistPin ? { offerBuilderSpecialistProjectId: offerBuilderSpecialistPin } : {}),
+      ...(invoiceSetupSpecialist ? { invoiceSetupSpecialist: true } : {}),
+      ...(investigationSpecialist ? { investigationSpecialist: true } : {}),
+      ...(playbookAuditSpecialist ? { playbookAuditSpecialist: true } : {}),
+      ...(bulkTriageSpecialist ? { bulkTriageSpecialist: true } : {}),
     };
 
     if (operatorAssistantStreamingV1Enabled()) {
@@ -907,6 +1223,122 @@ export function SupportAssistantWidget() {
                   </span>
                 </div>
               )}
+              {escalationResolverPin ? (
+                <div
+                  className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-rose-400/35 bg-rose-500/[0.12] px-2 py-1.5"
+                  role="status"
+                >
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-rose-50/95">
+                    Escalation resolver — pinned{" "}
+                    <span className="font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/85">
+                      {escalationResolverPin.slice(0, 8)}…
+                    </span>
+                    . Ana sees grounded row data; resolution still needs your confirm card below.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setEscalationResolverPin(null)}
+                    className="shrink-0 rounded border border-white/25 bg-white/10 px-2 py-0.5 font-['Saans',ui-sans-serif] text-[10px] text-white/90 hover:bg-white/15"
+                  >
+                    Exit resolver
+                  </button>
+                </div>
+              ) : null}
+              {offerBuilderSpecialistPin ? (
+                <div
+                  className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-400/35 bg-amber-500/[0.12] px-2 py-1.5"
+                  role="status"
+                >
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-amber-50/95">
+                    Offer builder specialist — pinned{" "}
+                    <span className="font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/85">
+                      {offerBuilderSpecialistPin.slice(0, 8)}…
+                    </span>
+                    . Grounded outline in context; name/title changes enqueue for review only.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setOfferBuilderSpecialistPin(null)}
+                    className="shrink-0 rounded border border-white/25 bg-white/10 px-2 py-0.5 font-['Saans',ui-sans-serif] text-[10px] text-white/90 hover:bg-white/15"
+                  >
+                    Exit offer mode
+                  </button>
+                </div>
+              ) : null}
+              {invoiceSetupSpecialist ? (
+                <div
+                  className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-violet-400/35 bg-violet-500/[0.12] px-2 py-1.5"
+                  role="status"
+                >
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-violet-50/95">
+                    Invoice setup specialist — grounded <span className="text-white/90">studio_invoice_setup</span> lane.
+                    Bounded template proposals only (no logo binary); apply stays on the review page.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceSetupSpecialist(false)}
+                    className="shrink-0 rounded border border-white/25 bg-white/10 px-2 py-0.5 font-['Saans',ui-sans-serif] text-[10px] text-white/90 hover:bg-white/15"
+                  >
+                    Exit invoice mode
+                  </button>
+                </div>
+              ) : null}
+              {investigationSpecialist ? (
+                <div
+                  className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-cyan-400/35 bg-cyan-600/[0.14] px-2 py-1.5"
+                  role="status"
+                >
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-cyan-50/95">
+                    Investigation mode — extra read-only tool budget; cite Context and tool JSON; say when evidence is
+                    missing.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setInvestigationSpecialist(false)}
+                    className="shrink-0 rounded border border-white/25 bg-white/10 px-2 py-0.5 font-['Saans',ui-sans-serif] text-[10px] text-white/90 hover:bg-white/15"
+                  >
+                    Exit investigation
+                  </button>
+                </div>
+              ) : null}
+              {playbookAuditSpecialist ? (
+                <div
+                  className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-emerald-400/35 bg-emerald-700/[0.14] px-2 py-1.5"
+                  role="status"
+                >
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-emerald-50/95">
+                    Rule audit mode — playbook coverage in Context; new rules only as{" "}
+                    <span className="font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/90">
+                      playbook_rule_candidate
+                    </span>
+                    ; promote on Rule candidates (review).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPlaybookAuditSpecialist(false)}
+                    className="shrink-0 rounded border border-white/25 bg-white/10 px-2 py-0.5 font-['Saans',ui-sans-serif] text-[10px] text-white/90 hover:bg-white/15"
+                  >
+                    Exit rule audit
+                  </button>
+                </div>
+              ) : null}
+              {bulkTriageSpecialist ? (
+                <div
+                  className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-400/40 bg-amber-600/[0.16] px-2 py-1.5"
+                  role="status"
+                >
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-amber-50/95">
+                    Bulk triage mode — grounded Today / queue snapshot only; one confirmable action proposal per turn.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setBulkTriageSpecialist(false)}
+                    className="shrink-0 rounded border border-white/25 bg-white/10 px-2 py-0.5 font-['Saans',ui-sans-serif] text-[10px] text-white/90 hover:bg-white/15"
+                  >
+                    Exit bulk triage
+                  </button>
+                </div>
+              ) : null}
 
               <div
                 ref={listRef}
@@ -916,10 +1348,43 @@ export function SupportAssistantWidget() {
                 aria-relevant="additions"
               >
                 {messages.length === 0 && !anaTyping && (
-                  <div className="flex h-full min-h-[100px] flex-col items-center justify-center py-6">
+                  <div className="flex h-full min-h-[100px] flex-col items-center justify-center gap-3 py-6">
                     <span className="ana-badge-logo" aria-hidden>
                       a
                     </span>
+                    {!escalationResolverPin &&
+                    !offerBuilderSpecialistPin &&
+                    !invoiceSetupSpecialist &&
+                    !investigationSpecialist &&
+                    !playbookAuditSpecialist &&
+                    !bulkTriageSpecialist ? (
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setInvestigationSpecialist(true)}
+                          className="rounded border border-cyan-400/40 bg-cyan-500/15 px-2.5 py-1 font-['Saans',ui-sans-serif] text-[10px] text-cyan-100/95 hover:bg-cyan-500/25"
+                          data-testid="ana-enter-investigation-mode"
+                        >
+                          Deep search (investigation mode)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPlaybookAuditSpecialist(true)}
+                          className="rounded border border-emerald-400/40 bg-emerald-600/15 px-2.5 py-1 font-['Saans',ui-sans-serif] text-[10px] text-emerald-100/95 hover:bg-emerald-600/25"
+                          data-testid="ana-enter-playbook-audit-mode"
+                        >
+                          Rule audit (playbook mode)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBulkTriageSpecialist(true)}
+                          className="rounded border border-amber-400/45 bg-amber-600/18 px-2.5 py-1 font-['Saans',ui-sans-serif] text-[10px] text-amber-100/95 hover:bg-amber-600/28"
+                          data-testid="ana-enter-bulk-triage-mode"
+                        >
+                          Bulk triage (queue mode)
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 )}
                 {messages.map((m) => (
@@ -1183,6 +1648,9 @@ export function SupportAssistantWidget() {
                               const pk = offerBuilderChangeProposalKey(p);
                               const busy = confirmingProposalKey === pk;
                               const consumed = isProposalKeyConsumed(consumedProposalKeysByMessageId, m.id, pk);
+                              const offerProjectIdMismatch =
+                                offerBuilderSpecialistPin != null &&
+                                p.project_id.trim() !== offerBuilderSpecialistPin;
                               return (
                                 <li
                                   key={pk}
@@ -1204,6 +1672,11 @@ export function SupportAssistantWidget() {
                                     Name / title only (no layout or pricing blocks). Queues one review row — does not edit
                                     the live offer until a future apply step. Nothing is saved until you confirm below.
                                   </p>
+                                  {offerProjectIdMismatch ? (
+                                    <p className="mt-1 font-['Saans',ui-sans-serif] text-[10px] text-amber-200/95">
+                                      Project id does not match pinned offer — confirm is disabled.
+                                    </p>
+                                  ) : null}
                                   {consumed && (
                                     <p className="mt-1.5 font-['Saans',ui-sans-serif] text-[10px] text-emerald-200/90">
                                       Enqueued for review.
@@ -1211,7 +1684,7 @@ export function SupportAssistantWidget() {
                                   )}
                                   <button
                                     type="button"
-                                    disabled={busy || consumed}
+                                    disabled={busy || consumed || offerProjectIdMismatch}
                                     onClick={() => void confirmOfferBuilderChangeProposal(m.id, p)}
                                     className="mt-2 rounded border border-amber-400/40 bg-amber-600/25 px-2 py-1 font-['Saans',ui-sans-serif] text-[10px] text-amber-100 hover:bg-amber-600/35 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
@@ -1264,6 +1737,139 @@ export function SupportAssistantWidget() {
                             })}
                           </ul>
                         )}
+                        {m.display.calendarEventCreateProposals.length > 0 && (
+                          <ul className="mt-2 space-y-2">
+                            {m.display.calendarEventCreateProposals.map((p) => {
+                              const pk = calendarEventCreateProposalKey(p);
+                              const busy = confirmingProposalKey === pk;
+                              const consumed = isProposalKeyConsumed(consumedProposalKeysByMessageId, m.id, pk);
+                              return (
+                                <li
+                                  key={pk}
+                                  className="rounded-md border border-emerald-400/25 bg-emerald-500/[0.07] px-2.5 py-2 text-left"
+                                >
+                                  <p className="font-['Saans',ui-sans-serif] text-[10px] font-semibold uppercase tracking-wide text-emerald-200/90">
+                                    Proposed calendar event
+                                  </p>
+                                  <p className="mt-1 font-['Saans',ui-sans-serif] text-[11px] text-white/90">{p.title}</p>
+                                  <p className="mt-0.5 font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/55">
+                                    {p.eventType} · {p.startTime} → {p.endTime}
+                                    {p.weddingId ? ` · wedding ${p.weddingId}` : ""}
+                                  </p>
+                                  <p className="mt-1 font-['Saans',ui-sans-serif] text-[9px] leading-snug text-white/50">
+                                    Creates one row in your app calendar (database). Not saved until you confirm.
+                                  </p>
+                                  {consumed && (
+                                    <p className="mt-1.5 font-['Saans',ui-sans-serif] text-[10px] text-emerald-200/90">
+                                      Event created.
+                                    </p>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={busy || consumed}
+                                    onClick={() => void confirmCalendarEventCreateProposal(m.id, p)}
+                                    className="mt-2 rounded border border-emerald-400/40 bg-emerald-500/20 px-2 py-1 font-['Saans',ui-sans-serif] text-[10px] text-emerald-100 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {consumed ? "Created" : busy ? "Saving…" : "Create calendar event (confirm)"}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                        {m.display.calendarEventRescheduleProposals.length > 0 && (
+                          <ul className="mt-2 space-y-2">
+                            {m.display.calendarEventRescheduleProposals.map((p) => {
+                              const pk = calendarEventRescheduleProposalKey(p);
+                              const busy = confirmingProposalKey === pk;
+                              const consumed = isProposalKeyConsumed(consumedProposalKeysByMessageId, m.id, pk);
+                              return (
+                                <li
+                                  key={pk}
+                                  className="rounded-md border border-lime-400/25 bg-lime-500/[0.07] px-2.5 py-2 text-left"
+                                >
+                                  <p className="font-['Saans',ui-sans-serif] text-[10px] font-semibold uppercase tracking-wide text-lime-200/90">
+                                    Reschedule calendar event
+                                  </p>
+                                  <p className="mt-1 font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/55">
+                                    Event {p.calendarEventId}
+                                  </p>
+                                  <p className="mt-0.5 font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/55">
+                                    {p.startTime} → {p.endTime}
+                                  </p>
+                                  <p className="mt-1 font-['Saans',ui-sans-serif] text-[9px] leading-snug text-white/50">
+                                    Updates start and end time only. Not saved until you confirm.
+                                  </p>
+                                  {consumed && (
+                                    <p className="mt-1.5 font-['Saans',ui-sans-serif] text-[10px] text-emerald-200/90">
+                                      Times updated.
+                                    </p>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={busy || consumed}
+                                    onClick={() => void confirmCalendarEventRescheduleProposal(m.id, p)}
+                                    className="mt-2 rounded border border-lime-400/40 bg-lime-500/20 px-2 py-1 font-['Saans',ui-sans-serif] text-[10px] text-lime-100 hover:bg-lime-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {consumed ? "Updated" : busy ? "Updating…" : "Reschedule event (confirm)"}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                        {m.display.escalationResolveProposals.length > 0 && (
+                          <ul className="mt-2 space-y-2">
+                            {m.display.escalationResolveProposals.map((p) => {
+                              const pk = escalationResolveProposalKey(p);
+                              const busy = confirmingProposalKey === pk;
+                              const consumed = isProposalKeyConsumed(consumedProposalKeysByMessageId, m.id, pk);
+                              const idMismatch = escalationResolverPin !== p.escalationId;
+                              return (
+                                <li
+                                  key={pk}
+                                  className="rounded-md border border-rose-400/30 bg-rose-500/[0.1] px-2.5 py-2 text-left"
+                                >
+                                  <p className="font-['Saans',ui-sans-serif] text-[10px] font-semibold uppercase tracking-wide text-rose-200/90">
+                                    Proposed escalation resolution
+                                  </p>
+                                  <p className="mt-1 font-['SaansMono',ui-monospace,monospace] text-[9px] text-white/70">
+                                    Escalation {p.escalationId}
+                                  </p>
+                                  <p className="mt-1 whitespace-pre-wrap font-['Saans',ui-sans-serif] text-[11px] leading-snug text-white/90">
+                                    {p.resolutionSummary}
+                                  </p>
+                                  {p.photographerReplyRaw ? (
+                                    <p className="mt-1 whitespace-pre-wrap font-['Saans',ui-sans-serif] text-[10px] leading-snug text-white/75">
+                                      Reply / notes: {p.photographerReplyRaw}
+                                    </p>
+                                  ) : null}
+                                  <p className="mt-1 font-['Saans',ui-sans-serif] text-[9px] leading-snug text-white/55">
+                                    Queues the same dashboard job as Today → Record resolution. Not sent until you confirm.
+                                  </p>
+                                  {idMismatch ? (
+                                    <p className="mt-1 font-['Saans',ui-sans-serif] text-[10px] text-amber-200/95">
+                                      Proposal id does not match pinned escalation — confirm is disabled.
+                                    </p>
+                                  ) : null}
+                                  {consumed && (
+                                    <p className="mt-1.5 font-['Saans',ui-sans-serif] text-[10px] text-emerald-200/90">
+                                      Resolution queued.
+                                    </p>
+                                  )}
+                                  <button
+                                    type="button"
+                                    disabled={busy || consumed || idMismatch}
+                                    onClick={() => void confirmEscalationResolveProposal(m.id, p)}
+                                    className="mt-2 rounded border border-rose-400/45 bg-rose-500/25 px-2 py-1 font-['Saans',ui-sans-serif] text-[10px] text-rose-50 hover:bg-rose-500/35 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {consumed ? "Queued" : busy ? "Queueing…" : "Queue resolution (confirm)"}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
                         {m.display.devRetrieval && (
                           <AssistantDevRetrievalBlock
                             scopes={m.display.devRetrieval.scopes}
@@ -1292,6 +1898,34 @@ export function SupportAssistantWidget() {
                 )}
               </div>
 
+              {pendingCalendarUndo && (
+                <div className="mt-2 shrink-0 rounded-md border border-lime-400/30 bg-lime-500/[0.08] px-2.5 py-2">
+                  <p className="font-['Saans',ui-sans-serif] text-[10px] leading-snug text-white/80">
+                    {pendingCalendarUndo.kind === "create"
+                      ? "The last calendar event you created from Ana can be removed."
+                      : "The last calendar reschedule from Ana can be reverted to the previous times."}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={undoingCalendarAuditId != null}
+                      onClick={() => void undoPendingAnaCalendarWrite()}
+                      className="rounded border border-lime-400/45 bg-lime-500/25 px-2 py-1 font-['Saans',ui-sans-serif] text-[10px] text-lime-100 hover:bg-lime-500/35 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {undoingCalendarAuditId ? "Undoing…" : "Undo"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={undoingCalendarAuditId != null}
+                      onClick={() => setPendingCalendarUndo(null)}
+                      className="rounded border border-white/20 bg-white/5 px-2 py-1 font-['Saans',ui-sans-serif] text-[10px] text-white/75 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-3 shrink-0">
                 <div className="ana-widget-input-well focus-within:border-white/25">
                   <textarea
@@ -1305,7 +1939,21 @@ export function SupportAssistantWidget() {
                       }
                     }}
                     rows={1}
-                    placeholder="Ask me anything..."
+                    placeholder={
+                      escalationResolverPin
+                        ? "Ask about this escalation, or send empty to load default resolver prompt…"
+                        : offerBuilderSpecialistPin
+                          ? "Ask about this offer document, or send empty for the default specialist prompt…"
+                          : invoiceSetupSpecialist
+                            ? "Ask about invoice PDF template, or send empty for the default specialist prompt…"
+                            : investigationSpecialist
+                              ? "Describe what to investigate, or send empty for the default investigation prompt…"
+                              : playbookAuditSpecialist
+                                ? "Ask about playbook coverage or gaps, or send empty for the default rule-audit prompt…"
+                                : bulkTriageSpecialist
+                                  ? "Ask how to prioritize the queue, or send empty for the default bulk-triage prompt…"
+                                  : "Ask me anything..."
+                    }
                     disabled={lockComposerWhileSubmitting}
                     className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 font-['Saans',ui-sans-serif] text-[12px] text-white/[0.96] placeholder:text-white/45 focus:outline-none disabled:opacity-60"
                   />
@@ -1313,7 +1961,16 @@ export function SupportAssistantWidget() {
                     <button
                       type="button"
                       onClick={() => submitQuestion()}
-                      disabled={lockComposerWhileSubmitting || !question.trim()}
+                      disabled={
+                        lockComposerWhileSubmitting ||
+                        (!question.trim() &&
+                          !escalationResolverPin &&
+                          !offerBuilderSpecialistPin &&
+                          !invoiceSetupSpecialist &&
+                          !investigationSpecialist &&
+                          !playbookAuditSpecialist &&
+                          !bulkTriageSpecialist)
+                      }
                       className="ana-widget-send disabled:opacity-35"
                       aria-label="Send"
                     >

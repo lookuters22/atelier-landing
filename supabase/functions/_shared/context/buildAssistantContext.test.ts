@@ -1859,4 +1859,182 @@ describe("buildAssistantContext", () => {
 
     vi.restoreAllMocks();
   });
+
+  it("S3: adds invoice_setup_specialist scope and focus payload when invoiceSetupSpecialist is true", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.limit = () => chain;
+        chain.maybeSingle = () =>
+          table === "studio_invoice_setup"
+            ? Promise.resolve({ data: null, error: null })
+            : Promise.resolve({ data: null, error: null });
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") return resolve({ data: [], error: null });
+          if (table === "weddings") return resolve({ data: [], error: null });
+          if (table === "people") return resolve({ data: [], error: null });
+          if (table === "memories") return resolve({ data: [], error: null });
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "x",
+      invoiceSetupSpecialist: true,
+    });
+
+    expect(ctx.retrievalLog.scopesQueried).toContain("invoice_setup_specialist");
+    const pl = ctx.invoiceSetupSpecialistFocus?.toolPayload as { selectionNote?: string };
+    expect(pl?.selectionNote).toBe("no_invoice_setup_row");
+
+    vi.restoreAllMocks();
+  });
+
+  it("S4: adds investigation_specialist scope and focus when investigationSpecialist is true", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.limit = () => chain;
+        chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") return resolve({ data: [], error: null });
+          if (table === "weddings") return resolve({ data: [], error: null });
+          if (table === "people") return resolve({ data: [], error: null });
+          if (table === "memories") return resolve({ data: [], error: null });
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "x",
+      investigationSpecialist: true,
+    });
+
+    expect(ctx.retrievalLog.scopesQueried).toContain("investigation_specialist");
+    const pl = ctx.investigationSpecialistFocus?.toolPayload as { mode?: string; readOnlyLookupToolNames?: string[] };
+    expect(pl?.mode).toBe("deep_search_investigation_v1");
+    expect(pl?.readOnlyLookupToolNames?.length).toBeGreaterThan(0);
+
+    vi.restoreAllMocks();
+  });
+
+  it("S5: adds playbook_audit_specialist scope and focus when playbookAuditSpecialist is true", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.limit = () => chain;
+        chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") return resolve({ data: [], error: null });
+          if (table === "weddings") return resolve({ data: [], error: null });
+          if (table === "people") return resolve({ data: [], error: null });
+          if (table === "memories") return resolve({ data: [], error: null });
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "x",
+      playbookAuditSpecialist: true,
+    });
+
+    expect(ctx.retrievalLog.scopesQueried).toContain("playbook_audit_specialist");
+    const pl = ctx.playbookAuditSpecialistFocus?.toolPayload as { mode?: string; proposedActionsPolicy?: unknown };
+    expect(pl?.mode).toBe("rule_authoring_audit_v1");
+    expect(pl?.proposedActionsPolicy).toBeDefined();
+
+    vi.restoreAllMocks();
+  });
+
+  it("S6: adds bulk_triage_specialist scope and focus when bulkTriageSpecialist is true", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.limit = () => chain;
+        chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") return resolve({ data: [], error: null });
+          if (table === "weddings") return resolve({ data: [], error: null });
+          if (table === "people") return resolve({ data: [], error: null });
+          if (table === "memories") return resolve({ data: [], error: null });
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "x",
+      bulkTriageSpecialist: true,
+    });
+
+    expect(ctx.retrievalLog.scopesQueried).toContain("bulk_triage_specialist");
+    const pl = ctx.bulkTriageSpecialistFocus?.toolPayload as { mode?: string; maxLookupToolCallsThisTurn?: number };
+    expect(pl?.mode).toBe("bulk_triage_queue_v1");
+    expect(pl?.maxLookupToolCallsThisTurn).toBe(4);
+
+    vi.restoreAllMocks();
+  });
 });

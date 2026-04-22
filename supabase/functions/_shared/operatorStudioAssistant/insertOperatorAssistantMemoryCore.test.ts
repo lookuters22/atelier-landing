@@ -17,6 +17,19 @@ describe("insertMemoryForOperatorAssistant", () => {
           }),
         };
       }
+      if (table === "operator_assistant_write_audit") {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () =>
+                Promise.resolve({
+                  data: { id: "audit-mem-1" },
+                  error: null,
+                }),
+            }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     });
 
@@ -31,6 +44,7 @@ describe("insertMemoryForOperatorAssistant", () => {
     });
 
     expect(out.id).toBe("mem-1");
+    expect(out.auditId).toBe("audit-mem-1");
   });
 
   it("verifies wedding ownership before insert when memoryScope is project", async () => {
@@ -62,6 +76,18 @@ describe("insertMemoryForOperatorAssistant", () => {
           }),
         };
       }
+      if (table === "operator_assistant_write_audit") {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () => {
+                order.push("audit");
+                return Promise.resolve({ data: { id: "audit-m2" }, error: null });
+              },
+            }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     });
 
@@ -73,7 +99,7 @@ describe("insertMemoryForOperatorAssistant", () => {
       fullContent: "Longer content",
       weddingId: "w1",
     });
-    expect(order).toEqual(["weddings", "memories"]);
+    expect(order).toEqual(["weddings", "memories", "audit"]);
   });
 
   it("verifies people ownership before insert when memoryScope is person", async () => {
@@ -105,6 +131,18 @@ describe("insertMemoryForOperatorAssistant", () => {
           }),
         };
       }
+      if (table === "operator_assistant_write_audit") {
+        return {
+          insert: () => ({
+            select: () => ({
+              single: () => {
+                order.push("audit");
+                return Promise.resolve({ data: { id: "audit-m3" }, error: null });
+              },
+            }),
+          }),
+        };
+      }
       throw new Error(`unexpected table ${table}`);
     });
 
@@ -117,6 +155,6 @@ describe("insertMemoryForOperatorAssistant", () => {
       weddingId: null,
       personId: "p1",
     });
-    expect(order).toEqual(["people", "memories"]);
+    expect(order).toEqual(["people", "memories", "audit"]);
   });
 });

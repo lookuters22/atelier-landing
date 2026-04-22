@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useInvoiceSetup } from "../../components/modes/settings/InvoiceSetupContext";
+import { openAnaWithInvoiceSetupSpecialist } from "../../components/SupportAssistantWidget";
 
 const PRESETS = ["#3b4ed0", "#0d9488", "#b45309", "#1a1c1e"];
 
@@ -31,7 +32,7 @@ export function InvoiceSetupPage() {
         <p className="mt-1 text-[13px] text-muted-foreground">
           How invoices look when generated. Changes update the live preview in real time.
         </p>
-        <p className="mt-2">
+        <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             to="/workspace/invoice-setup/proposals"
             className="text-[13px] text-primary underline underline-offset-2 hover:text-foreground/90"
@@ -39,6 +40,14 @@ export function InvoiceSetupPage() {
           >
             Change proposals (review)
           </Link>
+          <button
+            type="button"
+            onClick={() => openAnaWithInvoiceSetupSpecialist()}
+            className="text-[13px] text-primary underline underline-offset-2 hover:text-foreground/90"
+            data-testid="invoice-setup-ask-ana-specialist"
+          >
+            Ask Ana (invoice template)
+          </button>
         </p>
       </div>
 

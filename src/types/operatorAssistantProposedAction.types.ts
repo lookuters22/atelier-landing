@@ -113,6 +113,41 @@ export type OperatorAssistantProposedActionInvoiceSetupChangeProposal = {
   template_patch: InvoiceSetupTemplatePatchV1;
 };
 
+/**
+ * F3 — simple `calendar_events` create (confirm → insert). Optional project link via `weddingId`.
+ */
+export type OperatorAssistantProposedActionCalendarEventCreate = {
+  kind: "calendar_event_create";
+  title: string;
+  /** ISO 8601 timestamptz string */
+  startTime: string;
+  endTime: string;
+  eventType: Database["public"]["Enums"]["event_type"];
+  weddingId?: string | null;
+};
+
+/**
+ * F3 — narrow reschedule: only `start_time` / `end_time` on an existing tenant-owned row.
+ * `calendarEventId` must match an id from Context (e.g. Calendar lookup) when the operator refers to a listed event.
+ */
+export type OperatorAssistantProposedActionCalendarEventReschedule = {
+  kind: "calendar_event_reschedule";
+  calendarEventId: string;
+  startTime: string;
+  endTime: string;
+};
+
+/**
+ * S1 — queue dashboard escalation resolution (`dashboard-resolve-escalation`) after operator confirms on the card.
+ * Must match the pinned escalation id in resolver mode; server filters stray proposals.
+ */
+export type OperatorAssistantProposedActionEscalationResolve = {
+  kind: "escalation_resolve";
+  escalationId: string;
+  resolutionSummary: string;
+  photographerReplyRaw?: string | null;
+};
+
 export type OperatorAssistantProposedAction =
   | OperatorAssistantProposedActionPlaybookRuleCandidate
   | OperatorAssistantProposedActionTask
@@ -120,7 +155,27 @@ export type OperatorAssistantProposedAction =
   | OperatorAssistantProposedActionAuthorizedCaseException
   | OperatorAssistantProposedActionStudioProfileChangeProposal
   | OperatorAssistantProposedActionOfferBuilderChangeProposal
-  | OperatorAssistantProposedActionInvoiceSetupChangeProposal;
+  | OperatorAssistantProposedActionInvoiceSetupChangeProposal
+  | OperatorAssistantProposedActionCalendarEventCreate
+  | OperatorAssistantProposedActionCalendarEventReschedule
+  | OperatorAssistantProposedActionEscalationResolve;
+
+/** API body for `insert-operator-assistant-calendar-event` (confirm step). */
+export type InsertOperatorAssistantCalendarEventBody =
+  | {
+      operation: "create";
+      title: string;
+      startTime: string;
+      endTime: string;
+      eventType: Database["public"]["Enums"]["event_type"];
+      weddingId: string | null;
+    }
+  | {
+      operation: "reschedule";
+      calendarEventId: string;
+      startTime: string;
+      endTime: string;
+    };
 
 /**
  * API body for `insert-operator-assistant-playbook-rule-candidate` (confirm step).

@@ -21,6 +21,9 @@ function answerDisplay(mainText: string): OperatorStudioAssistantAssistantDispla
     studioProfileChangeProposals: [],
     offerBuilderChangeProposals: [],
     invoiceSetupChangeProposals: [],
+    calendarEventCreateProposals: [],
+    calendarEventRescheduleProposals: [],
+    escalationResolveProposals: [],
   };
 }
 

@@ -44,13 +44,13 @@ Deno.serve(async (req) => {
       return json({ error: validated.error }, 400);
     }
 
-    const { id } = await insertPlaybookRuleCandidateForOperatorAssistant(
+    const { id, auditId } = await insertPlaybookRuleCandidateForOperatorAssistant(
       supabaseAdmin,
       photographerId,
       validated.value,
     );
 
-    return json({ candidateId: id, clientFacingForbidden: true as const });
+    return json({ candidateId: id, auditEventId: auditId, clientFacingForbidden: true as const });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Internal error";
     if (msg === "Unauthorized" || msg.includes("Missing or invalid Authorization")) {

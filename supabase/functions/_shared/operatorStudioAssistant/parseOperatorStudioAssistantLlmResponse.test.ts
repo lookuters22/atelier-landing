@@ -232,4 +232,45 @@ describe("parseOperatorStudioAssistantLlmResponse", () => {
       expect(o.proposedActions[0].template_patch.paymentTerms).toBe("Net 14 · Bank transfer");
     }
   });
+
+  it("F3: parses calendar_event_create", () => {
+    const o = parseOperatorStudioAssistantLlmResponse(
+      JSON.stringify({
+        reply: "Staged — confirm to add to your calendar.",
+        proposedActions: [
+          {
+            kind: "calendar_event_create",
+            title: "Venue Call",
+            startTime: "2026-05-04T14:00:00.000Z",
+            endTime: "2026-05-04T15:00:00.000Z",
+            eventType: "other",
+            weddingId: null,
+          },
+        ],
+      }),
+    );
+    expect(o.proposedActions).toHaveLength(1);
+    expect(o.proposedActions[0]!.kind).toBe("calendar_event_create");
+  });
+
+  it("F3: parses calendar_event_reschedule", () => {
+    const id = "33333333-3333-4333-a333-333333333333";
+    const o = parseOperatorStudioAssistantLlmResponse(
+      JSON.stringify({
+        reply: "Confirm to move the event.",
+        proposedActions: [
+          {
+            kind: "calendar_event_reschedule",
+            calendarEventId: id,
+            startTime: "2026-05-04T16:00:00.000Z",
+            endTime: "2026-05-04T17:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    expect(o.proposedActions).toHaveLength(1);
+    if (o.proposedActions[0]!.kind === "calendar_event_reschedule") {
+      expect(o.proposedActions[0].calendarEventId).toBe(id);
+    }
+  });
 });

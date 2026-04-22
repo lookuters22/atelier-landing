@@ -53,6 +53,11 @@ const EMPTY_OPERATOR_STATE: AssistantOperatorStateSummary = {
 import {
   completeOperatorStudioAssistantLlm,
   completeOperatorStudioAssistantLlmStreaming,
+  offerBuilderSpecialistModeSystemAddendum,
+  invoiceSetupSpecialistModeSystemAddendum,
+  investigationModeSystemAddendum,
+  playbookAuditModeSystemAddendum,
+  bulkTriageModeSystemAddendum,
   OPERATOR_STUDIO_ASSISTANT_RECENT_SESSION_ADDENDUM,
   OPERATOR_STUDIO_ASSISTANT_SYSTEM_PROMPT,
 } from "./completeOperatorStudioAssistantLlm.ts";
@@ -107,6 +112,12 @@ function minimalAssistantContext(overrides: Partial<AssistantContext> = {}): Ass
     operatorInquiryCountSnapshot: IDLE_ASSISTANT_INQUIRY_COUNT_SNAPSHOT,
     operatorCalendarSnapshot: IDLE_ASSISTANT_CALENDAR_SNAPSHOT,
     operatorTriage: IDLE_OPERATOR_ANA_TRIAGE,
+    escalationResolverFocus: null,
+    offerBuilderSpecialistFocus: null,
+    invoiceSetupSpecialistFocus: null,
+    investigationSpecialistFocus: null,
+    playbookAuditSpecialistFocus: null,
+    bulkTriageSpecialistFocus: null,
     ...overrides,
   };
   const cov = deriveAssistantPlaybookCoverageSummary(base.playbookRules);
@@ -264,7 +275,7 @@ describe("OPERATOR_STUDIO_ASSISTANT_SYSTEM_PROMPT (Slice 2)", () => {
     expect(p).toContain('**"memory_note"**');
     expect(p).toContain("**memoryScope**");
     expect(p).toMatch(
-      /[Nn]ever claim a rule, task, memory, exception, profile field, offer document, or invoice template|proposes what they can confirm/,
+      /[Nn]ever claim a rule, task, memory, exception, profile field, offer document, invoice template, or calendar row|proposes what they can confirm/,
     );
   });
 
@@ -368,7 +379,7 @@ describe("OPERATOR_STUDIO_ASSISTANT_SYSTEM_PROMPT (Slice 2)", () => {
 
   it("Calendar — system prompt stresses DB window evidence (no “free day” inference)", () => {
     const p = OPERATOR_STUDIO_ASSISTANT_SYSTEM_PROMPT;
-    expect(p).toMatch(/\*\*Calendar \(read-only — database calendar_events\):\*\*/);
+    expect(p).toMatch(/\*\*Calendar \(database calendar_events — reads \+ staged writes\):\*\*/);
     expect(p).toContain("lookup mode");
     expect(p).toContain("UTC time window");
     expect(p).toMatch(/no rows|free/i);
@@ -385,9 +396,10 @@ describe("OPERATOR_STUDIO_ASSISTANT_SYSTEM_PROMPT (Slice 2)", () => {
 
   it("Slice 3 refinement — operator queue / Today snapshot contract", () => {
     const p = OPERATOR_STUDIO_ASSISTANT_SYSTEM_PROMPT;
-    expect(p).toMatch(/\*\*Operator queue \/ Today \(read-only — Slice 3 refinement\):\*\*/);
+    expect(p).toMatch(/\*\*Operator queue \/ Today \(read-only — Slice 3 refinement \+ F5 urgency framing\):\*\*/);
     expect(p).toContain("operator_queue");
     expect(p).toMatch(/Snapshot-derived|Zen tab totals/i);
+    expect(p).toMatch(/blocking \/ decision|triage \/ volume|overdue tasks/i);
   });
 
   it("draft inspection — operator_lookup_draft + evidence vs inference in system prompt", () => {
@@ -1770,5 +1782,97 @@ describe("completeOperatorStudioAssistantLlmStreaming (mocked OpenAI stream)", (
     await completeOperatorStudioAssistantLlm(minimalAssistantContext());
     const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body)) as { stream?: boolean };
     expect(body.stream).toBeUndefined();
+  });
+});
+
+describe("offerBuilderSpecialistModeSystemAddendum (S2)", () => {
+  it("is empty when no specialist focus", () => {
+    expect(offerBuilderSpecialistModeSystemAddendum(minimalAssistantContext())).toBe("");
+  });
+
+  it("names pinned project id and bounded proposal rules", () => {
+    const pid = "a0eebc99-9c0b-4ef8-8bb2-111111111111";
+    const add = offerBuilderSpecialistModeSystemAddendum(
+      minimalAssistantContext({
+        offerBuilderSpecialistFocus: {
+          pinnedProjectId: pid,
+          toolPayload: { selectionNote: "ok", didRun: true },
+        },
+      }),
+    );
+    expect(add).toContain("Offer builder specialist mode (S2)");
+    expect(add).toContain(pid);
+    expect(add).toContain("offer_builder_change_proposal");
+    expect(add).toContain("never");
+  });
+});
+
+describe("investigationModeSystemAddendum (S4)", () => {
+  it("is empty when no investigation focus", () => {
+    expect(investigationModeSystemAddendum(minimalAssistantContext())).toBe("");
+  });
+
+  it("describes evidence-first investigation and tool budget", () => {
+    const add = investigationModeSystemAddendum(
+      minimalAssistantContext({
+        investigationSpecialistFocus: { toolPayload: { mode: "deep_search_investigation_v1" } },
+      }),
+    );
+    expect(add).toContain("Deep search / investigation mode (S4)");
+    expect(add).toContain("evidence-first");
+    expect(add).toContain("5");
+  });
+});
+
+describe("playbookAuditModeSystemAddendum (S5)", () => {
+  it("is empty when no playbook audit focus", () => {
+    expect(playbookAuditModeSystemAddendum(minimalAssistantContext())).toBe("");
+  });
+
+  it("describes audit lane and playbook_rule_candidate-only writes", () => {
+    const add = playbookAuditModeSystemAddendum(
+      minimalAssistantContext({
+        playbookAuditSpecialistFocus: { toolPayload: { mode: "rule_authoring_audit_v1" } },
+      }),
+    );
+    expect(add).toContain("Rule authoring / audit mode (S5)");
+    expect(add).toContain("playbook_rule_candidate");
+    expect(add).toContain("playbook_rules");
+  });
+});
+
+describe("bulkTriageModeSystemAddendum (S6)", () => {
+  it("is empty when no bulk triage focus", () => {
+    expect(bulkTriageModeSystemAddendum(minimalAssistantContext())).toBe("");
+  });
+
+  it("describes queue triage and one proposal cap", () => {
+    const add = bulkTriageModeSystemAddendum(
+      minimalAssistantContext({
+        bulkTriageSpecialistFocus: { toolPayload: { mode: "bulk_triage_queue_v1" } },
+      }),
+    );
+    expect(add).toContain("Bulk queue triage mode (S6)");
+    expect(add).toContain("At most one");
+    expect(add).toContain("4");
+  });
+});
+
+describe("invoiceSetupSpecialistModeSystemAddendum (S3)", () => {
+  it("is empty when no invoice specialist focus", () => {
+    expect(invoiceSetupSpecialistModeSystemAddendum(minimalAssistantContext())).toBe("");
+  });
+
+  it("mentions invoice setup specialist and bounded template proposals", () => {
+    const add = invoiceSetupSpecialistModeSystemAddendum(
+      minimalAssistantContext({
+        invoiceSetupSpecialistFocus: {
+          toolPayload: { selectionNote: "ok", didRun: true },
+        },
+      }),
+    );
+    expect(add).toContain("Invoice setup specialist mode (S3)");
+    expect(add).toContain("invoice_setup_change_proposal");
+    expect(add).toContain("logoDataUrl");
   });
 });

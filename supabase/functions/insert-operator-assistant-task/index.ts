@@ -45,9 +45,9 @@ Deno.serve(async (req) => {
       return json({ error: validated.error }, 400);
     }
 
-    const { id } = await insertTaskForOperatorAssistant(supabaseAdmin, photographerId, validated.value);
+    const { id, auditId } = await insertTaskForOperatorAssistant(supabaseAdmin, photographerId, validated.value);
 
-    return json({ taskId: id, clientFacingForbidden: true as const });
+    return json({ taskId: id, auditEventId: auditId, clientFacingForbidden: true as const });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Internal error";
     if (msg === "Unauthorized" || msg.includes("Missing or invalid Authorization")) {

@@ -56,6 +56,12 @@ function minimalCtx(overrides: Partial<AssistantContext> = {}): AssistantContext
     studioAnalysisSnapshot: null,
     carryForward: null,
     operatorTriage: IDLE_OPERATOR_ANA_TRIAGE,
+    escalationResolverFocus: null,
+    offerBuilderSpecialistFocus: null,
+    invoiceSetupSpecialistFocus: null,
+    investigationSpecialistFocus: null,
+    playbookAuditSpecialistFocus: null,
+    bulkTriageSpecialistFocus: null,
     retrievalLog: {
       mode: "assistant_query" as const,
       queryDigest: { charLength: 2, fingerprint: "wx" },

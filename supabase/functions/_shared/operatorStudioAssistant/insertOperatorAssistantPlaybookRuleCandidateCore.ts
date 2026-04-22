@@ -4,12 +4,13 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { Database } from "../../../../src/types/database.types.ts";
 import type { ValidatedPlaybookRuleCandidatePayload } from "./validatePlaybookRuleCandidatePayload.ts";
+import { recordOperatorAssistantWriteAudit } from "./recordOperatorAssistantWriteAudit.ts";
 
 export async function insertPlaybookRuleCandidateForOperatorAssistant(
   supabase: SupabaseClient,
   photographerId: string,
   body: ValidatedPlaybookRuleCandidatePayload,
-): Promise<{ id: string }> {
+): Promise<{ id: string; auditId: string }> {
   if (body.weddingId) {
     const { data, error } = await supabase
       .from("weddings")
@@ -51,5 +52,16 @@ export async function insertPlaybookRuleCandidateForOperatorAssistant(
   if (!row?.id) {
     throw new Error("insert did not return id");
   }
-  return { id: String(row.id) };
+  const id = String(row.id);
+  const { auditId } = await recordOperatorAssistantWriteAudit(supabase, photographerId, {
+    operation: "playbook_rule_candidate_create",
+    entityTable: "playbook_rule_candidates",
+    entityId: id,
+    detail: {
+      topic: body.topic,
+      proposedActionKey: body.proposedActionKey,
+      weddingId: body.weddingId ?? null,
+    },
+  });
+  return { id, auditId };
 }

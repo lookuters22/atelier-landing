@@ -75,6 +75,12 @@ function minimalContext(): AssistantContext {
     studioAnalysisSnapshot: null,
     carryForward: null,
     operatorTriage: IDLE_OPERATOR_ANA_TRIAGE,
+    escalationResolverFocus: null,
+    offerBuilderSpecialistFocus: null,
+    invoiceSetupSpecialistFocus: null,
+    investigationSpecialistFocus: null,
+    playbookAuditSpecialistFocus: null,
+    bulkTriageSpecialistFocus: null,
     retrievalLog: {
       mode: "assistant_query",
       queryDigest: { charLength: 1, fingerprint: "ab" },

@@ -1,0 +1,55 @@
+1. Notepad Extractions (Fluid Memory)
+The background memory worker needs to capture an intense web of agency dynamics and custom deals from this massive thread:
+
+VIP Dynamics (Critical): Lavender & Rose (Polina, Kerry, Jennifer, Alexandra) are the planners. They explicitly expressed frustration over being left out of direct client communications. The AI must note: Always CC the planning team on all logistical or financial emails with Davina & Ryan.
+
+Financial & Deal Structures: The budget was aggressively negotiated down to 30k. The engagement shoot was discounted to €5,000. The agency receives a 10% commission.
+
+Billing Entity: Wall Street Investment Group, LLC.
+
+Banking Exception: The agency took a €100 hit to their commission to cover a wire transfer bounce fee caused by the clients.
+
+Aesthetic Requests: Davina specifically wants Ryan’s closed eyes edited/opened in the "red curtain" reception photos.
+
+⚡ 2. Tool Triggers (The Orchestrator)
+Here is exactly when the Orchestrator would need to fire its tools to prevent a disaster:
+
+Pre-Flight (Entity Resolution):
+
+Trigger: [Wed, May 7, 2025 at 11:24 AM] Ana mentions that the clients reached out directly via WhatsApp and Ryan’s assistant emailed contract changes.
+
+Action: The system must cleanly map the Assistant's email address and the WhatsApp conversation directly into the Lavender & Rose master thread so Ana isn't confused about who is approving what.
+
+Tool: check_calendar & generate_meeting:
+
+Trigger: [Mon, Mar 31, 2025 at 10:49 AM] and [Thu, Aug 14, 2025 at 12:12 PM].
+
+Action: Ana handles timezone conversions (PST to CET) and successfully generates Zoom links for the initial pitch and the timeline sync.
+
+Tool: escalate_to_boss:
+
+Trigger 1: [Tue, Mar 18, 2025 at 3:41 PM] Jennifer pushes back on the €39k quote, stating the budget is strictly €30k. (AI must halt: It cannot authorize a €9,000 discount).
+
+Trigger 2: [Fri, May 16, 2025 at 12:36 PM] Kerry sends a list of legal changes to the contract, including altering the cancellation liability window to 24 hours. (AI must halt: It can never approve legal redlines or contract amendments).
+
+Trigger 3: [Thu, Aug 14, 2025 at 2:49 PM] Alexandra asks to creatively deduct €100 from their own commission to cover the client's bank mistake. (AI must halt: It cannot authorize ad-hoc accounting shifts).
+
+Trigger 4: [Sat, Dec 6, 2025 at 3:15 AM] Davina asks if Ryan's eyes can be Photoshopped open in the red curtain pictures. (AI must halt: It cannot promise complex graphical edits without the editing team reviewing the raw files).
+
+🚨 3. Architecture Gaps (Where the humans got messy)
+This thread exposed some very realistic friction points that our 5-module architecture needs to smooth out. Because you aren't a developer, we will solve these with simple dashboard buttons rather than complex code.
+
+Gap A: The "Agency Ghosting" Problem
+The planners got incredibly stressed because the clients bypassed them, texted Danilo on WhatsApp, and Danilo sent the contract directly. The planners felt cut out of the loop.
+
+The Fix: We need an Agency CC Rule. When the background worker tags an inquiry with a Planner's email, the AI automatically CCs that planner on every single outgoing deliverable (contracts, galleries, invoices). If you send a manual WhatsApp, you just tap a "Notify Planner" button on your dashboard, and Ana sends a quick email: "Hi Polina, just keeping you in the loop that Danilo just sent the contract over via WhatsApp!"
+
+Gap B: The Real-Life Production Delay
+On December 3rd, Ana had to write a highly empathetic email delaying the gallery delivery by two days because of an unexpected travel schedule change. The AI has no idea where you are flying or if you are running behind on editing.
+
+The Fix: We need a Delay Deliverable button on your dashboard. If you are stuck at an airport, you hit the button, type "stuck in transit, need 2 more days," and the AI autonomously drafts a beautiful, luxury-toned apology email explaining the delay without sounding like a panicked vendor.
+
+Gap C: The "Visual Exception" Protocol
+Davina attached an image (IMG_1973.jpeg) asking if Ryan's eyes could be fixed. The AI cannot look at an image and know if a face-swap is technically possible in Photoshop.
+
+The Fix: The system needs an Attachment Flag. If a client uploads an image accompanied by words like "edit," "change," or "fix," the AI drafts a polite acknowledgment ("I've received the photo and will check with Sharon!") but immediately triggers the WhatsApp loop so you can actually look at the JPEG and make the call.

@@ -7,6 +7,7 @@ import type { Json } from "../../../../src/types/database.types.ts";
 import { addDaysIsoUtc, DEFAULT_AUTHORIZED_CASE_EXCEPTION_TTL_DAYS } from "../policy/authorizedCaseExceptionExpiry.ts";
 import { fetchPlaybookRuleIdForTenantActionKey } from "../policy/upsertAuthorizedCaseExceptionFromEscalationResolution.ts";
 import type { ValidatedOperatorAssistantAuthorizedCaseExceptionPayload } from "./validateOperatorAssistantAuthorizedCaseExceptionPayload.ts";
+import { recordOperatorAssistantWriteAudit } from "./recordOperatorAssistantWriteAudit.ts";
 
 async function revokeCompetingForActionKey(
   supabase: SupabaseClient,
@@ -62,7 +63,7 @@ export async function insertAuthorizedCaseExceptionForOperatorAssistant(
   supabase: SupabaseClient,
   photographerId: string,
   body: ValidatedOperatorAssistantAuthorizedCaseExceptionPayload,
-): Promise<{ id: string; effectiveUntil: string }> {
+): Promise<{ id: string; effectiveUntil: string; auditId: string }> {
   const { data: w, error: wErr } = await supabase
     .from("weddings")
     .select("id")
@@ -147,5 +148,21 @@ export async function insertAuthorizedCaseExceptionForOperatorAssistant(
   if (!row?.id) {
     throw new Error("insert did not return id");
   }
-  return { id: String(row.id), effectiveUntil: String((row as { effective_until: string }).effective_until) };
+  const id = String(row.id);
+  const { auditId } = await recordOperatorAssistantWriteAudit(supabase, photographerId, {
+    operation: "authorized_case_exception_create",
+    entityTable: "authorized_case_exceptions",
+    entityId: id,
+    detail: {
+      weddingId: body.weddingId,
+      overridesActionKey: body.overridesActionKey,
+      targetPlaybookRuleId: body.targetPlaybookRuleId ?? null,
+      clientThreadId: body.clientThreadId ?? null,
+    },
+  });
+  return {
+    id,
+    effectiveUntil: String((row as { effective_until: string }).effective_until),
+    auditId,
+  };
 }

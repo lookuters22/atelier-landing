@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       return json({ error: validated.error }, 400);
     }
 
-    const { id, effectiveUntil } = await insertAuthorizedCaseExceptionForOperatorAssistant(
+    const { id, effectiveUntil, auditId } = await insertAuthorizedCaseExceptionForOperatorAssistant(
       supabaseAdmin,
       photographerId,
       validated.value,
@@ -52,6 +52,7 @@ Deno.serve(async (req) => {
     return json({
       exceptionId: id,
       effectiveUntil,
+      auditEventId: auditId,
       clientFacingForbidden: true as const,
     });
   } catch (e) {

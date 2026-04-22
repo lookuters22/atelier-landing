@@ -1,6 +1,6 @@
 import type { Data } from "@measured/puck";
 import Lenis from "lenis";
-import { ExternalLink, FolderOpen, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, FolderOpen, MessageCircle, Plus, Trash2 } from "lucide-react";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
@@ -23,6 +23,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { openAnaWithOfferBuilderProject } from "../../components/SupportAssistantWidget";
 import {
   Empty,
   EmptyContent,
@@ -162,6 +163,9 @@ export function OfferBuilderHubPage() {
                 <ContextMenuContent>
                   <ContextMenuItem onClick={() => openProject(p.id)}>
                     <ExternalLink className="mr-2 h-4 w-4" /> Open project
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => openAnaWithOfferBuilderProject(p.id)}>
+                    <MessageCircle className="mr-2 h-4 w-4" /> Ask Ana (this offer)
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem className="text-red-400" onClick={() => void removeProject(p.id)}>

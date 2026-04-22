@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import type { AssistantRetrievalLog } from "../../../../src/types/assistantContext.types.ts";
+import type { AssistantContext, AssistantRetrievalLog } from "../../../../src/types/assistantContext.types.ts";
 import type { OperatorAnaCarryForwardClientState } from "../../../../src/types/operatorAnaCarryForward.types.ts";
 import type { OperatorAnaWebConversationMessage } from "../../../../src/lib/operatorAnaWidgetConversationBounds.ts";
 import type { OperatorAssistantProposedAction } from "../../../../src/types/operatorAssistantProposedAction.types.ts";
@@ -14,10 +14,146 @@ import {
 import { OperatorStudioAssistantValidationError } from "./operatorStudioAssistantHttp.ts";
 import { validateAndNormalizeOperatorStudioAssistantConversation } from "./validateOperatorStudioAssistantConversation.ts";
 
+const SPECIALIST_PIN_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function normalizeEscalationResolverPin(raw: unknown): string | null {
+  if (raw == null) return null;
+  const t = String(raw).trim();
+  if (!t) return null;
+  if (!SPECIALIST_PIN_UUID_RE.test(t)) {
+    throw new OperatorStudioAssistantValidationError("escalationResolverEscalationId must be a UUID when set");
+  }
+  return t;
+}
+
+function normalizeOfferBuilderSpecialistPin(raw: unknown): string | null {
+  if (raw == null) return null;
+  const t = String(raw).trim();
+  if (!t) return null;
+  if (!SPECIALIST_PIN_UUID_RE.test(t)) {
+    throw new OperatorStudioAssistantValidationError("offerBuilderSpecialistProjectId must be a UUID when set");
+  }
+  return t;
+}
+
+/** When S3 is active, drops **invoice_setup_change_proposal** unless grounded read **selectionNote** is **ok** (saved row). */
+export function applyInvoiceSetupSpecialistProposalGate(
+  ctx: AssistantContext,
+  actions: OperatorAssistantProposedAction[],
+): OperatorAssistantProposedAction[] {
+  if (!ctx.invoiceSetupSpecialistFocus) {
+    return actions;
+  }
+  const payload = ctx.invoiceSetupSpecialistFocus.toolPayload;
+  let selectionNote: string | null = null;
+  if (payload && typeof payload === "object") {
+    const p = payload as { selectionNote?: string };
+    if (typeof p.selectionNote === "string") selectionNote = p.selectionNote;
+  }
+  const allow = selectionNote === "ok";
+
+  return actions.filter((a) => {
+    if (a.kind !== "invoice_setup_change_proposal") return true;
+    return allow;
+  });
+}
+
+/** When S2 pin is active, drops **offer_builder_change_proposal** unless snapshot ok and **project_id** matches pin. */
+export function applyOfferBuilderSpecialistProposalGate(
+  ctx: AssistantContext,
+  actions: OperatorAssistantProposedAction[],
+): OperatorAssistantProposedAction[] {
+  const pin = ctx.offerBuilderSpecialistFocus?.pinnedProjectId ?? null;
+  if (!pin) {
+    return actions;
+  }
+  const payload = ctx.offerBuilderSpecialistFocus?.toolPayload;
+  let selectionNote: string | null = null;
+  if (payload && typeof payload === "object") {
+    const p = payload as { selectionNote?: string };
+    if (typeof p.selectionNote === "string") selectionNote = p.selectionNote;
+  }
+  const allow = selectionNote === "ok";
+
+  return actions.filter((a) => {
+    if (a.kind !== "offer_builder_change_proposal") return true;
+    if (!allow) return false;
+    return a.project_id.trim() === pin;
+  });
+}
+
+/** Drops stray **escalation_resolve** proposals unless resolver mode + open pinned row + id match (S1). */
+export function applyEscalationResolverProposalGate(
+  ctx: AssistantContext,
+  actions: OperatorAssistantProposedAction[],
+): OperatorAssistantProposedAction[] {
+  const pin = ctx.escalationResolverFocus?.pinnedEscalationId ?? null;
+  const payload = ctx.escalationResolverFocus?.toolPayload;
+  let status: string | null = null;
+  let selectionNote: string | null = null;
+  if (payload && typeof payload === "object") {
+    const p = payload as { selectionNote?: string; escalation?: { status?: string } };
+    if (typeof p.selectionNote === "string") selectionNote = p.selectionNote;
+    if (p.escalation && typeof p.escalation.status === "string") status = p.escalation.status;
+  }
+  const allowResolve = pin != null && selectionNote === "ok" && status === "open";
+
+  if (!pin) {
+    return actions.filter((a) => a.kind !== "escalation_resolve");
+  }
+  return actions.filter((a) => {
+    if (a.kind !== "escalation_resolve") return true;
+    if (!allowResolve) return false;
+    return a.escalationId === pin;
+  });
+}
+
+/**
+ * S5 — only **playbook_rule_candidate** proposals pass; all other kinds are dropped (review-first reusable policy lane).
+ */
+export function applyPlaybookAuditSpecialistProposalGate(
+  ctx: AssistantContext,
+  actions: OperatorAssistantProposedAction[],
+): OperatorAssistantProposedAction[] {
+  if (!ctx.playbookAuditSpecialistFocus) {
+    return actions;
+  }
+  return actions.filter((a) => a.kind === "playbook_rule_candidate");
+}
+
+/**
+ * S6 — at most **one** proposed action per turn (no multi-confirm batch from a single reply).
+ */
+export function applyBulkTriageSpecialistProposalGate(
+  ctx: AssistantContext,
+  actions: OperatorAssistantProposedAction[],
+): OperatorAssistantProposedAction[] {
+  if (!ctx.bulkTriageSpecialistFocus) {
+    return actions;
+  }
+  if (actions.length <= 1) {
+    return actions;
+  }
+  return actions.slice(0, 1);
+}
+
 export type OperatorStudioAssistantRequestBody = {
   queryText?: string;
   focusedWeddingId?: string | null;
   focusedPersonId?: string | null;
+  /** S1 — optional pinned escalation UUID (explicit resolver mode entry from the client). */
+  escalationResolverEscalationId?: string | null;
+  /** S2 — optional pinned offer-builder project UUID (`studio_offer_builder_projects.id`). Mutually exclusive with S1 pin. */
+  offerBuilderSpecialistProjectId?: string | null;
+  /** S3 — invoice PDF template specialist mode. Mutually exclusive with S1 and S2. */
+  invoiceSetupSpecialist?: boolean;
+  /** S4 — deep search / investigation mode. Mutually exclusive with S1–S3, S5, and S6. */
+  investigationSpecialist?: boolean;
+  /** S5 — rule authoring / audit mode. Mutually exclusive with S1–S4 and S6. */
+  playbookAuditSpecialist?: boolean;
+  /** S6 — bulk Today / queue triage mode. Mutually exclusive with S1–S5. */
+  bulkTriageSpecialist?: boolean;
   /** Optional bounded client-only session; validated and passed as LLM `messages[]`, not stored. */
   conversation?: unknown;
   /** Slice 6 — client round-trip carry-forward from the previous response. */
@@ -46,7 +182,49 @@ export type OperatorStudioAssistantValidatedRequest = {
 export function parseAndValidateOperatorStudioAssistantRequest(
   body: OperatorStudioAssistantRequestBody,
 ): OperatorStudioAssistantValidatedRequest {
-  const queryText = String(body.queryText ?? "").trim();
+  const escalationPin = normalizeEscalationResolverPin(body.escalationResolverEscalationId ?? null);
+  const offerBuilderPin = normalizeOfferBuilderSpecialistPin(body.offerBuilderSpecialistProjectId ?? null);
+  const invoiceSetupSpecialist = body.invoiceSetupSpecialist === true;
+  const investigationSpecialist = body.investigationSpecialist === true;
+  const playbookAuditSpecialist = body.playbookAuditSpecialist === true;
+  const bulkTriageSpecialist = body.bulkTriageSpecialist === true;
+  const specialistCount =
+    (escalationPin ? 1 : 0) +
+    (offerBuilderPin ? 1 : 0) +
+    (invoiceSetupSpecialist ? 1 : 0) +
+    (investigationSpecialist ? 1 : 0) +
+    (playbookAuditSpecialist ? 1 : 0) +
+    (bulkTriageSpecialist ? 1 : 0);
+  if (specialistCount > 1) {
+    throw new OperatorStudioAssistantValidationError(
+      "At most one of escalationResolverEscalationId, offerBuilderSpecialistProjectId, invoiceSetupSpecialist, investigationSpecialist, playbookAuditSpecialist, and bulkTriageSpecialist may be set",
+    );
+  }
+  let queryText = String(body.queryText ?? "").trim();
+  if (!queryText && escalationPin) {
+    queryText =
+      "[Escalation resolver mode] Help me interpret this pinned escalation and, when I agree, draft resolution text to queue on the dashboard.";
+  }
+  if (!queryText && offerBuilderPin) {
+    queryText =
+      "[Offer builder specialist mode] I'm focused on this one offer document. Help me understand the grounded outline, suggest bounded name/title changes if useful, and only use offer_builder_change_proposal when I agree — no layout or Puck JSON edits.";
+  }
+  if (!queryText && invoiceSetupSpecialist) {
+    queryText =
+      "[Invoice setup specialist mode] I'm focused on invoice PDF template settings for my studio. Help with grounded legal name, prefix, payment terms, accent color, and footer — bounded invoice_setup_change_proposal only (no logo binary or arbitrary JSON).";
+  }
+  if (!queryText && investigationSpecialist) {
+    queryText =
+      "[Investigation mode] I need to investigate across threads, projects, queue, or escalations using only grounded reads. Walk me through evidence step by step; cite tool results and say when something was not retrieved.";
+  }
+  if (!queryText && playbookAuditSpecialist) {
+    queryText =
+      "[Rule audit mode] Help me review effective playbook coverage (topics and action keys), gaps, and overlaps using only the Context playbook blocks. For new reusable studio-wide rules, use playbook_rule_candidate proposals only — I will confirm in chat and promote candidates on Rule candidates (review). Do not describe direct playbook_rules edits.";
+  }
+  if (!queryText && bulkTriageSpecialist) {
+    queryText =
+      "[Bulk triage mode] Help me work through my Today / operator queue using only the grounded queue snapshot (counts, samples, highlights). Group what matters first, then suggest explicit next steps item by item. If you propose an action, only one confirmable proposal this turn — no batch automation.";
+  }
   if (!queryText) {
     throw new OperatorStudioAssistantValidationError("queryText is required");
   }
@@ -72,6 +250,12 @@ export async function handleOperatorStudioAssistantPost(
     focusedWeddingId: body.focusedWeddingId ?? null,
     focusedPersonId: body.focusedPersonId ?? null,
     carryForward: body.carryForward,
+    escalationResolverEscalationId: body.escalationResolverEscalationId ?? null,
+    offerBuilderSpecialistProjectId: body.offerBuilderSpecialistProjectId ?? null,
+    invoiceSetupSpecialist: body.invoiceSetupSpecialist === true,
+    investigationSpecialist: body.investigationSpecialist === true,
+    playbookAuditSpecialist: body.playbookAuditSpecialist === true,
+    bulkTriageSpecialist: body.bulkTriageSpecialist === true,
   });
 
   let reply: string;
@@ -81,7 +265,12 @@ export async function handleOperatorStudioAssistantPost(
   try {
     const out = await completeOperatorStudioAssistantLlm(ctx, { conversation, supabase });
     reply = out.reply;
-    proposedActions = out.proposedActions.length > 0 ? out.proposedActions : undefined;
+    const gatedEsc = applyEscalationResolverProposalGate(ctx, out.proposedActions);
+    const gatedOb = applyOfferBuilderSpecialistProposalGate(ctx, gatedEsc);
+    const gatedInv = applyInvoiceSetupSpecialistProposalGate(ctx, gatedOb);
+    const gatedAudit = applyPlaybookAuditSpecialistProposalGate(ctx, gatedInv);
+    const gated = applyBulkTriageSpecialistProposalGate(ctx, gatedAudit);
+    proposedActions = gated.length > 0 ? gated : undefined;
     readOnlyLookupToolTrace = out.readOnlyLookupToolTrace;
     readOnlyLookupToolOutcomes = out.readOnlyLookupToolOutcomes;
   } catch (e) {
@@ -159,6 +348,12 @@ export async function handleOperatorStudioAssistantPostStreaming(
     focusedWeddingId: body.focusedWeddingId ?? null,
     focusedPersonId: body.focusedPersonId ?? null,
     carryForward: body.carryForward,
+    escalationResolverEscalationId: body.escalationResolverEscalationId ?? null,
+    offerBuilderSpecialistProjectId: body.offerBuilderSpecialistProjectId ?? null,
+    invoiceSetupSpecialist: body.invoiceSetupSpecialist === true,
+    investigationSpecialist: body.investigationSpecialist === true,
+    playbookAuditSpecialist: body.playbookAuditSpecialist === true,
+    bulkTriageSpecialist: body.bulkTriageSpecialist === true,
   });
 
   let out: Awaited<ReturnType<typeof completeOperatorStudioAssistantLlmStreaming>>;
@@ -181,7 +376,12 @@ export async function handleOperatorStudioAssistantPostStreaming(
     throw e;
   }
   const reply = out.reply;
-  const proposedActions = out.proposedActions.length > 0 ? out.proposedActions : undefined;
+  const gatedEsc = applyEscalationResolverProposalGate(ctx, out.proposedActions);
+  const gatedOb = applyOfferBuilderSpecialistProposalGate(ctx, gatedEsc);
+  const gatedInv = applyInvoiceSetupSpecialistProposalGate(ctx, gatedOb);
+  const gatedAudit = applyPlaybookAuditSpecialistProposalGate(ctx, gatedInv);
+  const gated = applyBulkTriageSpecialistProposalGate(ctx, gatedAudit);
+  const proposedActions = gated.length > 0 ? gated : undefined;
   const readOnlyLookupToolTrace = out.readOnlyLookupToolTrace;
   const readOnlyLookupToolOutcomes = out.readOnlyLookupToolOutcomes;
 

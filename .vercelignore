@@ -1,0 +1,17 @@
+# Keep Vercel CLI uploads under size limits (default deployment uses repo root).
+node_modules
+dist
+supabase
+docs
+playwright-report
+test-results
+reports
+.cursor
+LANDING2
+COPY
+HEROEXTRACT
+chunks
+csschunks
+persona agent examples context/
+# Large doc exports (optional local mirrors)
+docs/**

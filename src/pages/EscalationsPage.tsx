@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { cn } from "@/lib/utils";
 import { resolveEscalationsViaDashboardBatch } from "../lib/escalationResolutionClient";
 import { fireDataChanged } from "../lib/events";
+import { openAnaWithEscalation } from "../components/SupportAssistantWidget";
 
 type EscalationStatus = "open" | "answered" | "dismissed" | "promoted";
 
@@ -452,6 +453,15 @@ export function EscalationsPage() {
                 ) : (
                   <span className="italic">No wedding linked</span>
                 )}
+                {r.status === "open" ? (
+                  <button
+                    type="button"
+                    className="font-medium text-foreground underline-offset-2 hover:underline"
+                    onClick={() => openAnaWithEscalation(r.id)}
+                  >
+                    Resolve with Ana
+                  </button>
+                ) : null}
               </div>
 
               <PromoteRow row={r} />

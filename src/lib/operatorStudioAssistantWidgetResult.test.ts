@@ -42,6 +42,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -64,6 +67,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -86,6 +92,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -117,6 +126,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -147,6 +159,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -196,6 +211,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -223,6 +241,7 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       const mem = d.memoryNoteProposals[0]!;
       expect(mem.memoryScope).toBe("person");
       expect(mem.personId).toBe("55555555-5555-5555-5555-555555555555");
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -252,6 +271,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -281,6 +303,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.playbookRuleProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -309,6 +334,9 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(ob.metadata_patch.name).toBe("Editorial Weddings");
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -334,6 +362,44 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(inv.template_patch.invoicePrefix).toBe("INV");
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
+    }
+  });
+
+  it("F3: surfaces calendar_event_create and reschedule proposals", () => {
+    const eid = "aaaaaaaa-bbbb-4ccc-bddd-eeeeeeeeeeee";
+    const d = buildOperatorStudioAssistantAssistantDisplay(
+      {
+        reply: "Confirm to add or move the event.",
+        clientFacingForbidden: true,
+        proposedActions: [
+          {
+            kind: "calendar_event_create",
+            title: "Venue call",
+            startTime: "2026-05-03T15:00:00.000Z",
+            endTime: "2026-05-03T16:00:00.000Z",
+            eventType: "other",
+            weddingId: null,
+          },
+          {
+            kind: "calendar_event_reschedule",
+            calendarEventId: eid,
+            startTime: "2026-05-03T16:00:00.000Z",
+            endTime: "2026-05-03T17:00:00.000Z",
+          },
+        ],
+      },
+      { devMode: false },
+    );
+    expect(d.kind).toBe("answer");
+    if (d.kind === "answer") {
+      expect(d.calendarEventCreateProposals).toHaveLength(1);
+      expect(d.calendarEventCreateProposals[0]!.title).toBe("Venue call");
+      expect(d.calendarEventRescheduleProposals).toHaveLength(1);
+      expect(d.calendarEventRescheduleProposals[0]!.calendarEventId).toBe(eid);
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 
@@ -359,6 +425,51 @@ describe("buildOperatorStudioAssistantAssistantDisplay", () => {
       expect(d.studioProfileChangeProposals).toEqual([]);
       expect(d.offerBuilderChangeProposals).toEqual([]);
       expect(d.invoiceSetupChangeProposals).toEqual([]);
+      expect(d.calendarEventCreateProposals).toEqual([]);
+      expect(d.calendarEventRescheduleProposals).toEqual([]);
+      expect(d.escalationResolveProposals).toEqual([]);
+    }
+  });
+
+  it("S1: surfaces escalation_resolve proposals", () => {
+    const eid = "a0eebc99-9c0b-4ef8-8bb2-111111111111";
+    const d = buildOperatorStudioAssistantAssistantDisplay(
+      {
+        reply: "When you agree, confirm to queue resolution.",
+        clientFacingForbidden: true,
+        proposedActions: [
+          {
+            kind: "escalation_resolve",
+            escalationId: eid,
+            resolutionSummary: "Approved exception per studio policy.",
+            photographerReplyRaw: "We confirmed on email.",
+          },
+        ],
+      },
+      { devMode: false },
+    );
+    expect(d.kind).toBe("answer");
+    if (d.kind === "answer") {
+      expect(d.escalationResolveProposals).toHaveLength(1);
+      const er = d.escalationResolveProposals[0]!;
+      expect(er.escalationId).toBe(eid);
+      expect(er.resolutionSummary).toContain("Approved");
+      expect(er.photographerReplyRaw).toBe("We confirmed on email.");
+    }
+  });
+
+  it("S1: drops escalation_resolve with invalid escalation id", () => {
+    const d = buildOperatorStudioAssistantAssistantDisplay(
+      {
+        reply: "x",
+        clientFacingForbidden: true,
+        proposedActions: [{ kind: "escalation_resolve", escalationId: "bad-id", resolutionSummary: "ok" }],
+      },
+      { devMode: false },
+    );
+    expect(d.kind).toBe("answer");
+    if (d.kind === "answer") {
+      expect(d.escalationResolveProposals).toEqual([]);
     }
   });
 });

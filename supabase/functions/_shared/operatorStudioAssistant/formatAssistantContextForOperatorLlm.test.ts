@@ -15,6 +15,9 @@ import {
   formatStudioOfferBuilderForOperatorLlm,
   formatStudioProfileForOperatorLlm,
 } from "./formatAssistantContextForOperatorLlm.ts";
+import { investigationSpecialistToolPayload } from "./tools/operatorAssistantReadOnlyLookupTools.ts";
+import { playbookAuditSpecialistToolPayload } from "./tools/operatorAssistantPlaybookAuditSpecialist.ts";
+import { bulkTriageSpecialistToolPayload } from "./tools/operatorAssistantReadOnlyLookupTools.ts";
 import {
   IDLE_ASSISTANT_THREAD_MESSAGE_BODIES,
 } from "../context/fetchAssistantThreadMessageBodies.ts";
@@ -82,6 +85,12 @@ function minimalCtx(overrides: Partial<AssistantContext> = {}): AssistantContext
     operatorInquiryCountSnapshot: IDLE_ASSISTANT_INQUIRY_COUNT_SNAPSHOT,
     operatorCalendarSnapshot: IDLE_ASSISTANT_CALENDAR_SNAPSHOT,
     operatorTriage: IDLE_OPERATOR_ANA_TRIAGE,
+    escalationResolverFocus: null,
+    offerBuilderSpecialistFocus: null,
+    invoiceSetupSpecialistFocus: null,
+    investigationSpecialistFocus: null,
+    playbookAuditSpecialistFocus: null,
+    bulkTriageSpecialistFocus: null,
     ...overrides,
   };
   const cov = deriveAssistantPlaybookCoverageSummary(merged.playbookRules);
@@ -113,6 +122,70 @@ describe("formatAssistantContextForOperatorLlm", () => {
     const s = formatAssistantContextForOperatorLlm(minimalCtx());
     expect(s).toContain("## Offer projects (grounded");
     expect(s).toMatch(/no offer-builder projects|No rows returned/i);
+  });
+
+  it("includes Offer builder specialist (S2) section when offerBuilderSpecialistFocus is set", () => {
+    const pid = "a0eebc99-9c0b-4ef8-8bb2-111111111111";
+    const s = formatAssistantContextForOperatorLlm(
+      minimalCtx({
+        offerBuilderSpecialistFocus: {
+          pinnedProjectId: pid,
+          toolPayload: { didRun: true, selectionNote: "ok", project: { id: pid } },
+        },
+      }),
+    );
+    expect(s).toContain("## Offer builder specialist (pinned project)");
+    expect(s).toContain(pid);
+    expect(s).toContain('"selectionNote":"ok"');
+  });
+
+  it("includes Invoice setup specialist (S3) section when invoiceSetupSpecialistFocus is set", () => {
+    const s = formatAssistantContextForOperatorLlm(
+      minimalCtx({
+        invoiceSetupSpecialistFocus: {
+          toolPayload: { didRun: true, selectionNote: "ok", template: { hasRow: true } },
+        },
+      }),
+    );
+    expect(s).toContain("## Invoice setup specialist (pinned template lane)");
+    expect(s).toContain('"selectionNote":"ok"');
+  });
+
+  it("includes Deep search / investigation mode (S4) section when investigationSpecialistFocus is set", () => {
+    const pl = investigationSpecialistToolPayload();
+    const s = formatAssistantContextForOperatorLlm(
+      minimalCtx({
+        investigationSpecialistFocus: { toolPayload: pl },
+      }),
+    );
+    expect(s).toContain("## Deep search / investigation mode (S4)");
+    expect(s).toContain('"mode":"deep_search_investigation_v1"');
+    expect(s).toContain("maxLookupToolCallsThisTurn");
+    expect(s).toContain("evidenceDiscipline");
+  });
+
+  it("includes Rule authoring / audit mode (S5) section when playbookAuditSpecialistFocus is set", () => {
+    const pl = playbookAuditSpecialistToolPayload();
+    const s = formatAssistantContextForOperatorLlm(
+      minimalCtx({
+        playbookAuditSpecialistFocus: { toolPayload: pl },
+      }),
+    );
+    expect(s).toContain("## Rule authoring / audit mode (S5)");
+    expect(s).toContain('"mode":"rule_authoring_audit_v1"');
+    expect(s).toContain("proposedActionsPolicy");
+  });
+
+  it("includes Bulk queue triage mode (S6) section when bulkTriageSpecialistFocus is set", () => {
+    const pl = bulkTriageSpecialistToolPayload();
+    const s = formatAssistantContextForOperatorLlm(
+      minimalCtx({
+        bulkTriageSpecialistFocus: { toolPayload: pl },
+      }),
+    );
+    expect(s).toContain("## Bulk queue triage mode (S6)");
+    expect(s).toContain('"mode":"bulk_triage_queue_v1"');
+    expect(s).toContain("maxLookupToolCallsThisTurn");
   });
 
   it("includes Invoice setup block without raw logo data", () => {
@@ -518,23 +591,25 @@ describe("formatAssistantContextForOperatorLlm", () => {
       pendingApprovalDrafts: 1,
       zenTabs: { review: 3, drafts: 1, leads: 2, needs_filing: 0 },
     };
+    const samples = {
+      ...EMPTY_STATE.samples,
+      topActions: [
+        { id: "open_escalation:x", title: "Policy question", typeLabel: "Escalation" },
+      ],
+    };
     const s = formatAssistantContextForOperatorLlm({
       ...base,
       retrievalLog: { ...base.retrievalLog, operatorQueueIntentMatched: true },
       operatorStateSummary: {
         ...EMPTY_STATE,
         counts,
-        queueHighlights: deriveOperatorQueueHighlights(counts),
-        samples: {
-          ...EMPTY_STATE.samples,
-          topActions: [
-            { id: "open_escalation:x", title: "Policy question", typeLabel: "Escalation" },
-          ],
-        },
+        samples,
+        queueHighlights: deriveOperatorQueueHighlights(counts, samples),
       },
     });
     expect(s).toContain("## Operator queue / Today snapshot");
     expect(s).toContain("### Snapshot-derived priorities");
+    expect(s).toMatch(/counts \+ samples|evidence-backed/i);
     expect(s).toContain("**Open escalations:** 2");
     expect(s).toContain("**Zen tabs");
     expect(s).toContain("[Escalation]");

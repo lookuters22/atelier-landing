@@ -4,12 +4,13 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type { Database } from "../../../../src/types/database.types.ts";
 import type { ValidatedOperatorAssistantTaskPayload } from "./validateOperatorAssistantTaskPayload.ts";
+import { recordOperatorAssistantWriteAudit } from "./recordOperatorAssistantWriteAudit.ts";
 
 export async function insertTaskForOperatorAssistant(
   supabase: SupabaseClient,
   photographerId: string,
   body: ValidatedOperatorAssistantTaskPayload,
-): Promise<{ id: string }> {
+): Promise<{ id: string; auditId: string }> {
   if (body.weddingId) {
     const { data, error } = await supabase
       .from("weddings")
@@ -42,5 +43,16 @@ export async function insertTaskForOperatorAssistant(
   if (!row?.id) {
     throw new Error("insert did not return id");
   }
-  return { id: String(row.id) };
+  const id = String(row.id);
+  const { auditId } = await recordOperatorAssistantWriteAudit(supabase, photographerId, {
+    operation: "task_create",
+    entityTable: "tasks",
+    entityId: id,
+    detail: {
+      title: body.title,
+      dueDate: body.dueDateNormalized,
+      weddingId: body.weddingId ?? null,
+    },
+  });
+  return { id, auditId };
 }

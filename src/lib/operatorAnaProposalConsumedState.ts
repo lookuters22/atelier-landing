@@ -1,5 +1,8 @@
 import type {
   OperatorAssistantProposedActionAuthorizedCaseException,
+  OperatorAssistantProposedActionCalendarEventCreate,
+  OperatorAssistantProposedActionCalendarEventReschedule,
+  OperatorAssistantProposedActionEscalationResolve,
   OperatorAssistantProposedActionInvoiceSetupChangeProposal,
   OperatorAssistantProposedActionMemoryNote,
   OperatorAssistantProposedActionOfferBuilderChangeProposal,
@@ -35,6 +38,19 @@ export function offerBuilderChangeProposalKey(p: OperatorAssistantProposedAction
 
 export function invoiceSetupChangeProposalKey(p: OperatorAssistantProposedActionInvoiceSetupChangeProposal): string {
   return `inv_setup:${p.rationale.slice(0, 80)}:${JSON.stringify(p.template_patch)}`;
+}
+
+export function calendarEventCreateProposalKey(p: OperatorAssistantProposedActionCalendarEventCreate): string {
+  return `cal_create:${p.title}:${p.startTime}:${p.endTime}:${p.eventType}:${p.weddingId ?? ""}`;
+}
+
+export function calendarEventRescheduleProposalKey(p: OperatorAssistantProposedActionCalendarEventReschedule): string {
+  return `cal_resched:${p.calendarEventId}:${p.startTime}:${p.endTime}`;
+}
+
+export function escalationResolveProposalKey(p: OperatorAssistantProposedActionEscalationResolve): string {
+  const reply = p.photographerReplyRaw?.trim() ?? "";
+  return `esc_res:${p.escalationId}:${p.resolutionSummary.slice(0, 120)}:${reply.slice(0, 80)}`;
 }
 
 /**
