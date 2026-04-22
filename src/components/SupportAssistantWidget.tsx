@@ -387,6 +387,7 @@ export function SupportAssistantWidget() {
     };
 
     if (operatorAssistantStreamingV1Enabled()) {
+      logAnaStreamLine("streaming branch entered");
       cancelPacedReveal();
       streamAbortRef.current?.abort();
       const ac = new AbortController();
@@ -457,6 +458,9 @@ export function SupportAssistantWidget() {
             revealStateRef.current = null;
             return;
           }
+          logAnaStreamLine(
+            `finalize: displayedAtSwap=${st0.displayedLen} receivedAtSwap=${st0.received.length}`,
+          );
           setMessages((m) =>
             m.map((x) =>
               x.id === st0.inFlightId && isAssistantInFlightLine(x)
@@ -505,6 +509,13 @@ export function SupportAssistantWidget() {
                   ? { ...x, streamingText: st.received.slice(0, st.displayedLen) }
                   : x,
               ),
+            );
+          }
+          if (streamDebug) {
+            logAnaStreamLine(
+              `tick: displayed=${st.displayedLen} received=${st.received.length} ended=${String(
+                st.receivedEnded,
+              )} at +${Math.round(performance.now() - tStream0)}ms`,
             );
           }
           if (st.receivedEnded && st.displayedLen >= st.received.length) {
