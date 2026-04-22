@@ -44,6 +44,7 @@ Tables present in the checked-in migrations:
 - `wedding_milestones`
 - `authorized_case_exceptions` (V3 case-scoped approved policy overrides; see §5.17.1)
 - `studio_offer_builder_projects` (logged-in offer / package builder Puck documents; see §5.22)
+- `studio_invoice_setup` (per-photographer invoice PDF template/setup JSON; see §5.22A)
 
 Important truth:
 
@@ -1141,6 +1142,32 @@ Durable, tenant-scoped storage for the magazine-style **offer builder** (Puck). 
 
 - Treat `puck_data` as the canonical structured document for offer layouts; avoid parallel ad-hoc copies of the same content.
 - Logged-out / dev fallback may still use local storage; the app migrates local projects to this table once per browser after first successful remote list when the user is authenticated.
+
+## 5.22A studio_invoice_setup
+
+### Status
+
+Implemented today (migration `20260525100000_studio_invoice_setup.sql`).
+
+### Purpose
+
+Durable, tenant-scoped storage for the **invoice PDF template/setup** (branding, terms, optional logo as data URL). Replaces browser-only `localStorage` for signed-in photographers so server-side tools (e.g. future Ana invoice flows) can read and apply structured patches safely.
+
+### Current columns
+
+- `photographer_id` UUID PK FK → `photographers.id` ON DELETE CASCADE
+- `template` JSONB NOT NULL — `InvoiceSetupState` plus `schema_version` (see `src/lib/invoiceSetupTypes.ts`)
+- `updated_at` TIMESTAMPTZ NOT NULL (app-supplied on upsert from the client)
+
+### Access
+
+- RLS: `photographer_id = auth.uid()` for all operations.
+- At most one row per photographer (primary key = `photographer_id`).
+
+### Rules
+
+- Treat `template` as the canonical structured document for invoice appearance; avoid parallel ad-hoc copies in client-only state for logged-in sessions.
+- Large `logoDataUrl` values may be stored in JSON until a future asset/storage column exists.
 
 ## 6. Insert And Update Rules For AI Coding
 

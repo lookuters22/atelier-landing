@@ -1759,6 +1759,32 @@ export type Database = {
           },
         ]
       }
+      studio_invoice_setup: {
+        Row: {
+          photographer_id: string
+          template: Json
+          updated_at: string
+        }
+        Insert: {
+          photographer_id: string
+          template: Json
+          updated_at: string
+        }
+        Update: {
+          photographer_id?: string
+          template?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studio_invoice_setup_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: true
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           due_date: string
