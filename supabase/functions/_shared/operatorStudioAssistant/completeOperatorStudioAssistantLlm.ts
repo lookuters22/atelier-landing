@@ -13,6 +13,7 @@ import {
   MAX_LOOKUP_TOOL_CALLS_PER_TURN,
 } from "./tools/operatorAssistantReadOnlyLookupTools.ts";
 import {
+  getVisibleReplyForStreamFallback,
   parseOperatorStudioAssistantLlmResponse,
   type OperatorStudioAssistantLlmResult,
 } from "./parseOperatorStudioAssistantLlmResponse.ts";
@@ -358,6 +359,12 @@ export async function completeOperatorStudioAssistantLlmStreaming(
     throw new Error("Missing OPENAI_API_KEY");
   }
   const streamSignal = options.signal;
+  let streamedTokenPayloadChars = 0;
+  const onStreamDelta: OnOperatorStudioAssistantLlmToken = (d) => {
+    if (!d) return;
+    streamedTokenPayloadChars += d.length;
+    onToken(d);
+  };
 
   const weatherToolMarkdown = await buildOperatorAssistantWeatherMarkdown(ctx);
   const userContent = formatAssistantContextForOperatorLlm(ctx, { weatherToolMarkdown });
@@ -395,7 +402,7 @@ export async function completeOperatorStudioAssistantLlmStreaming(
         response_format: { type: "json_object" },
         messages: baseMessages,
       },
-      (d) => feedExtractor(ex, d, onToken),
+      (d) => feedExtractor(ex, d, onStreamDelta),
       fullText,
       byIndex,
       null,
@@ -408,7 +415,10 @@ export async function completeOperatorStudioAssistantLlmStreaming(
     if (byIndex.size > 0) {
       throw new Error("Unexpected tool_calls in no-tools streaming path");
     }
-    return parseOperatorStudioAssistantLlmResponse(text);
+    const parsed = parseOperatorStudioAssistantLlmResponse(text);
+    const vis = getVisibleReplyForStreamFallback(text);
+    if (vis && streamedTokenPayloadChars === 0) onStreamDelta(vis);
+    return parsed;
   }
 
   const t1 = { s: "" };
@@ -437,13 +447,17 @@ export async function completeOperatorStudioAssistantLlmStreaming(
   if (!hasTools) {
     const ex1 = createReplyExtractor();
     for (const d of firstPassContentDeltas) {
-      feedExtractor(ex1, d, onToken);
+      feedExtractor(ex1, d, onStreamDelta);
+      await Promise.resolve();
     }
     const text = t1.s.trim();
     if (!text) {
       throw new Error("OpenAI returned empty assistant content");
     }
-    return parseOperatorStudioAssistantLlmResponse(text);
+    const parsed = parseOperatorStudioAssistantLlmResponse(text);
+    const vis = getVisibleReplyForStreamFallback(text);
+    if (vis && streamedTokenPayloadChars === 0) onStreamDelta(vis);
+    return parsed;
   }
 
   const tool_calls = toolCalls.map((t) => ({
@@ -531,7 +545,7 @@ export async function completeOperatorStudioAssistantLlmStreaming(
       response_format: { type: "json_object" },
       messages,
     },
-    (d) => feedExtractor(ex2, d, onToken),
+    (d) => feedExtractor(ex2, d, onStreamDelta),
     t2,
     by2,
     null,
@@ -547,6 +561,8 @@ export async function completeOperatorStudioAssistantLlmStreaming(
     throw new Error("OpenAI returned empty assistant content after tool results");
   }
   const parsed = parseOperatorStudioAssistantLlmResponse(text2);
+  const vis2 = getVisibleReplyForStreamFallback(text2);
+  if (vis2 && streamedTokenPayloadChars === 0) onStreamDelta(vis2);
   return {
     ...parsed,
     readOnlyLookupToolTrace: trace.length > 0 ? trace : undefined,

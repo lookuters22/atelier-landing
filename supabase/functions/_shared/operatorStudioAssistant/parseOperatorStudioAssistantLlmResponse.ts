@@ -45,6 +45,24 @@ function tryParseJsonObject(text: string): unknown {
 }
 
 /**
+ * Same user-visible `reply` string that {@link parseOperatorStudioAssistantLlmResponse} would surface,
+ * or `null` when there is no non-empty model reply to stream (e.g. missing/empty `reply` in JSON).
+ * Used to emit a last-resort `token` when the stream extractor failed to output visible deltas.
+ */
+export function getVisibleReplyForStreamFallback(rawContent: string): string | null {
+  const parsed = tryParseJsonObject(rawContent);
+  if (parsed == null || typeof parsed !== "object") {
+    const r = rawContent.trim();
+    return r.length > 0 ? r : null;
+  }
+  const o = parsed as Record<string, unknown>;
+  if (typeof o.reply === "string" && o.reply.trim().length > 0) {
+    return o.reply.trim();
+  }
+  return null;
+}
+
+/**
  * When the model returns non-JSON, keep full text as `reply` and no proposals.
  */
 export function parseOperatorStudioAssistantLlmResponse(rawContent: string): OperatorStudioAssistantLlmResult {
