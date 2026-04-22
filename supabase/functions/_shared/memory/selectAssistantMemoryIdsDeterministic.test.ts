@@ -85,4 +85,50 @@ describe("selectAssistantMemoryIdsDeterministic", () => {
     expect(ids).toContain("s1");
     expect(ids).not.toContain("per2");
   });
+
+  it("excludes project-scoped memory when weddings.project_type mismatches focused project type (anti-bleed)", () => {
+    const wid = "11111111-1111-1111-1111-111111111111";
+    const headers: MemoryHeader[] = [
+      h({
+        id: "m-wed",
+        scope: "project",
+        wedding_id: wid,
+        weddingProjectType: "wedding",
+        title: "ceremony",
+      }),
+      h({
+        id: "m-com",
+        scope: "project",
+        wedding_id: wid,
+        weddingProjectType: "commercial",
+        title: "brand",
+      }),
+      h({ id: "s1", scope: "studio", title: "alpha" }),
+    ];
+    const ids = selectAssistantMemoryIdsDeterministic({
+      queryText: "alpha",
+      memoryHeaders: headers,
+      focusedWeddingId: wid,
+      focusedPersonId: null,
+      focusedProjectType: "commercial",
+    });
+    expect(ids).toEqual(expect.arrayContaining(["m-com", "s1"]));
+    expect(ids).not.toContain("m-wed");
+  });
+
+  it("when focusedProjectType is omitted, project memories stay eligible (join missing — conservative)", () => {
+    const wid = "11111111-1111-1111-1111-111111111111";
+    const headers: MemoryHeader[] = [
+      h({ id: "m1", scope: "project", wedding_id: wid, weddingProjectType: "wedding", title: "a" }),
+      h({ id: "s1", scope: "studio", title: "a" }),
+    ];
+    const ids = selectAssistantMemoryIdsDeterministic({
+      queryText: "a",
+      memoryHeaders: headers,
+      focusedWeddingId: wid,
+      focusedPersonId: null,
+    });
+    expect(ids).toContain("m1");
+    expect(ids).toContain("s1");
+  });
 });

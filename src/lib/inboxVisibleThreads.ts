@@ -1,12 +1,12 @@
-import type { UnfiledThread } from "../hooks/useUnfiledInbox";
-import type { Tables } from "../types/database.types";
+import type { UnfiledThread } from "../hooks/useUnfiledInbox.ts";
+import type { Tables } from "../types/database.types.ts";
 import {
   GMAIL_LABEL_DRAFT,
   GMAIL_LABEL_SENT,
   GMAIL_LABEL_STARRED,
   deriveUnreadFromGmailLabelIds,
-} from "./gmailInboxLabels";
-import { isSuppressedInboxThread } from "./inboxThreadBucket";
+} from "./gmailInboxLabels.ts";
+import { isSuppressedInboxThread } from "./inboxThreadBucket.ts";
 
 export const INQUIRY_STAGES = new Set(["inquiry", "consultation", "proposal_sent", "contract_out"]);
 export const ACTIVE_STAGES = new Set(["booked", "prep"]);

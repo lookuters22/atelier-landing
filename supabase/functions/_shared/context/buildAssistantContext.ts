@@ -1,14 +1,23 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import type {
   AssistantContext,
+  AssistantCrmDigest,
+  AssistantFocusedProjectFacts,
   AssistantRetrievalLog,
+  AssistantStudioAnalysisSnapshot,
   BuildAssistantContextInput,
 } from "../../../../src/types/assistantContext.types.ts";
 import { assertResolvedTenantPhotographerId } from "../../../../src/types/decisionContext.types.ts";
 import { deriveEffectivePlaybook } from "../policy/deriveEffectivePlaybook.ts";
 import { fetchActivePlaybookRulesForDecisionContext } from "./fetchActivePlaybookRulesForDecisionContext.ts";
 import { fetchAuthorizedCaseExceptionsForDecisionContext } from "./fetchAuthorizedCaseExceptionsForDecisionContext.ts";
-import { fetchAssistantCrmDigest } from "./fetchAssistantCrmDigest.ts";
+/** Operator Ana: Slice 4 removed digest from the prompt; keep empty shape on context for compatibility. */
+const EMPTY_CRM_DIGEST: AssistantCrmDigest = { recentWeddings: [], recentPeople: [] };
+import {
+  fetchAssistantFocusedProjectFacts,
+  fetchAssistantFocusedProjectSummaryRow,
+} from "./fetchAssistantFocusedProjectFacts.ts";
+import { fetchAssistantOperatorStateSummary } from "./fetchAssistantOperatorStateSummary.ts";
 import {
   fetchRelevantGlobalKnowledgeForDecisionContext,
   MAX_GLOBAL_KNOWLEDGE_ROWS_ASSISTANT,
@@ -16,6 +25,39 @@ import {
 import { fetchAssistantMemoryHeaders } from "../memory/fetchAssistantMemoryHeaders.ts";
 import { fetchSelectedMemoriesFull } from "../memory/fetchSelectedMemoriesFull.ts";
 import { selectAssistantMemoryIdsDeterministic } from "../memory/selectAssistantMemoryIdsDeterministic.ts";
+import { getAssistantAppCatalogForContext } from "../../../../src/lib/operatorAssistantAppCatalog.ts";
+import { shouldIncludeAppCatalogInOperatorPrompt } from "../../../../src/lib/operatorAssistantAppHelpIntent.ts";
+import { shouldLoadStudioAnalysisSnapshotForQuery } from "../../../../src/lib/operatorAssistantStudioAnalysisIntent.ts";
+import { fetchAssistantStudioAnalysisSnapshot } from "./fetchAssistantStudioAnalysisSnapshot.ts";
+import { fetchAssistantQueryEntityIndex } from "./fetchAssistantQueryEntityIndex.ts";
+import {
+  resolveOperatorQueryEntitiesFromIndex,
+  shouldRunOperatorQueryEntityResolution,
+} from "./resolveOperatorQueryEntitiesFromIndex.ts";
+import {
+  fetchAssistantThreadMessageLookup,
+  IDLE_ASSISTANT_THREAD_MESSAGE_LOOKUP,
+} from "./fetchAssistantThreadMessageLookup.ts";
+import {
+  hasOperatorThreadMessageLookupIntent,
+  querySuggestsCommercialOrNonWeddingInboundFocus,
+} from "../../../../src/lib/operatorAssistantThreadMessageLookupIntent.ts";
+import { hasOperatorInquiryCountIntent } from "../../../../src/lib/operatorAssistantInquiryCountIntent.ts";
+import { hasOperatorCalendarScheduleIntent } from "../../../../src/lib/operatorAssistantCalendarScheduleIntent.ts";
+import { buildOperatorCalendarLookupPlan } from "../../../../src/lib/operatorAssistantCalendarLookupPlan.ts";
+import {
+  fetchAssistantInquiryCountSnapshot,
+  IDLE_ASSISTANT_INQUIRY_COUNT_SNAPSHOT,
+} from "./fetchAssistantInquiryCountSnapshot.ts";
+import {
+  fetchAssistantOperatorCalendarSnapshot,
+  IDLE_ASSISTANT_CALENDAR_SNAPSHOT,
+} from "./fetchAssistantOperatorCalendarSnapshot.ts";
+import { deriveAssistantPlaybookCoverageSummary } from "../../../../src/lib/deriveAssistantPlaybookCoverageSummary.ts";
+import {
+  prepareCarryForwardForContext,
+  tryParseClientCarryForward,
+} from "../operatorStudioAssistant/operatorAssistantCarryForward.ts";
 
 function normalizeOptionalUuid(id: string | null | undefined): string | null {
   if (id == null) return null;
@@ -93,19 +135,39 @@ export async function buildAssistantContext(
 
   const scopesQueried: AssistantRetrievalLog["scopesQueried"] = [
     "playbook",
-    "crm_digest",
     "studio_memory",
     "knowledge_base",
   ];
-  if (weddingIdEffective) scopesQueried.push("project_memory");
+  if (weddingIdEffective) {
+    scopesQueried.push("project_memory");
+    scopesQueried.push("focused_project_summary");
+  }
   if (personIdEffective) scopesQueried.push("person_memory");
+  scopesQueried.push("operator_state_summary");
+  scopesQueried.push("app_catalog");
+
+  const loadStudioAnalysis = shouldLoadStudioAnalysisSnapshotForQuery(queryText);
+  if (loadStudioAnalysis) {
+    scopesQueried.push("studio_analysis_snapshot");
+  }
+
+  const shouldRunEntity = shouldRunOperatorQueryEntityResolution(queryText);
+  if (shouldRunEntity) {
+    scopesQueried.push("operator_query_entity_resolution");
+  }
+
+  const appCatalog = getAssistantAppCatalogForContext();
+  const includeAppCatalogInOperatorPrompt = shouldIncludeAppCatalogInOperatorPrompt(queryText);
 
   const [
     rawPlaybookRules,
     authorizedCaseExceptions,
-    crmDigest,
     memoryHeaders,
     globalKnowledge,
+    focusedProjectSummaryAndHints,
+    operatorStateSummary,
+    studioAnalysisSnapshot,
+    entityIndex,
   ] = await Promise.all([
     fetchActivePlaybookRulesForDecisionContext(supabase, tenantPhotographerId),
     fetchAuthorizedCaseExceptionsForDecisionContext(
@@ -114,7 +176,6 @@ export async function buildAssistantContext(
       weddingIdEffective,
       null,
     ),
-    fetchAssistantCrmDigest(supabase, tenantPhotographerId),
     fetchAssistantMemoryHeaders(supabase, tenantPhotographerId, weddingIdEffective, personIdEffective),
     fetchRelevantGlobalKnowledgeForDecisionContext(
       supabase,
@@ -126,21 +187,112 @@ export async function buildAssistantContext(
       },
       { maxRows: MAX_GLOBAL_KNOWLEDGE_ROWS_ASSISTANT },
     ),
+    weddingIdEffective
+      ? fetchAssistantFocusedProjectSummaryRow(supabase, tenantPhotographerId, weddingIdEffective)
+      : Promise.resolve(null),
+    fetchAssistantOperatorStateSummary(supabase, tenantPhotographerId),
+    loadStudioAnalysis
+      ? fetchAssistantStudioAnalysisSnapshot(supabase, tenantPhotographerId)
+      : Promise.resolve<AssistantStudioAnalysisSnapshot | null>(null),
+    shouldRunEntity ? fetchAssistantQueryEntityIndex(supabase, tenantPhotographerId) : Promise.resolve({ weddings: [], people: [] }),
   ]);
 
   const playbookRules = deriveEffectivePlaybook(rawPlaybookRules, authorizedCaseExceptions);
+  const playbookCoverageSummary = deriveAssistantPlaybookCoverageSummary(playbookRules);
 
   const memoryIds = selectAssistantMemoryIdsDeterministic({
     queryText,
     memoryHeaders,
     focusedWeddingId: weddingIdEffective,
     focusedPersonId: personIdEffective,
+    focusedProjectType: focusedProjectSummaryAndHints?.summary?.projectType ?? null,
   });
 
   const selectedMemories =
     memoryIds.length > 0
       ? await fetchSelectedMemoriesFull(supabase, tenantPhotographerId, memoryIds)
       : [];
+
+  const resCore = resolveOperatorQueryEntitiesFromIndex(queryText, entityIndex.weddings, entityIndex.people);
+
+  let queryResolvedProjectFacts: AssistantFocusedProjectFacts | null = null;
+  if (shouldRunEntity && resCore.weddingSignal === "unique" && resCore.uniqueWeddingId) {
+    if (weddingIdEffective === resCore.uniqueWeddingId) {
+      queryResolvedProjectFacts = null;
+    } else {
+      queryResolvedProjectFacts = await fetchAssistantFocusedProjectFacts(
+        supabase,
+        tenantPhotographerId,
+        resCore.uniqueWeddingId,
+      );
+    }
+  }
+  if (
+    queryResolvedProjectFacts != null &&
+    hasOperatorThreadMessageLookupIntent(queryText) &&
+    querySuggestsCommercialOrNonWeddingInboundFocus(queryText)
+  ) {
+    queryResolvedProjectFacts = null;
+  }
+
+  const operatorQueryEntityResolution = {
+    didRun: shouldRunEntity,
+    ...resCore,
+    queryResolvedProjectFacts,
+  };
+
+  const loadThreadMessageLookup = hasOperatorThreadMessageLookupIntent(queryText);
+  if (loadThreadMessageLookup) {
+    scopesQueried.push("operator_thread_message_lookup");
+  }
+
+  const loadInquiryCount = hasOperatorInquiryCountIntent(queryText);
+  if (loadInquiryCount) {
+    scopesQueried.push("operator_inquiry_count_snapshot");
+  }
+
+  const loadCalendarSnapshot = hasOperatorCalendarScheduleIntent(queryText);
+  if (loadCalendarSnapshot) {
+    scopesQueried.push("operator_calendar_snapshot");
+  }
+
+  const assistantNow = new Date();
+  const operatorCalendarLookupPlan =
+    loadCalendarSnapshot
+      ? buildOperatorCalendarLookupPlan({
+          queryText,
+          now: assistantNow,
+          focusedWeddingId: weddingIdEffective,
+          entityResolution: {
+            weddingSignal: operatorQueryEntityResolution.weddingSignal,
+            uniqueWeddingId: operatorQueryEntityResolution.uniqueWeddingId,
+            queryResolvedProjectFacts: operatorQueryEntityResolution.queryResolvedProjectFacts,
+          },
+          weddingIndexRows: shouldRunEntity ? entityIndex.weddings : [],
+        })
+      : null;
+
+  const [operatorThreadMessageLookup, operatorInquiryCountSnapshot, operatorCalendarSnapshot] =
+    await Promise.all([
+      loadThreadMessageLookup
+        ? fetchAssistantThreadMessageLookup(supabase, tenantPhotographerId, {
+            queryText,
+            weddingIdEffective: weddingIdEffective,
+            personIdEffective: personIdEffective,
+            operatorQueryEntityResolution,
+            now: assistantNow,
+          })
+        : Promise.resolve(IDLE_ASSISTANT_THREAD_MESSAGE_LOOKUP),
+      loadInquiryCount
+        ? fetchAssistantInquiryCountSnapshot(supabase, tenantPhotographerId, {})
+        : Promise.resolve(IDLE_ASSISTANT_INQUIRY_COUNT_SNAPSHOT),
+      loadCalendarSnapshot && operatorCalendarLookupPlan
+        ? fetchAssistantOperatorCalendarSnapshot(supabase, tenantPhotographerId, {
+            now: assistantNow,
+            plan: operatorCalendarLookupPlan,
+          })
+        : Promise.resolve(IDLE_ASSISTANT_CALENDAR_SNAPSHOT),
+    ]);
 
   const retrievalLog: AssistantRetrievalLog = {
     mode: "assistant_query",
@@ -159,6 +311,36 @@ export async function buildAssistantContext(
     memoryHeaderCount: memoryHeaders.length,
     selectedMemoryIds: memoryIds,
     globalKnowledgeRowCount: globalKnowledge.length,
+    studioAnalysisProjectCount: studioAnalysisSnapshot?.projectCount ?? null,
+    entityResolution: {
+      didRun: operatorQueryEntityResolution.didRun,
+      weddingSignal: operatorQueryEntityResolution.weddingSignal,
+      uniqueWeddingId: operatorQueryEntityResolution.uniqueWeddingId,
+      weddingCandidateCount: operatorQueryEntityResolution.weddingCandidates.length,
+      personMatchCount: operatorQueryEntityResolution.personMatches.length,
+      queryResolvedProjectFactsLoaded: operatorQueryEntityResolution.queryResolvedProjectFacts != null,
+    },
+    threadMessageLookup: {
+      didRun: operatorThreadMessageLookup.didRun,
+      threadCount: operatorThreadMessageLookup.threads.length,
+    },
+    inquiryCountSnapshot: {
+      didRun: operatorInquiryCountSnapshot.didRun,
+      truncated: operatorInquiryCountSnapshot.truncated,
+      todayCount: operatorInquiryCountSnapshot.windows.today.count,
+      yesterdayCount: operatorInquiryCountSnapshot.windows.yesterday.count,
+    },
+    calendarSnapshot: {
+      didRun: operatorCalendarSnapshot.didRun,
+      rowCount: operatorCalendarSnapshot.rowCountReturned,
+      truncated: operatorCalendarSnapshot.truncated,
+      lookupMode: operatorCalendarSnapshot.lookupMode,
+    },
+    playbookCoverage: {
+      totalActiveRules: playbookCoverageSummary.totalActiveRules,
+      uniqueTopicCount: playbookCoverageSummary.uniqueTopics.length,
+      uniqueActionKeyCount: playbookCoverageSummary.uniqueActionKeys.length,
+    },
   };
 
   console.log(
@@ -179,16 +361,36 @@ export async function buildAssistantContext(
     summary: h.summary,
   }));
 
+  const carryForward = prepareCarryForwardForContext(
+    tryParseClientCarryForward(input.carryForward),
+    { weddingId: weddingIdEffective, personId: personIdEffective },
+    queryText,
+    Date.now(),
+  );
+
   return {
     clientFacingForbidden: true,
     photographerId: tenantPhotographerId,
     queryText,
     focusedWeddingId: weddingIdEffective,
     focusedPersonId: personIdEffective,
+    carryForward,
+    playbookCoverageSummary,
     playbookRules,
     rawPlaybookRules,
     authorizedCaseExceptions,
-    crmDigest,
+    crmDigest: EMPTY_CRM_DIGEST,
+    focusedProjectFacts: null,
+    focusedProjectSummary: focusedProjectSummaryAndHints?.summary ?? null,
+    focusedProjectRowHints: focusedProjectSummaryAndHints?.rowHints ?? null,
+    operatorStateSummary,
+    appCatalog,
+    includeAppCatalogInOperatorPrompt,
+    studioAnalysisSnapshot: studioAnalysisSnapshot,
+    operatorQueryEntityResolution,
+    operatorThreadMessageLookup,
+    operatorInquiryCountSnapshot,
+    operatorCalendarSnapshot,
     memoryHeaders: headerOut,
     selectedMemories,
     globalKnowledge,

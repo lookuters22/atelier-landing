@@ -2379,6 +2379,33 @@ export type Database = {
           },
         ]
       }
+      v_thread_first_inbound_at: {
+        Row: {
+          ai_routing_metadata: Json | null
+          first_inbound_at: string | null
+          kind: Database["public"]["Enums"]["thread_kind"] | null
+          photographer_id: string | null
+          thread_id: string | null
+          wedding_id: string | null
+          wedding_stage: Database["public"]["Enums"]["project_stage"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "threads_photographer_id_fkey"
+            columns: ["photographer_id"]
+            isOneToOne: false
+            referencedRelation: "photographers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "threads_wedding_id_fkey"
+            columns: ["wedding_id"]
+            isOneToOne: false
+            referencedRelation: "weddings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       backpatch_lazy_grouped_import_wedding_link: {

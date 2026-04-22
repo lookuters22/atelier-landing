@@ -17,6 +17,7 @@ import {
   ORCHESTRATOR_SPD_ESCALATION_REASON_CODES,
   ORCHESTRATOR_STR_ESCALATION_REASON_CODES,
 } from "../../../../src/types/decisionContext.types.ts";
+import { NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER } from "./proposeClientOrchestratorCandidateActions.ts";
 import { IDENTITY_ENTITY_AMBIGUITY_BLOCKER } from "./detectIdentityEntityRoutingAmbiguity.ts";
 import { AUTHORITY_POLICY_BLOCKER } from "./detectAuthorityPolicyRisk.ts";
 import { IRREGULAR_SETTLEMENT_BLOCKER } from "./detectIrregularSettlementOrchestratorRequest.ts";
@@ -84,6 +85,83 @@ describe("proposeClientOrchestratorCandidateActions — Phase 4.1 NC risk", () =
     expect(proposals[0]?.action_family).toBe("send_message");
     expect(proposals[0]?.likely_outcome).toBe("draft");
     expect(proposals[0]?.risk_class).toBeUndefined();
+  });
+
+  it("needs filing: blocks routine send_message draft when weddingId is missing (unfiled thread)", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience(),
+      playbookRules: [],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: null,
+      threadId: "t-unfiled",
+      replyChannel: "email",
+      rawMessage: "Zoom invite or friend note — not linked to an inquiry yet.",
+      requestedExecutionMode: "draft_only",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+    const primarySend = proposals.find(
+      (p) => p.action_family === "send_message" && p.action_key === "send_message",
+    );
+    expect(primarySend?.likely_outcome).toBe("block");
+    expect(primarySend?.blockers_or_missing_facts).toContain(NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER);
+    expect(primarySend?.rationale).toMatch(/needs filing|No inquiry\/booking project is linked/i);
+    const op = proposals.find((p) => p.action_family === "operator_notification_routing");
+    expect(op).toBeTruthy();
+  });
+
+  it("needs filing: blocks disambiguation send_message too (draft picker only skips likely_outcome block)", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience(),
+      playbookRules: [],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: null,
+      threadId: "t-multi",
+      replyChannel: "email",
+      rawMessage: "Following up on our dates.",
+      requestedExecutionMode: "draft_only",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+      candidateWeddingIds: ["wedding-a", "wedding-b"],
+    });
+    const disamb = proposals.find((p) => p.action_key === "v3_wedding_identity_disambiguation");
+    expect(disamb?.likely_outcome).toBe("block");
+    expect(disamb?.blockers_or_missing_facts).toContain(NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER);
+  });
+
+  it("needs filing: forces playbook send_message to block when weddingId is missing", () => {
+    const proposals = proposeClientOrchestratorCandidateActions({
+      audience: baseAudience(),
+      playbookRules: [
+        {
+          id: "rule-needs-filing-guard",
+          topic: "Test",
+          action_key: "send_message",
+          channel: "email",
+          instruction: "Always reply warmly.",
+          decision_mode: "draft_only",
+          is_active: true,
+          // deno-lint-ignore no-explicit-any
+        } as any,
+      ],
+      selectedMemoriesCount: 0,
+      globalKnowledgeCount: 0,
+      escalationOpenCount: 0,
+      weddingId: null,
+      threadId: "t-unfiled",
+      replyChannel: "email",
+      rawMessage: "Hello from an unfiled thread.",
+      requestedExecutionMode: "draft_only",
+      threadDraftsSummary: null,
+      weddingCrmParityHints: null,
+    });
+    const playbookSend = proposals.find((p) => p.playbook_rule_ids?.includes("rule-needs-filing-guard"));
+    expect(playbookSend?.likely_outcome).toBe("block");
+    expect(playbookSend?.blockers_or_missing_facts).toContain(NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER);
   });
 
   it("adds wire chase CRM candidate when workflow has pending chase_due_at", () => {

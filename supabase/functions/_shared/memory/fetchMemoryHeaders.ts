@@ -13,6 +13,8 @@ export type MemoryHeader = {
   wedding_id: string | null;
   /** `memories.person_id`; meaningful when `scope='person'`. */
   person_id: string | null;
+  /** `weddings.project_type` for `scope=project` (assistant path join); used for type anti-bleed. */
+  weddingProjectType?: string | null;
   scope: MemoryScope;
   type: string;
   title: string;

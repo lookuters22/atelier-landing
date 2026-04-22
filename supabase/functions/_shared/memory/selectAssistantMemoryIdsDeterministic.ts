@@ -76,6 +76,28 @@ function isAssistantSelectableHeader(
   return false;
 }
 
+function normProjectType(t: string | null | undefined): string {
+  return String(t ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * When the focused project type is known, drop project-scoped memories whose `weddings.project_type`
+ * does not match (join metadata on the header). Studio/person unchanged; missing join = no filter.
+ */
+function projectMemoryMatchesFocusedProjectType(
+  h: MemoryHeader,
+  focusedProjectType: string | null,
+): boolean {
+  if (h.scope !== "project") return true;
+  const f = normProjectType(focusedProjectType);
+  if (f.length < 1) return true;
+  const m = h.weddingProjectType;
+  if (m == null || normProjectType(m).length < 1) return true;
+  return normProjectType(m) === f;
+}
+
 function sortBucket(ids: { id: string; keywordScore: number }[]): string[] {
   const rows = [...ids];
   rows.sort((a, b) => {
@@ -90,6 +112,8 @@ export type SelectAssistantMemoryIdsInput = {
   memoryHeaders: MemoryHeader[];
   focusedWeddingId: string | null;
   focusedPersonId: string | null;
+  /** When set (from focused project summary), project-scope rows must match this `weddings.project_type`. */
+  focusedProjectType?: string | null;
 };
 
 /**
@@ -100,6 +124,7 @@ export type SelectAssistantMemoryIdsInput = {
 export function selectAssistantMemoryIdsDeterministic(input: SelectAssistantMemoryIdsInput): string[] {
   const effectiveWeddingId = normalizeWeddingId(input.focusedWeddingId);
   const effectivePersonId = normalizePersonId(input.focusedPersonId);
+  const focusedProjectType = input.focusedProjectType ?? null;
   const queryBlob = String(input.queryText ?? "");
 
   const projectRows: { id: string; keywordScore: number }[] = [];
@@ -111,6 +136,7 @@ export function selectAssistantMemoryIdsDeterministic(input: SelectAssistantMemo
     const id = String(h.id ?? "").trim();
     if (!id || seen.has(id)) continue;
     if (!isAssistantSelectableHeader(h, effectiveWeddingId, effectivePersonId)) continue;
+    if (!projectMemoryMatchesFocusedProjectType(h, focusedProjectType)) continue;
     seen.add(id);
     const kw = keywordOverlapScore(`${h.type} ${h.title} ${h.summary}`, queryBlob);
     if (h.scope === "project") projectRows.push({ id, keywordScore: kw });

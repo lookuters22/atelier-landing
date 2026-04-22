@@ -78,3 +78,9 @@ supabase/.temp/
 # Local landing-page scratchpads (raw HTML/docx + trial fonts)
 /LANDING2/
 /COPY/
+
+# Local asset exports and zip extracts (not app source)
+/export/
+
+# Local agent session state
+.claude/

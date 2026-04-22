@@ -13,7 +13,8 @@
  *
  * DB twin (sender + subject + body only, no optional headers):
  *   `public.classify_inbound_suppression` — keep aligned with migrations
- *   `20260507000000` + `20260509000000` for `convert_unfiled_thread_to_inquiry`.
+ *   `20260507000000`, `20260509000000`, `20260524120100` (calendar/video invite parity)
+ *   for `convert_unfiled_thread_to_inquiry` and related RPCs.
  *
  * Contract:
  *   - Pure, deterministic, no I/O, no LLM.
@@ -57,6 +58,9 @@ export type InboundSuppressionReasonCode =
   | "subject_promo_markers"
   | "subject_transactional_receipt"
   | "body_transactional_receipt"
+  | "body_vcalendar_invite"
+  | "body_structured_video_meeting_invite"
+  | "subject_calendar_video_invite"
   | "empty_or_unparseable";
 
 export type InboundSuppressionInput = {
@@ -259,6 +263,24 @@ const SUBJECT_PROMO_TOKENS: readonly string[] = [
  * suppressing subjects like "Invoice for deposit — Smith wedding" from a
  * personal inbox with no other transactional signals.
  */
+/**
+ * Boilerplate common in Zoom/Teams/Google calendar-generated messages (lowercased body).
+ * Used with a video URL so casual "here's my zoom link" from a lead does not false-suppress.
+ */
+const STRUCTURED_VIDEO_MEETING_BOILERPLATE: readonly string[] = [
+  "join zoom meeting",
+  "join our cloud hd video meeting",
+  "meeting id:",
+  "meeting id ",
+  "passcode:",
+  "webinar id:",
+  "topic:",
+  "time:",
+  "microsoft teams meeting",
+  "join the meeting now",
+  "click here to join the meeting",
+];
+
 const SUBJECT_STRONG_TRANSACTIONAL_PATTERNS: readonly RegExp[] = [
   /^\s*receipt\b/i,
   /^\s*your\s+receipt\b/i,
@@ -463,6 +485,29 @@ export function classifyInboundSuppression(
   // --- 3. Body content ------------------------------------------------------
   const bodyLower = toLower(body);
   if (bodyLower.length > 0) {
+    if (bodyLower.includes("begin:vcalendar")) {
+      pushReason("body_vcalendar_invite");
+      systemScore += 3;
+    } else {
+      const hasVideoMeetingUrl =
+        bodyLower.includes("zoom.us/") ||
+        bodyLower.includes("zoom.com/") ||
+        bodyLower.includes("teams.microsoft.com/") ||
+        bodyLower.includes("meet.google.com/");
+      if (hasVideoMeetingUrl) {
+        let structuredVideoInvite = false;
+        for (const m of STRUCTURED_VIDEO_MEETING_BOILERPLATE) {
+          if (bodyLower.includes(m)) {
+            structuredVideoInvite = true;
+            break;
+          }
+        }
+        if (structuredVideoInvite) {
+          pushReason("body_structured_video_meeting_invite");
+          systemScore += 3;
+        }
+      }
+    }
     for (const m of UNSUBSCRIBE_BODY_MARKERS) {
       if (bodyLower.includes(m)) {
         pushReason("body_unsubscribe_language");
@@ -503,6 +548,24 @@ export function classifyInboundSuppression(
   // --- 4. Subject (weak promo + strong transactional) -----------------------
   const subjectLower = toLower(subject);
   if (subjectLower.length > 0) {
+    const subjectCoarse = typeof subject === "string" ? subject : "";
+    const videoInviteSubject =
+      /^\s*(invitation|updated invitation|cancelled invitation|canceled invitation)\s*:/i.test(
+        subjectCoarse,
+      ) ||
+      /^\s*(accepted|declined|tentative)\s*:\s/i.test(subjectCoarse);
+    if (videoInviteSubject) {
+      const bodyForVideo = toLower(body);
+      const hasVideoMeetingUrlInBody =
+        bodyForVideo.includes("zoom.us/") ||
+        bodyForVideo.includes("zoom.com/") ||
+        bodyForVideo.includes("teams.microsoft.com/") ||
+        bodyForVideo.includes("meet.google.com/");
+      if (hasVideoMeetingUrlInBody) {
+        pushReason("subject_calendar_video_invite");
+        systemScore += 3;
+      }
+    }
     let subjectHit = false;
     for (const m of SUBJECT_PROMO_TOKENS) {
       if (subjectLower.includes(m)) {

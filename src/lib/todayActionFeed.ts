@@ -1,9 +1,9 @@
 /**
  * Read model for Today (Stage 2 unified action feed) — aggregates rows from existing tables only.
  */
-import type { PendingDraft } from "../hooks/usePendingApprovals";
-import type { UnfiledThread } from "../hooks/useUnfiledInbox";
-import type { TaskRow } from "../hooks/useTasks";
+import type { PendingDraft } from "../hooks/usePendingApprovals.ts";
+import type { UnfiledThread } from "../hooks/useUnfiledInbox.ts";
+import type { TaskRow } from "../hooks/useTasks.ts";
 import {
   deriveInboxThreadBucket,
   inboxBucketTodayStatusLabel,
@@ -11,15 +11,15 @@ import {
   readInboxMetadataSenderRole,
   zenLobbyHeroTagForInboxBucket,
   type InboxThreadBucket,
-} from "./inboxThreadBucket";
+} from "./inboxThreadBucket.ts";
 import {
   escalationResolutionTarget,
   resolutionTargetToTodayActionResolution,
   type ResolutionTarget,
   type TodayActionResolution,
-} from "./resolutionTarget";
+} from "./resolutionTarget.ts";
 
-export type { PipelineResolutionTab, TodayActionResolution } from "./resolutionTarget";
+export type { PipelineResolutionTab, TodayActionResolution } from "./resolutionTarget.ts";
 
 export type TodayActionType =
   | "draft_approval"

@@ -22,6 +22,18 @@ verify_jwt = false
 [functions.operator-studio-assistant]
 verify_jwt = false
 
+[functions.insert-operator-assistant-playbook-rule-candidate]
+verify_jwt = false
+
+[functions.insert-operator-assistant-task]
+verify_jwt = false
+
+[functions.insert-operator-assistant-memory]
+verify_jwt = false
+
+[functions.insert-operator-assistant-authorized-case-exception]
+verify_jwt = false
+
 [functions.webhook-approval]
 verify_jwt = false
 

@@ -77,6 +77,12 @@ const DEFAULT_INBOUND_SENDER_AUTHORITY: InboundSenderAuthoritySnapshot = {
 export const INBOUND_SUPPRESSED_NON_CLIENT_BLOCKER = "inbound_suppressed_non_client";
 
 /**
+ * No CRM inquiry/booking linked for this orchestrator turn — routine Ana client `send_message`
+ * must not be draftable until the operator files or links the thread (needs filing / unfiled).
+ */
+export const NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER = "no_booking_context_for_client_reply";
+
+/**
  * When true, routine client `send_message` must not be draftable — durable workflow state
  * already covers the thread (timeline elsewhere, wire-chase window, stalled nudge window).
  * Matches the same conditions as `sendMessageBlockers` workflow entries.
@@ -249,7 +255,12 @@ export function proposeClientOrchestratorCandidateActions(
 
   const blockers: string[] = [];
   if (!threadId) blockers.push("thread_id_missing");
-  if (!weddingId) blockers.push("wedding_id_missing_some_crm_and_thread_scoped_actions");
+  const missingBookingContextForClientReply =
+    weddingId == null || (typeof weddingId === "string" && weddingId.trim().length === 0);
+  if (missingBookingContextForClientReply) {
+    blockers.push("wedding_id_missing_some_crm_and_thread_scoped_actions");
+    blockers.push(NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER);
+  }
 
   const pendingApprovalCount = threadDraftsSummary?.pendingApprovalCount ?? 0;
   const hasPendingApprovalDrafts = pendingApprovalCount > 0;
@@ -374,6 +385,9 @@ export function proposeClientOrchestratorCandidateActions(
   if (inboundSuppressed) {
     sendMessageLikely = "block";
   }
+  if (missingBookingContextForClientReply) {
+    sendMessageLikely = "block";
+  }
 
   let sendMessageRationale =
     `Draft or send a client-appropriate reply on ${channelLabel(replyChannel)}; align with playbook and decision mode (${requestedExecutionMode}).`;
@@ -429,6 +443,10 @@ export function proposeClientOrchestratorCandidateActions(
     sendMessageRationale +=
       ` Inbound message was classified as ${inboundSuppression.verdict} (confidence=${inboundSuppression.confidence}, reasons=[${reasons}]) — do not draft a client reply; promotional / system / non-client mail must route to operator attention only.`;
   }
+  if (missingBookingContextForClientReply) {
+    sendMessageRationale +=
+      " No inquiry/booking project is linked for this thread yet (needs filing) — do not draft a routine client reply until the operator files or links it to the correct project.";
+  }
 
   sendMessageRationale += orchestratorContextRationaleSuffix;
 
@@ -441,7 +459,8 @@ export function proposeClientOrchestratorCandidateActions(
     aud.agencyCcLock === true ||
     aud.broadcastRisk === "high" ||
     escalationOpenCount > 0 ||
-    inboundSuppressed;
+    inboundSuppressed ||
+    missingBookingContextForClientReply;
 
   const operatorLikely = inferLikelyOutcome(requestedExecutionMode, aud.broadcastRisk, null);
 
@@ -1141,7 +1160,8 @@ export function proposeClientOrchestratorCandidateActions(
          * gate. Treat it identically to other safety hits: force `block`,
          * propagate the canonical blocker codes.
          */
-        inboundSuppressed)
+        inboundSuppressed ||
+        missingBookingContextForClientReply)
     ) {
       likely = "block";
       pbBlockers = [...pbBlockers, ...sendMessageBlockers.filter((b) => !pbBlockers.includes(b))];
@@ -1157,6 +1177,23 @@ export function proposeClientOrchestratorCandidateActions(
       blockers_or_missing_facts: pbBlockers,
       playbook_rule_ids: [rule.id],
     });
+  }
+
+  /**
+   * `attemptOrchestratorDraft` selects the first non-block `send_message` by family alone — including
+   * disambiguation / clarification keys. Without this pass, an unfiled thread could still get a client
+   * draft from a secondary `send_message` even when the primary path is blocked for missing booking.
+   */
+  if (missingBookingContextForClientReply) {
+    for (const p of proposals) {
+      if (p.action_family !== "send_message") continue;
+      const bf = p.blockers_or_missing_facts ?? [];
+      const nextBlockers = bf.includes(NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER)
+        ? bf
+        : [...bf, NO_BOOKING_CONTEXT_CLIENT_REPLY_BLOCKER];
+      p.likely_outcome = "block";
+      p.blockers_or_missing_facts = nextBlockers;
+    }
   }
 
   return proposals;

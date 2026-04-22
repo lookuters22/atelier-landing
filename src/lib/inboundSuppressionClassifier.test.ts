@@ -152,7 +152,9 @@ describe("classifyInboundSuppression — newsletter", () => {
 /**
  * Fixtures here use only sender/subject/body (no `headers`), matching the
  * arguments to `public.classify_inbound_suppression` from
- * `convert_unfiled_thread_to_inquiry`. Migration 20260509000000 mirrors this path.
+ * `convert_unfiled_thread_to_inquiry`. Migrations 20260509000000 (transactional)
+ * and 20260524120100 (calendar/video invites) mirror this 3-arg SQL path — keep
+ * expected verdicts/reasons aligned when editing either side.
  */
 describe("classifyInboundSuppression — receipts / billing (transactional_non_client)", () => {
   it("suppresses a clear payment receipt subject + receipt body copy", () => {
@@ -188,6 +190,63 @@ describe("classifyInboundSuppression — receipts / billing (transactional_non_c
     expect(c.verdict).toBe("transactional_non_client");
     expect(c.reasons).toContain("sender_local_system_token");
     expect(c.reasons).toContain("subject_transactional_receipt");
+  });
+});
+
+/** Same cases are enforced in SQL by `20260524120100_classify_inbound_suppression_calendar_invite_parity.sql`. */
+describe("classifyInboundSuppression — calendar / video meeting invites (deterministic)", () => {
+  it("suppresses structured Zoom-style invites (boilerplate + join URL)", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "Friend <friend@gmail.com>",
+      subject: "Zoom meeting",
+      body: [
+        "Topic: Catch up",
+        "Time: May 5, 2026 03:00 PM",
+        "",
+        "Join Zoom Meeting",
+        "https://zoom.us/j/123456789",
+        "Meeting ID: 123 456 789",
+        "Passcode: abc123",
+      ].join("\n"),
+    });
+    expect(c.verdict).toBe("system_or_notification");
+    expect(c.suppressed).toBe(true);
+    expect(c.reasons).toContain("body_structured_video_meeting_invite");
+  });
+
+  it("suppresses ICS / vCalendar bodies", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "notifications@calendar.google.com",
+      subject: "Invitation: Coffee @ Mon May 5, 2026",
+      body: "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nEND:VEVENT\nEND:VCALENDAR\n",
+    });
+    expect(c.verdict).toBe("system_or_notification");
+    expect(c.suppressed).toBe(true);
+    expect(c.reasons).toContain("body_vcalendar_invite");
+  });
+
+  it("suppresses invitation: subject + Teams URL (operational calendar mail)", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "organizer@company.com",
+      subject: "Invitation: Project sync",
+      body: "Microsoft Teams meeting\nJoin the meeting now\nhttps://teams.microsoft.com/l/meetup-join/abc123\n",
+    });
+    expect(c.verdict).toBe("system_or_notification");
+    expect(c.suppressed).toBe(true);
+    expect(
+      c.reasons.includes("subject_calendar_video_invite") ||
+        c.reasons.includes("body_structured_video_meeting_invite"),
+    ).toBe(true);
+  });
+
+  it("does not suppress a casual lead message with only a Zoom link (no calendar boilerplate)", () => {
+    const c = classifyInboundSuppression({
+      senderRaw: "Jordan <jordan@example.com>",
+      subject: "Re: Wedding photography",
+      body: "Thanks! Here's the Zoom for our chat https://zoom.us/j/999 — Tuesday 3pm works.",
+    });
+    expect(c.verdict).toBe("human_client_or_lead");
+    expect(c.suppressed).toBe(false);
   });
 });
 
