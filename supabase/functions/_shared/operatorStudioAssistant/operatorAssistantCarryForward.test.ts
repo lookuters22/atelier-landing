@@ -120,6 +120,28 @@ describe("operatorAssistantCarryForward", () => {
     expect(d.lastDomain).toBe("none");
   });
 
+  it("no-tool path sets lastDomain inquiry_counts when the prior turn loaded inquiry count snapshot", () => {
+    const d = extractCarryForwardDataFromTurn(
+      makeCtx({
+        retrievalLog: {
+          ...emptyCtxBase.retrievalLog,
+          scopesQueried: ["operator_inquiry_count_snapshot"],
+        },
+        operatorInquiryCountSnapshot: { ...IDLE_ASSISTANT_INQUIRY_COUNT_SNAPSHOT, didRun: true },
+      }),
+      [],
+    );
+    expect(d.lastDomain).toBe("inquiry_counts");
+  });
+
+  it("operator_lookup_inquiry_counts tool sets lastDomain inquiry_counts", () => {
+    const d = extractCarryForwardDataFromTurn(
+      makeCtx(),
+      [{ name: "operator_lookup_inquiry_counts", ok: true, content: JSON.stringify({ tool: "x", result: { ok: true } }) }],
+    );
+    expect(d.lastDomain).toBe("inquiry_counts");
+  });
+
   it("sets lastEntityAmbiguous from ambiguous project resolver", () => {
     const content = JSON.stringify({
       tool: "operator_lookup_projects",

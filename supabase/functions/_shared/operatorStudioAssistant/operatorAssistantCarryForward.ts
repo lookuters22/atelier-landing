@@ -76,7 +76,7 @@ const DOMAIN_BY_TOOL: Record<string, OperatorAnaCarryForwardDomain> = {
   operator_lookup_projects: "projects",
   operator_lookup_project_details: "projects",
   operator_lookup_threads: "threads",
-  operator_lookup_inquiry_counts: "none",
+  operator_lookup_inquiry_counts: "inquiry_counts",
 };
 
 function toolDomain(name: string): OperatorAnaCarryForwardDomain {
@@ -133,6 +133,7 @@ function parseDomain(v: unknown): OperatorAnaCarryForwardDomain {
     "studio_analysis",
     "app_help",
     "knowledge",
+    "inquiry_counts",
     "none",
   ];
   return (allowed as string[]).includes(s) ? (s as OperatorAnaCarryForwardDomain) : "none";
@@ -414,9 +415,6 @@ function mergeToolIntoData(
     }
   }
 
-  if (toolName === "operator_lookup_inquiry_counts") {
-    next.lastDomain = "none";
-  }
   return next;
 }
 
@@ -483,6 +481,9 @@ function mergeContextOnlySignals(
 
   if (e.personMatches.length === 1 && out.lastMentionedPersonId == null) {
     out.lastMentionedPersonId = e.personMatches[0]!.id;
+  }
+  if (ctx.retrievalLog.scopesQueried.includes("operator_inquiry_count_snapshot")) {
+    out.lastDomain = "inquiry_counts";
   }
   return out;
 }

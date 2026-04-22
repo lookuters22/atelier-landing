@@ -42,7 +42,10 @@ import {
   hasOperatorThreadMessageLookupIntent,
   querySuggestsCommercialOrNonWeddingInboundFocus,
 } from "../../../../src/lib/operatorAssistantThreadMessageLookupIntent.ts";
-import { hasOperatorInquiryCountIntent } from "../../../../src/lib/operatorAssistantInquiryCountIntent.ts";
+import {
+  hasOperatorInquiryCountContinuityIntent,
+  hasOperatorInquiryCountIntent,
+} from "../../../../src/lib/operatorAssistantInquiryCountIntent.ts";
 import { hasOperatorCalendarScheduleIntent } from "../../../../src/lib/operatorAssistantCalendarScheduleIntent.ts";
 import { buildOperatorCalendarLookupPlan } from "../../../../src/lib/operatorAssistantCalendarLookupPlan.ts";
 import {
@@ -132,6 +135,13 @@ export async function buildAssistantContext(
     resolveEffectiveFocusWeddingId(supabase, tenantPhotographerId, weddingIdRequested),
     resolveEffectiveFocusPersonId(supabase, tenantPhotographerId, personIdRequested),
   ]);
+
+  const carryForward = prepareCarryForwardForContext(
+    tryParseClientCarryForward(input.carryForward),
+    { weddingId: weddingIdEffective, personId: personIdEffective },
+    queryText,
+    Date.now(),
+  );
 
   const scopesQueried: AssistantRetrievalLog["scopesQueried"] = [
     "playbook",
@@ -246,7 +256,8 @@ export async function buildAssistantContext(
     scopesQueried.push("operator_thread_message_lookup");
   }
 
-  const loadInquiryCount = hasOperatorInquiryCountIntent(queryText);
+  const loadInquiryCount =
+    hasOperatorInquiryCountIntent(queryText) || hasOperatorInquiryCountContinuityIntent(queryText, carryForward);
   if (loadInquiryCount) {
     scopesQueried.push("operator_inquiry_count_snapshot");
   }
@@ -360,13 +371,6 @@ export async function buildAssistantContext(
     title: h.title,
     summary: h.summary,
   }));
-
-  const carryForward = prepareCarryForwardForContext(
-    tryParseClientCarryForward(input.carryForward),
-    { weddingId: weddingIdEffective, personId: personIdEffective },
-    queryText,
-    Date.now(),
-  );
 
   return {
     clientFacingForbidden: true,

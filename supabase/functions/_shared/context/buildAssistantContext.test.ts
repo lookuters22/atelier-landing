@@ -1133,6 +1133,249 @@ describe("buildAssistantContext", () => {
     vi.restoreAllMocks();
   });
 
+  it("preserves inquiry-count path for elliptical follow-up after a prior inquiry-count turn (how many yesterday?)", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.useFakeTimers();
+    const t0 = new Date("2026-04-21T16:00:00.000Z");
+    vi.setSystemTime(t0);
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.lt = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.neq = () => chain;
+        chain.gte = () => chain;
+        chain.ilike = () => chain;
+        chain.limit = () => {
+          if (table === "calendar_events") {
+            return Promise.resolve({ data: [], error: null });
+          }
+          return chain;
+        };
+        chain.maybeSingle = () => {
+          if (table === "weddings" || table === "people") {
+            return Promise.resolve({ data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        };
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "tasks" || table === "escalation_requests") {
+            return resolve({ data: null, count: 0, error: null });
+          }
+          if (table === "thread_weddings") return resolve({ data: [], error: null });
+          if (table === "v_thread_first_inbound_at") {
+            return resolve({
+              data: [
+                {
+                  thread_id: "t-inq-1",
+                  first_inbound_at: "2026-04-21T10:00:00.000Z",
+                  wedding_id: "w1",
+                  wedding_stage: "inquiry",
+                  ai_routing_metadata: null,
+                  kind: "client",
+                },
+              ],
+              error: null,
+            });
+          }
+          if (table === "weddings") {
+            return resolve({
+              data: [{ id: "w1", couple_names: "A", stage: "inquiry", wedding_date: null }],
+              error: null,
+            });
+          }
+          if (table === "people") return resolve({ data: [], error: null });
+          if (table === "memories") return resolve({ data: [], error: null });
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const carryForward = {
+      lastDomain: "inquiry_counts" as const,
+      lastFocusedProjectId: null,
+      lastFocusedProjectType: null,
+      lastMentionedPersonId: null,
+      lastThreadId: null,
+      lastEntityAmbiguous: false,
+      emittedAtEpochMs: t0.getTime() - 60_000,
+      capturedFocusWeddingId: null,
+      capturedFocusPersonId: null,
+    };
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "how many yesterday?",
+      carryForward,
+    });
+    expect(ctx.retrievalLog.scopesQueried).toContain("operator_inquiry_count_snapshot");
+    expect(ctx.operatorInquiryCountSnapshot.didRun).toBe(true);
+
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("preserves inquiry-count for follow-up 'what about last week?' with prior inquiry_counts domain", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.useFakeTimers();
+    const t0 = new Date("2026-04-21T16:00:00.000Z");
+    vi.setSystemTime(t0);
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.lt = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.neq = () => chain;
+        chain.gte = () => chain;
+        chain.ilike = () => chain;
+        chain.limit = () => {
+          if (table === "calendar_events") {
+            return Promise.resolve({ data: [], error: null });
+          }
+          return chain;
+        };
+        chain.maybeSingle = () => {
+          if (table === "weddings" || table === "people") {
+            return Promise.resolve({ data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        };
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "tasks" || table === "escalation_requests") {
+            return resolve({ data: null, count: 0, error: null });
+          }
+          if (table === "thread_weddings") return resolve({ data: [], error: null });
+          if (table === "v_thread_first_inbound_at") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "weddings") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "people") return resolve({ data: [], error: null });
+          if (table === "memories") return resolve({ data: [], error: null });
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "what about last week?",
+      carryForward: {
+        lastDomain: "inquiry_counts",
+        lastFocusedProjectId: null,
+        lastFocusedProjectType: null,
+        lastMentionedPersonId: null,
+        lastThreadId: null,
+        lastEntityAmbiguous: false,
+        emittedAtEpochMs: t0.getTime() - 30_000,
+        capturedFocusWeddingId: null,
+        capturedFocusPersonId: null,
+      },
+    });
+    expect(ctx.retrievalLog.scopesQueried).toContain("operator_inquiry_count_snapshot");
+    expect(ctx.operatorInquiryCountSnapshot.didRun).toBe(true);
+
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("does not load inquiry count for ambiguous 'how many yesterday?' in a fresh session (no prior inquiry_counts)", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-21T16:00:00.000Z"));
+
+    const supabase = {
+      rpc: () => Promise.resolve({ data: [], error: null }),
+      from: (table: string) => {
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.in = () => chain;
+        chain.lte = () => chain;
+        chain.lt = () => chain;
+        chain.or = () => chain;
+        chain.order = () => chain;
+        chain.neq = () => chain;
+        chain.gte = () => chain;
+        chain.ilike = () => chain;
+        chain.limit = () => {
+          if (table === "calendar_events") {
+            return Promise.resolve({ data: [], error: null });
+          }
+          return chain;
+        };
+        chain.maybeSingle = () => {
+          if (table === "weddings" || table === "people") {
+            return Promise.resolve({ data: null, error: null });
+          }
+          return Promise.resolve({ data: null, error: null });
+        };
+        chain.then = (resolve: (v: unknown) => unknown) => {
+          if (table === "playbook_rules") return resolve({ data: [], error: null });
+          if (table === "authorized_case_exceptions") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "tasks" || table === "escalation_requests") {
+            return resolve({ data: null, count: 0, error: null });
+          }
+          if (table === "thread_weddings") return resolve({ data: [], error: null });
+          if (table === "v_thread_first_inbound_at") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "weddings" || table === "people" || table === "memories") {
+            return resolve({ data: [], error: null });
+          }
+          if (table === "global_knowledge" || table === "knowledge_documents") {
+            return resolve({ data: [], error: null });
+          }
+          return resolve({ data: [], error: null });
+        };
+        return chain;
+      },
+    } as never;
+
+    const ctx = await buildAssistantContext(supabase, "photo-1", {
+      queryText: "how many yesterday?",
+    });
+    expect(ctx.retrievalLog.scopesQueried).not.toContain("operator_inquiry_count_snapshot");
+    expect(ctx.operatorInquiryCountSnapshot.didRun).toBe(false);
+
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
   it("loads bounded calendar lookup when the query matches schedule intent (read-only)", async () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.useFakeTimers();

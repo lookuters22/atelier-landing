@@ -12,6 +12,7 @@ export type OperatorAnaCarryForwardDomain =
   | "studio_analysis"
   | "app_help"
   | "knowledge"
+  | "inquiry_counts"
   | "none";
 
 export type OperatorAnaCarryForwardProjectType = "wedding" | "commercial" | "video" | "other";
