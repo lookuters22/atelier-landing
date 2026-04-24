@@ -191,6 +191,10 @@ import {
   buildPreIngressSourceObservabilityRecord,
   logPreIngressSourceObservabilityRecord,
 } from "../../_shared/triage/preIngressSourceObservability.ts";
+import {
+  buildLegacyRoutingRetirementReadinessRecord,
+  logLegacyRoutingRetirementReadinessRecord,
+} from "../../_shared/triage/legacyRoutingRetirementReadiness.ts";
 
 // ── Stage gate + matchmaker: ../../_shared/triage/emailIngressClassification.ts ──
 
@@ -242,6 +246,15 @@ export const triageFunction = inngest.createFunction(
      * - **Email:** `comms/email.received` — no in-repo emitter observed; branch remains for external/legacy producers.
      * Both events stay subscribed on this function; see `[triage.pre_ingress_source]` logs.
      */
+    logLegacyRoutingRetirementReadinessRecord(
+      buildLegacyRoutingRetirementReadinessRecord({
+        triageRegistered: true,
+        consumesCommsEmailReceived: true,
+        consumesCommsWebReceived: true,
+        webEmitterPresentInRepo: true,
+        emailEmitterPresentInRepo: false,
+      }),
+    );
     // Step 8D: client vs operator WhatsApp use distinct event names (see `inngest.ts`).
     // Legacy `comms/whatsapp.received` + `operator/whatsapp.legacy.received` → Internal Concierge only.
     // Twilio operator lane → `operator/whatsapp.inbound.v1` (not triage).

@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    /** In-repo pre-ingress emitter for dashboard/web → `triage` (`comms/web.received`); retirement audits treat this path as still reachable. */
     await inngest.send({
       name: "comms/web.received",
       data: {
