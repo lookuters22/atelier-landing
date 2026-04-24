@@ -33,6 +33,10 @@ import { evaluatePreLlmInboundEmail } from "../../_shared/triage/preLlmEmailRout
 import { evaluatePostIngestSuppressionAfterPreLlm } from "../../_shared/triage/postIngestSuppressionGate.ts";
 import { applyUnlinkedWeddingLeadIntakeBoost } from "../../_shared/triage/unlinkedWeddingLeadIntakeBoost.ts";
 import {
+  buildPostIngestDispatchObservabilityRecord,
+  logPostIngestDispatchObservabilityRecord,
+} from "../../_shared/triage/postIngestDispatchObservability.ts";
+import {
   type MainPathEmailDispatchResult,
   runMainPathEmailDispatch,
 } from "../../_shared/triage/runMainPathEmailDispatch.ts";
@@ -563,6 +567,17 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
           replyChannel: "email",
           useExistingThreadIntakeEvent: dispatchIntent === "intake",
         }),
+    );
+
+    logPostIngestDispatchObservabilityRecord(
+      buildPostIngestDispatchObservabilityRecord({
+        threadId,
+        photographerId,
+        dispatchIntent,
+        replyChannel: "email",
+        dispatchResult,
+        traceId,
+      }),
     );
 
     return {
