@@ -187,6 +187,10 @@ import {
   extractReplyToFromRawEmailPayload,
 } from "../../_shared/triage/rawEmailIngressSuppressionGate.ts";
 import { resolveIngressIdentitySenderEmail } from "../../_shared/triage/ingressSenderEmailNormalize.ts";
+import {
+  buildPreIngressSourceObservabilityRecord,
+  logPreIngressSourceObservabilityRecord,
+} from "../../_shared/triage/preIngressSourceObservability.ts";
 
 // ── Stage gate + matchmaker: ../../_shared/triage/emailIngressClassification.ts ──
 
@@ -232,6 +236,12 @@ export const triageFunction = inngest.createFunction(
     { event: "comms/web.received" },
   ],
   async ({ event, step }) => {
+    /**
+     * Pre-ingress ingress (observability only; routing unchanged):
+     * - **Web:** `comms/web.received` — still reachable in-repo (e.g. `webhook-web`).
+     * - **Email:** `comms/email.received` — no in-repo emitter observed; branch remains for external/legacy producers.
+     * Both events stay subscribed on this function; see `[triage.pre_ingress_source]` logs.
+     */
     // Step 8D: client vs operator WhatsApp use distinct event names (see `inngest.ts`).
     // Legacy `comms/whatsapp.received` + `operator/whatsapp.legacy.received` → Internal Concierge only.
     // Twilio operator lane → `operator/whatsapp.inbound.v1` (not triage).
@@ -246,6 +256,14 @@ export const triageFunction = inngest.createFunction(
       const photographerId = typeof raw.photographer_id === "string" ? raw.photographer_id : "";
 
       console.log(`[triage] WhatsApp received — bypassing email pipeline. From: ${fromNumber}, photographer: ${photographerId}`);
+
+      logPreIngressSourceObservabilityRecord(
+        buildPreIngressSourceObservabilityRecord({
+          ingressEventName: event.name,
+          replyChannel: "whatsapp",
+          photographerIdPresent: Boolean(photographerId.trim()),
+        }),
+      );
 
       await step.run("dispatch-internal-concierge", async () => {
         await inngest.send({
@@ -265,7 +283,8 @@ export const triageFunction = inngest.createFunction(
       };
     }
 
-    // ── Source detection (email / web only from this point) ────────
+    // ── Pre-ingress web vs email (WhatsApp returned above) ───────────
+    // `comms/web.received` vs `comms/email.received` — shared pipeline below; observability classifies by `event.name` only.
     const isWebWidget = event.name === "comms/web.received";
 
     const replyChannel: "email" | "whatsapp" | "web" =
@@ -281,6 +300,14 @@ export const triageFunction = inngest.createFunction(
 
     const payloadPhotographerId =
       typeof raw.photographer_id === "string" ? raw.photographer_id : null;
+
+    logPreIngressSourceObservabilityRecord(
+      buildPreIngressSourceObservabilityRecord({
+        ingressEventName: event.name,
+        replyChannel: replyChannel === "web" ? "web" : "email",
+        photographerIdPresent: Boolean(payloadPhotographerId?.trim()),
+      }),
+    );
 
     const { sender, body } = extractSenderAndBody(
       typeof payload === "object" && payload !== null
