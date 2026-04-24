@@ -13,6 +13,10 @@ import { runIntakeExtractionAndResearch } from "../../_shared/intake/intakeBoots
 import { isIntakeLiveOrchestratorPostBootstrapEmailEnabled } from "../../_shared/intake/intakeLivePostBootstrapOrchestratorGate.ts";
 import { isIntakeLiveOrchestratorPostBootstrapWebEnabled } from "../../_shared/intake/intakeLivePostBootstrapOrchestratorWebGate.ts";
 import { isIntakeShadowOrchestratorPostBootstrapEnabled } from "../../_shared/intake/intakePostBootstrapOrchestratorGate.ts";
+import {
+  buildIntakePostBootstrapDispatchObservabilityRecord,
+  logIntakePostBootstrapDispatchObservabilityRecord,
+} from "../../_shared/intake/intakePostBootstrapDispatchObservability.ts";
 
 function intakeReplyChannelForOrchestratorParity(
   reply_channel: string | undefined,
@@ -135,6 +139,17 @@ export const intakeExistingThreadFunction = inngest.createFunction(
         },
       });
 
+      logIntakePostBootstrapDispatchObservabilityRecord(
+        buildIntakePostBootstrapDispatchObservabilityRecord({
+          photographerId,
+          weddingId,
+          threadId,
+          replyChannel,
+          downstreamChoice: "live_orchestrator_email",
+          intakeLiveCorrelationId,
+        }),
+      );
+
       return {
         status: "facts_extracted_live_orchestrator_post_bootstrap_email",
         weddingId,
@@ -167,6 +182,17 @@ export const intakeExistingThreadFunction = inngest.createFunction(
         },
       });
 
+      logIntakePostBootstrapDispatchObservabilityRecord(
+        buildIntakePostBootstrapDispatchObservabilityRecord({
+          photographerId,
+          weddingId,
+          threadId,
+          replyChannel,
+          downstreamChoice: "live_orchestrator_web",
+          intakeLiveWebCorrelationId,
+        }),
+      );
+
       return {
         status: "facts_extracted_live_orchestrator_post_bootstrap_web",
         weddingId,
@@ -198,6 +224,17 @@ export const intakeExistingThreadFunction = inngest.createFunction(
           intakeParityFanoutSource: "intake_post_bootstrap_parity",
         },
       });
+
+      logIntakePostBootstrapDispatchObservabilityRecord(
+        buildIntakePostBootstrapDispatchObservabilityRecord({
+          photographerId,
+          weddingId,
+          threadId,
+          replyChannel,
+          downstreamChoice: "shadow_orchestrator_parity",
+          intakeParityCorrelationId,
+        }),
+      );
     }
 
     await step.sendEvent("handoff-to-persona", {
@@ -210,6 +247,16 @@ export const intakeExistingThreadFunction = inngest.createFunction(
         reply_channel: reply_channel ?? undefined,
       },
     });
+
+    logIntakePostBootstrapDispatchObservabilityRecord(
+      buildIntakePostBootstrapDispatchObservabilityRecord({
+        photographerId,
+        weddingId,
+        threadId,
+        replyChannel,
+        downstreamChoice: "legacy_persona",
+      }),
+    );
 
     return {
       status: "facts_extracted_handoff_sent",
