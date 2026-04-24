@@ -43,11 +43,9 @@ Repo search found the event definition and the consumer in `triage.ts`, but **no
 
 This makes the email pre-ingress lane a strong decommission candidate, but not yet a delete target without confirming no external emitter exists.
 
-### 4. `comms/web.received` still has an in-repo emitter
+### 4. `comms/web.received` — in-repo emitter retired (execution Slice A)
 
-[webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts) still emits `comms/web.received`.
-
-That means the web pre-ingress lane is still reachable from current code, even if it was quiet in the last-day Inngest screenshots.
+[webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts) **no longer** emits `comms/web.received`. It returns **410 Gone** with `web_pre_ingress_retired`. `triageFunction` may still subscribe to `comms/web.received` until a later unregister PR; any **new** web traffic must use the supported replacement path (not this webhook emit).
 
 ### 5. The active Gmail/thread path still depends on old routing modules
 
@@ -374,19 +372,25 @@ Reason:
 
 ## Current endpoint: cleanup complete, retirement deferred
 
-The orchestrator **decommission-prep program** (Slices 1–7) ends in a **retained-not-removed** state:
+The orchestrator **decommission-prep program** (Slices 1–7) ends in a **retained-not-removed** state, with **execution Slice A** applied:
 
 - **Live / cleaned-up primary path:** Gmail delta → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage.ts` (bounded flags, explicit post-ingest dispatch module, dispatch + intake + pre-ingress observability logs).
-- **Intentionally retained:** pre-ingress **`triageFunction`** still consumes `comms/email.received`, `comms/web.received`, and WhatsApp ingress events; **`webhook-web`** remains the in-repo emitter for `comms/web.received`.
+- **Pre-ingress web:** **`webhook-web` no longer emits `comms/web.received`** (410 `web_pre_ingress_retired`). **`triageFunction`** may still be registered for `comms/web.received` until a follow-up unregister/cleanup PR.
+- **Pre-ingress email / WhatsApp:** **`triageFunction`** still consumes `comms/email.received` and WhatsApp ingress events.
 - **Unsafe without an explicit ops/product PR:** hard delete of `triage.ts`, removal of `comms/*` triggers, or unregister of `triageFunction` while external `comms/email.received` producers are unproven.
 
 **Explicit retirement blockers** (also in code: `legacyRoutingCutoverGate.ts`, `legacyRoutingRetirementReadiness.ts`):
 
 1. `triageFunction` still registered (intentional).
-2. In-repo web emitter (`webhook-web`) still present.
-3. `comms/email.received` — no in-repo emitter observed; **external emitters not ruled out**.
+2. ~~In-repo web emitter (`webhook-web`)~~ **Retired** — no longer emits `comms/web.received`.
+3. `comms/email.received` — no in-repo emitter observed; **external emitters not ruled out** (**primary remaining pre-ingress blocker** for full triage retirement, aside from WhatsApp and explicit cutover).
 
-**Next prerequisites for any future removal PR:** prove or retire external email ingress; reroute or formally deprecate web pre-ingress if desired; flip `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA` only in the **same** change set as routing/unregister work (Step 12C/ops sign-off as applicable).
+**Next prerequisites for any future removal PR:** prove or retire external email ingress; unregister or narrow `triageFunction` triggers when safe; flip `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA` only in the **same** change set as routing/unregister work (Step 12C/ops sign-off as applicable).
+
+## Retirement execution — Slice A (web pre-ingress emitter)
+
+- **Done:** `webhook-web` stopped emitting `comms/web.received`; responses are **410** with `web_pre_ingress_retired`.
+- **Not in this slice:** `triage.ts` unregister, `comms/email.received`, Gmail/thread post-ingest.
 
 ## Source-of-truth files for this roadmap
 
