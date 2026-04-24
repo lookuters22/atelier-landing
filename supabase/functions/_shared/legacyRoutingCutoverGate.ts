@@ -1,22 +1,36 @@
 /**
- * execute_v3 Phase 12 Step 12D — **legacy routing retention** until replay/stress exit criteria pass.
+ * **Canonical “do not remove pre-ingress routing yet” guard** — Step 12D + orchestrator decommission formalization.
  *
- * **Current path:** Keep `triage` dispatching `ai/intent.*` only; keep all workers registered in
- * `supabase/functions/inngest/index.ts`; do **not** remove legacy handlers or switch production
- * fan-out to `ai/orchestrator.client.v1` based on this flag alone.
+ * ### What is done vs retained
  *
- * **Architecture note (post orchestrator-decommission observability slices):** The active Gmail/post-ingest
- * classifier (`processInboxThreadRequiresTriage`) is separated from this gate, but **pre-ingress** retirement
- * (`comms/email.received` / `comms/web.received` → `triage.ts`) is explicitly **not** complete — see
- * `[triage.legacy_retirement_readiness]` logs and `legacyRoutingRetirementReadiness.ts`.
+ * - **Post-ingest Gmail/thread cleanup (decommission prep)** is complete in code: bounded flags, dispatch observability,
+ *   `postIngestThreadDispatch`, legacy gate quarantine, intake post-bootstrap observability, pre-ingress source logs,
+ *   and retirement readiness audit (`legacyRoutingRetirementReadiness.ts`, `[triage.legacy_retirement_readiness]`).
+ * - **Pre-ingress routing is intentionally retained** until product/ops explicitly retires it. Do **not** delete
+ *   `triage.ts`, unregister `triageFunction`, or drop `comms/email.received` / `comms/web.received` support in a
+ *   drive-by cleanup PR.
  *
- * **Cutover (later, explicit phase):** When Step 12C replay and stress tests are green in CI/ops,
- * change this gate and the routing implementation **in the same change set** — never flip the
- * flag without the corresponding triage/orchestrator wiring.
+ * ### Current retirement blockers (explicit)
  *
- * Search the repo for `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA` when planning removal.
+ * 1. **`triageFunction` remains registered** in `supabase/functions/inngest/index.ts` (not accidental).
+ * 2. **In-repo web emitter:** `webhook-web/index.ts` still emits `comms/web.received`.
+ * 3. **Email pre-ingress:** no in-repo emitter observed for `comms/email.received`; **external producers are not ruled out** —
+ *    the consumer on `triage` stays until that is proven.
+ *
+ * ### Runtime flag
+ *
+ * **`LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`** stays `true` until Step 12C replay/stress exit criteria
+ * **and** the pre-ingress blockers above are resolved in an explicit change set together with routing/unregister work.
+ *
+ * Search: `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`, `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY`.
  */
 export const LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA = true as const;
+
+/**
+ * Single-line, stable summary for logs/docs greps — **not** a runtime switch (see `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`).
+ */
+export const LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY =
+  "pre_ingress_routing_intentionally_retained_pending_explicit_ops_retirement" as const;
 
 export type LegacyRoutingRetentionGate =
   typeof LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA;

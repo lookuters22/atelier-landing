@@ -19,6 +19,23 @@ The right approach is:
 2. harden remaining legacy paths that are still live
 3. only then retire old routing and workers
 
+## Orchestrator decommission prep — dual paths (formalized)
+
+After the orchestrator decommission prep slices (`docs/v3/ORCHESTRATOR_DECOMMISSION_SLICE_ROADMAP.md`), the codebase has **two explicit ingress stories**:
+
+| Path | Role | Notes |
+|------|------|--------|
+| **Post-ingest Gmail/thread** | Primary cleaned-up flow | `processGmailDeltaSync` → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage` — observability and dispatch modules are explicit. |
+| **Pre-ingress `triageFunction`** | **Intentionally retained** | Still registered in `inngest/index.ts`; listens for `comms/email.received`, `comms/web.received`, WhatsApp. **Not** dead code. |
+
+**In-repo web pre-ingress emitter:** `supabase/functions/webhook-web/index.ts` emits `comms/web.received` by design.
+
+**Email pre-ingress:** no `comms/email.received` emitter under `supabase/functions/` was observed; **external producers are not ruled out** — do not remove the consumer or event subscription without proof.
+
+**Retirement blockers** (machine-greppable): `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY`, `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`, `[triage.legacy_retirement_readiness]`, `legacyRoutingCutoverGate.ts`.
+
+**Prerequisite for a future removal PR:** explicit product/ops decision plus evidence that upstream emitters are gone or rerouted; then change retention gates and unregister in one coordinated change set — never “cleanup” by deleting `triage.ts` or `comms/*` support blindly.
+
 ## Global Rules For Vibecoder
 
 Apply these rules on every cleanup slice:

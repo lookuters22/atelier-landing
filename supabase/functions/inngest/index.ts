@@ -112,6 +112,10 @@ const handler = serve({
   servePath: "/functions/v1/inngest",
   ...(serveHost ? { serveHost } : {}),
   functions: [
+    // `triageFunction` (traffic-cop-triage): intentionally registered for retained pre-ingress routing
+    // (`comms/email.received`, `comms/web.received`, WhatsApp ingress). Not obsolete — see
+    // `_shared/legacyRoutingCutoverGate.ts`, `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY`, and
+    // `[triage.legacy_retirement_readiness]` / `[triage.pre_ingress_source]` logs. Do not unregister in a cleanup-only PR.
     triageFunction,
     intakeFunction,
     intakeExistingThreadFunction,

@@ -1,6 +1,10 @@
 /**
  * Stateless Web Support webhook — zero business logic (.cursorrules Section 5).
- * Parse body, emit comms/web.received event, return 200.
+ * Parse body, emit `comms/web.received`, return 200.
+ *
+ * **Pre-ingress retention:** This Edge function is the **intentional in-repo emitter** for dashboard/web traffic into
+ * `triageFunction`. Pre-ingress routing remains registered by design (`legacyRoutingCutoverGate.ts`); do not treat this
+ * emit as removable without an explicit product/ops decision to reroute or retire web pre-ingress.
  *
  * Accepts two payload shapes:
  *  - Test button / lead form: { source, lead: { name, email, event_date, message }, ingress_token? }
@@ -108,7 +112,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    /** In-repo pre-ingress emitter for dashboard/web → `triage` (`comms/web.received`); retirement audits treat this path as still reachable. */
+    /**
+     * Intentional in-repo pre-ingress: `comms/web.received` → `triageFunction`. Retained until explicit retirement;
+     * see `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY` and orchestrator decommission docs.
+     */
     await inngest.send({
       name: "comms/web.received",
       data: {
