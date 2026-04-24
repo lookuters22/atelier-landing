@@ -38,8 +38,8 @@ import {
 } from "../../_shared/triage/postIngestDispatchObservability.ts";
 import {
   type MainPathEmailDispatchResult,
-  runMainPathEmailDispatch,
-} from "../../_shared/triage/runMainPathEmailDispatch.ts";
+  runPostIngestThreadDispatch,
+} from "../../_shared/triage/postIngestThreadDispatch.ts";
 import { resolveIngressIdentitySenderEmail } from "../../_shared/triage/ingressSenderEmailNormalize.ts";
 import { bootstrapInquiryWeddingForCanonicalThread } from "../../_shared/resolvers/bootstrapInquiryWeddingForCanonicalThread.ts";
 import { INBOX_THREAD_REQUIRES_TRIAGE_V1_EVENT, inngest } from "../../_shared/inngest.ts";
@@ -555,7 +555,7 @@ export const processInboxThreadRequiresTriage = inngest.createFunction(
     const dispatchResult = await step.run(
       "dispatch-downstream",
       async (): Promise<MainPathEmailDispatchResult> =>
-        runMainPathEmailDispatch({
+        runPostIngestThreadDispatch({
           nearMatchForApproval,
           nearMatchEscalationId,
           dispatchIntent,

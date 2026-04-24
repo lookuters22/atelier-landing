@@ -3,7 +3,7 @@
  * Pure builders only — no routing.
  */
 import type { TriageIntent } from "../agents/triage.ts";
-import type { MainPathEmailDispatchResult } from "./runMainPathEmailDispatch.ts";
+import type { MainPathEmailDispatchResult } from "./postIngestThreadDispatch.ts";
 
 export type PostIngestDispatchObservabilityRecord = {
   event: "post_ingest_dispatch_v1";
