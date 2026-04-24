@@ -6,7 +6,7 @@
  * (same ordering as `comms/email.received`) → LLM for survivors → Gmail-specific dispatch policy (no unlinked fake intake).
  */
 import { runTriageAgent } from "../../_shared/agents/triage.ts";
-import { isTriageBoundedUnresolvedEmailMatchmakerEnabled } from "../../_shared/orchestrator/triageShadowOrchestratorClientV1Gate.ts";
+import { isTriageBoundedUnresolvedEmailMatchmakerEnabled } from "../../_shared/triage/triageRoutingFlags.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { insertBoundedUnresolvedMatchApprovalEscalation } from "../../_shared/triage/boundedUnresolvedMatchApprovalEscalation.ts";
 import {

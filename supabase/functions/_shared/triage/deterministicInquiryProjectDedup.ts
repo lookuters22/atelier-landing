@@ -6,7 +6,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   BOUNDED_UNRESOLVED_MATCH_APPROVAL_ESCALATION_MIN_CONFIDENCE,
   BOUNDED_UNRESOLVED_MATCH_AUTO_RESOLVE_MIN_CONFIDENCE,
-} from "../orchestrator/triageShadowOrchestratorClientV1Gate.ts";
+} from "./triageRoutingFlags.ts";
 import { normalizeEmail } from "../utils/normalizeEmail.ts";
 import { weddingEmailGraphContainsAnyCandidate } from "../identity/identityEmailLookupCandidates.ts";
 

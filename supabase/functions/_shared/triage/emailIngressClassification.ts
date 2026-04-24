@@ -16,7 +16,7 @@ import {
   isTriageBoundedUnresolvedEmailMatchmakerEnabled,
   isTriageDeterministicInquiryDedupV1Enabled,
   TRIAGE_QA_BOUNDED_NEAR_MATCH_SYNTHETIC_CONFIDENCE_V1_ENV,
-} from "../orchestrator/triageShadowOrchestratorClientV1Gate.ts";
+} from "./triageRoutingFlags.ts";
 import { runDeterministicInquiryProjectDedup } from "./deterministicInquiryProjectDedup.ts";
 import { normalizeEmail } from "../utils/normalizeEmail.ts";
 import {
