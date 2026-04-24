@@ -148,9 +148,9 @@ import {
   isTriageLiveOrchestratorMainPathProjectManagementKnownWeddingEnabled,
   isTriageLiveOrchestratorMainPathStudioKnownWeddingEnabled,
   isTriageLiveOrchestratorWebWidgetKnownWeddingEnabled,
-  isTriageBoundedUnresolvedEmailMatchmakerEnabled,
   isTriageShadowOrchestratorClientV1Enabled,
-} from "../../_shared/orchestrator/triageShadowOrchestratorClientV1Gate.ts";
+} from "../../_shared/orchestrator/legacyOrchestratorCutoverGate.ts";
+import { isTriageBoundedUnresolvedEmailMatchmakerEnabled } from "../../_shared/triage/triageRoutingFlags.ts";
 import { supabaseAdmin } from "../../_shared/supabase.ts";
 import { runTriageAgent, type TriageIntent } from "../../_shared/agents/triage.ts";
 import { applyUnlinkedWeddingLeadIntakeBoost } from "../../_shared/triage/unlinkedWeddingLeadIntakeBoost.ts";
