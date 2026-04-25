@@ -29,7 +29,7 @@
  * `https://<ref>.supabase.co/functions/v1/inngest`, app **atelier-os**, **Production** env, and `INNGEST_ALLOW_IN_BAND_SYNC=1`.
  *
  * `clientOrchestratorV1Function` (`ai/orchestrator.client.v1`): QA/replay; optional **shadow** from Gmail/thread post-ingest
- * routing (`processInboxThreadRequiresTriage` / `runMainPathEmailDispatch`). **Pre-ingress `traffic-cop-triage` retired**
+ * routing (`processInboxThreadRequiresTriage` → `runPostIngestThreadDispatch` in `postIngestThreadDispatch.ts`). **Pre-ingress `traffic-cop-triage` retired**
  * — the old web-widget **CUT2** orchestrator surface (envs, event correlation fields, live observation branch) is **removed**
  * from code (Slice 8); pre-ingress web is not a live producer. Historical: `docs/v3/CUT2_WEB_WIDGET_D1_PREP_SLICE.md`.
  * Optional **CUT4** live for main-path concierge + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_CONCIERGE_KNOWN_WEDDING_V1`)

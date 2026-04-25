@@ -93,7 +93,6 @@ After the final pre-ingress retirement and cleanup slices, the live architecture
   - live routing flags split from legacy orchestrator scaffolding
   - post-ingest dispatch isolated into a named module
 - **still messy**
-  - `runMainPathEmailDispatch.ts` remains as a compatibility wrapper with no production caller
   - several CUT4-CUT8 comments still say "email or web" even though post-ingest live routing is now effectively email-only
 
 ## What we are actually doing
@@ -182,7 +181,7 @@ Goal:
 Likely files:
 
 - [processInboxThreadRequiresTriage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/processInboxThreadRequiresTriage.ts)
-- [runMainPathEmailDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/runMainPathEmailDispatch.ts)
+- [postIngestThreadDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.ts)
 - targeted tests near the triage/shared dispatch helpers
 
 Expected scope:
@@ -215,15 +214,14 @@ Why second:
 
 Goal:
 
-- stop [runMainPathEmailDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/runMainPathEmailDispatch.ts) from being a mixed bag of:
+- stop the pre–Slice-3 dispatch entrypoint from being a mixed bag of:
   - live Gmail canonical dispatch
   - legacy `ai/intent.*` routing
   - CUT4–CUT8 orchestrator migration logic
 
-Likely files:
+Likely files (historical — landed as `postIngestThreadDispatch.ts`; thin re-export wrapper removed Slice 10):
 
-- [runMainPathEmailDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/runMainPathEmailDispatch.ts)
-- new: `supabase/functions/_shared/triage/postIngestThreadDispatch.ts`
+- [postIngestThreadDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.ts)
 - [processInboxThreadRequiresTriage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/processInboxThreadRequiresTriage.ts)
 - ~~`inngest/functions/triage.ts`~~ *(removed in final pre-ingress retirement PR)*
 
@@ -420,34 +418,18 @@ Outcome:
 
 ---
 
-### Slice 10 - Delete the obsolete `runMainPathEmailDispatch.ts` wrapper
+### Slice 10 - Delete the obsolete main-path email dispatch wrapper
 
-**Status:** planned.
+**Status:** done.
 
-Why:
+**Outcome:** Wrapper file **deleted**; live dispatch is **`runPostIngestThreadDispatch`** in [postIngestThreadDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.ts) only.
 
-- there is no production caller
-- the name now points people at the wrong abstraction
-- only tests and comments still reference it
+**Touched:** [postIngestThreadDispatch.test.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.test.ts), [postIngestDispatchObservability.test.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestDispatchObservability.test.ts), [nonWeddingBusinessInquiryRouter.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/nonWeddingBusinessInquiryRouter.ts), [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts), v3 docs.
 
-Targets:
+**Acceptance:**
 
-- [runMainPathEmailDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/runMainPathEmailDispatch.ts)
-- [postIngestThreadDispatch.test.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.test.ts)
-- [postIngestDispatchObservability.test.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestDispatchObservability.test.ts)
-- [nonWeddingBusinessInquiryRouter.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/nonWeddingBusinessInquiryRouter.ts)
-- this roadmap and any other source-of-truth docs that still present the wrapper as current
-
-Expected outcome:
-
-- tests import `runPostIngestThreadDispatch` directly
-- docstrings/comments no longer mention `triage.ts` or pre-ingest callers
-- one misleading compatibility layer disappears
-
-Acceptance:
-
-- zero in-repo references to `runMainPathEmailDispatch`
-- no production behavior change
+- no remaining code references to the deleted wrapper module
+- no production behavior change (error string prefix updated to match real callee for consistency only)
 
 ---
 

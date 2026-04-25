@@ -1,7 +1,6 @@
 /**
  * Post–Gmail-ingest canonical thread dispatch: legacy `ai/intent.*`, existing-thread intake, or CUT4–CUT8 orchestrator.
- * Shared implementation for the live inbox-thread classifier; legacy pre-ingest callers use {@link runMainPathEmailDispatch}
- * in `runMainPathEmailDispatch.ts`.
+ * Live inbox-thread classifier (`processInboxThreadRequiresTriage`) calls {@link runPostIngestThreadDispatch} directly.
  */
 import type { TriageIntent } from "../agents/triage.ts";
 import {
@@ -115,7 +114,7 @@ export async function runPostIngestThreadDispatch(input: {
   if (eventName === "ai/intent.intake") {
     if (useExistingThreadIntakeEvent) {
       if (!finalWeddingId || !finalPhotographerId) {
-        throw new Error("runMainPathEmailDispatch: existing-thread intake requires wedding + photographer.");
+        throw new Error("runPostIngestThreadDispatch: existing-thread intake requires wedding + photographer.");
       }
       await inngest.send({
         name: AI_INTENT_INTAKE_EXISTING_THREAD_V1_EVENT,

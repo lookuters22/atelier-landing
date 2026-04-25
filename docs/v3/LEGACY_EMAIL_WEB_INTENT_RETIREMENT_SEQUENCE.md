@@ -6,7 +6,7 @@
 
 This document is the **narrow, email + dashboard-web–scoped** inventory for **legacy specialist dispatch** (historically **`triage`-driven**; now **post-ingest–driven** for the same `ai/intent.*` edges). It supports **RET1–RET3** in [`V3_FULL_CUTOVER_PLAN.md`](V3_FULL_CUTOVER_PLAN.md) without removing workers or changing routing.
 
-**In scope (historical framing):** Retired `comms/email.received` and `comms/web.received` paths that lived in removed `triage.ts` (including the web-widget known-wedding fast path). **Current live scope:** same specialist/orchestrator questions via **`postIngestThreadDispatch`** / **`runMainPathEmailDispatch`**.
+**In scope (historical framing):** Retired `comms/email.received` and `comms/web.received` paths that lived in removed `triage.ts` (including the web-widget known-wedding fast path). **Current live scope:** same specialist/orchestrator questions via **`runPostIngestThreadDispatch`** in **`postIngestThreadDispatch.ts`**.
 
 **Out of scope (this slice):** WhatsApp branches (`comms/whatsapp.*`, `operator/whatsapp.legacy.*`), `whatsappOrchestrator`, operator lanes, bounded unresolved matchmaker / near-match escalation (see [`UNFILED_UNRESOLVED_MATCHING_SLICE.md`](UNFILED_UNRESOLVED_MATCHING_SLICE.md)).
 

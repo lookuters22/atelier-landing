@@ -40,7 +40,6 @@ vi.mock("../orchestrator/triageShadowOrchestratorClientV1Gate.ts", () => ({
   isTriageD1Cut8MainPathStudioLegacyDispatchWhenCut8OffAllowed: () => gate.legacy8(),
 }));
 
-import { runMainPathEmailDispatch } from "./runMainPathEmailDispatch.ts";
 import { runPostIngestThreadDispatch } from "./postIngestThreadDispatch.ts";
 
 const baseInput = {
@@ -155,32 +154,5 @@ describe("runPostIngestThreadDispatch", () => {
     });
     expect(r).toEqual({ kind: "cut4_d1_blocked_no_dispatch" });
     expect(sendMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("runMainPathEmailDispatch wrapper", () => {
-  beforeEach(() => {
-    sendMock.mockClear();
-    gate.live4.mockReturnValue(false);
-    gate.live5.mockReturnValue(false);
-    gate.live6.mockReturnValue(false);
-    gate.live7.mockReturnValue(false);
-    gate.live8.mockReturnValue(false);
-    gate.legacy4.mockReturnValue(true);
-    gate.legacy5.mockReturnValue(true);
-    gate.legacy6.mockReturnValue(true);
-    gate.legacy7.mockReturnValue(true);
-    gate.legacy8.mockReturnValue(true);
-  });
-
-  it("delegates to the post-ingest implementation", async () => {
-    const r = await runMainPathEmailDispatch({
-      ...baseInput,
-      dispatchIntent: "concierge",
-      finalWeddingId: null,
-      finalPhotographerId: "photo-1",
-    });
-    expect(r).toEqual({ kind: "legacy", legacyEvent: "ai/intent.concierge" });
-    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -243,7 +243,7 @@ export function nonWeddingPromotionYieldedLinkedProject(
 }
 
 /**
- * Resolves `effectiveWeddingId` / `effectivePhotographerId` for {@link runMainPathEmailDispatch}
+ * Resolves `effectiveWeddingId` / `effectivePhotographerId` for {@link runPostIngestThreadDispatch}
  * after optional wedding-intake bootstrap or non-wedding promotion (Slice 4). Intake bootstrap wins
  * when both are absent; promotion and intake bootstrap are mutually exclusive in practice.
  */

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MainPathEmailDispatchResult } from "./runMainPathEmailDispatch.ts";
+import type { MainPathEmailDispatchResult } from "./postIngestThreadDispatch.ts";
 import {
   buildPostIngestDispatchObservabilityRecord,
   logPostIngestDispatchObservabilityRecord,
