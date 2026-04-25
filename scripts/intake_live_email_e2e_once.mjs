@@ -1,6 +1,7 @@
 /**
- * E2E: narrow live intake email — comms/email.received → triage → ai/intent.intake → ai/orchestrator.client.v1
+ * E2E: narrow live intake email — inbox/thread.requires_triage.v1 → ai/intent.intake → ai/orchestrator.client.v1
  * (no persona, no parity fanout on that turn when live gate is on).
+ * Pre-ingress `comms/email.received` / `traffic-cop-triage` retired.
  *
  * Thread resolution uses multiple strategies (body marker → messages → threads by wedding → drafts),
  * because `threads` has no `created_at` in schema — ordering by invalid columns can yield empty results.
@@ -13,6 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -50,6 +52,7 @@ if (!url || !sr || !inngestKey || !signingKey) {
 const fixturesPath = join(root, "supabase/functions/inngest/.qa_fixtures.json");
 const fixtures = JSON.parse(readFileSync(fixturesPath, "utf8"));
 const photographerId = fixtures.photographerId;
+const sb = createClient(url, sr);
 
 const ts = Date.now();
 const senderEmail = `intake_live_e2e_${ts}@qa.atelier.test`;
@@ -60,40 +63,28 @@ const body =
   "Could you share your packages and availability? " +
   BODY_MARKER;
 
-const event = {
-  name: "comms/email.received",
-  data: {
-    photographer_id: photographerId,
-    raw_email: {
-      from: senderEmail,
-      body,
-      subject: "Live intake email E2E — new inquiry",
-    },
-  },
-};
-
 const runStartedAt = new Date().toISOString();
-
-const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-const res = await fetch(ingestUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify([event]),
-});
-const sendText = await res.text();
-console.log("Inngest send:", res.status, sendText.slice(0, 400));
-if (!res.ok) {
-  console.error(sendText);
-  process.exit(1);
-}
 
 let eventId = null;
 try {
-  eventId = JSON.parse(sendText).ids?.[0] ?? null;
-} catch {
-  /* */
+  const r = await enqueueInboxThreadRequiresTriageV1({
+    supabase: sb,
+    photographerId,
+    weddingId: null,
+    senderEmail,
+    subject: "Live intake email E2E — new inquiry",
+    body,
+    inngestKey,
+    traceId: `intake-live-${ts}`,
+    source: "manual",
+  });
+  console.log("Inngest send (inbox/thread.requires_triage.v1): ok", r.sendText.slice(0, 400));
+  eventId = r.inngestEventId;
+} catch (e) {
+  console.error(e instanceof Error ? e.message : e);
+  process.exit(1);
 }
-console.log("comms/email.received event id:", eventId);
+console.log("inbox/thread.requires_triage.v1 event id:", eventId);
 console.log("senderEmail:", senderEmail);
 console.log("BODY_MARKER:", BODY_MARKER);
 console.log("runStartedAt (ISO):", runStartedAt);
@@ -251,8 +242,6 @@ async function resolveLeadThreadId(sb, { weddingId }) {
 
   return { threadId: null, trace, method: null };
 }
-
-const sb = createClient(url, sr);
 
 console.log("\n--- Poll DB for client (up to 6 min) ---");
 let clientRow = null;

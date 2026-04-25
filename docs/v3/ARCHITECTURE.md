@@ -1,5 +1,7 @@
 # ATELIER OS V3.1 ARCHITECTURE
 
+> **Current-state note (2026):** Primary **email classification** is **Gmail delta → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage`**. Pre-ingress **`comms/email.received`**, **`comms/web.received`**, and Inngest **`traffic-cop-triage`** are **retired** (see `ORCHESTRATOR_DECOMMISSION_SLICE_ROADMAP.md`). Operator WhatsApp legacy remains on **`legacy-whatsapp-ingress`**.
+
 ## 1. Purpose
 
 This document defines the target runtime for the app in this repository.
@@ -13,9 +15,9 @@ This revision replaces the older V3 story that treated WhatsApp as a client-faci
 
 New rule:
 
-- **Client new-lead intake** in this product is **email** (`comms/email.received` → triage → `ai/intent.intake`). **Web is not a client intake channel** for migration planning.
-- **Dashboard web** (`comms/web.received`) is the **photographer ↔ Ana (AI manager)** lane — same purpose family as operator WhatsApp: studio operator tooling, not end-client lead capture.
-- **Email** remains the primary asynchronous client ↔ studio channel for replies; V3 “email/web” orchestrator cutovers for **known-wedding** traffic use `reply_channel: "web"` only in that **dashboard web** sense, not as “web intake.”
+- **Client new-lead intake** in this product is **email** via **post-ingest** routing (`inbox/thread.requires_triage.v1` → dispatch, including `ai/intent.intake` when applicable). **Web is not a client intake channel** for migration planning. Retired pre-ingress **`comms/email.received`** is **not** part of the live Inngest contract.
+- **Dashboard web** (historical **`comms/web.received`**) was the **photographer ↔ Ana** lane; **`webhook-web`** no longer emits that event (410 `web_pre_ingress_retired`). Same *purpose family* as operator WhatsApp: studio tooling, not end-client lead capture.
+- **Email** remains the primary asynchronous client ↔ studio channel for replies; V3 “email/web” orchestrator cutovers for **known-wedding** traffic may use `reply_channel: "web"` in **dashboard** contexts only, not as “web intake.”
 - WhatsApp (operator line) is the channel between the **photographer** and Ana for clarifications and escalations.
 - If we later add client WhatsApp, that must be a separate channel contract and not be mixed with the operator line.
 
@@ -58,9 +60,10 @@ Current ingress functions:
 - `webhook-approval`
 - `api-resolve-draft`
 
-Current Inngest function roster:
+Current Inngest function roster (representative — see `supabase/functions/inngest/index.ts` for the served bundle):
 
-- `triage`
+- `legacy-whatsapp-ingress` (operator WhatsApp legacy → internal concierge only)
+- `process-inbox-thread-requires-triage` (Gmail/thread post-ingest classifier)
 - `intake`
 - `commercial`
 - `logistics`
@@ -80,8 +83,8 @@ Current Inngest function roster:
 Important truth:
 
 - The runtime is still a V1/V2 hybrid.
-- **Email / dashboard-web legacy `ai/intent.*` dispatch from triage** (vs env-gated `ai/orchestrator.client.v1`) is inventoried for retirement sequencing in [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) — no worker removal implied; preserves rollback when CUT gates are off.
-- Most client-facing AI still flows through `triage -> one specialist worker -> persona -> draft approval -> outbound`.
+- **Email / dashboard-web legacy `ai/intent.*` dispatch from post-ingest routing** (vs env-gated `ai/orchestrator.client.v1`) is inventoried for retirement sequencing in [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) — **that doc’s “triage.ts” framing is historical** after pre-ingress retirement; no worker removal implied; preserves rollback when CUT gates are off.
+- Most client-facing AI still flows through **`processInboxThreadRequiresTriage` / dispatch → one specialist worker → persona → draft approval → outbound** (same specialist workers; ingress path changed).
 - There is an experimental V2 WhatsApp orchestrator, but it does not yet implement the target policy-verifier-learning model.
 - There is still legacy/experimental WhatsApp logic in the codebase that does not match the new operator-only WhatsApp direction.
 

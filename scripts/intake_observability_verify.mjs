@@ -1,7 +1,9 @@
 /**
- * Post-CUT8 intake planning verification: behavior preservation + intake_legacy_dispatch on triage return.
+ * Post-CUT8 intake planning verification: behavior preservation + routing observability on inbox classifier return.
+ * Ingress: `inbox/thread.requires_triage.v1` (pre-ingress `comms/email.received` retired).
+ *
  * Requires: VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INNGEST_EVENT_KEY
- * Optional: INNGEST_SIGNING_KEY (or typo alias INGEST_SINGIN_KEY) — Inngest Cloud REST API for triage output
+ * Optional: INNGEST_SIGNING_KEY (or typo alias INGEST_SINGIN_KEY) — Inngest Cloud REST API for worker output
  *
  * Run: node scripts/intake_observability_verify.mjs
  */
@@ -9,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -50,6 +53,7 @@ if (!url || !sr || !inngestKey) {
 const fixturesPath = join(root, "supabase/functions/inngest/.qa_fixtures.json");
 const fixtures = JSON.parse(readFileSync(fixturesPath, "utf8"));
 const photographerId = fixtures.photographerId;
+const supabase = createClient(url, sr);
 
 /** Unknown sender → no clients.wedding_id → enforceStageGate forces intake. */
 const senderEmail = `intake_verify_${Date.now()}@qa.atelier.test`;
@@ -57,38 +61,24 @@ const body =
   "Hello — we are newly engaged and looking for a photographer for a summer 2028 wedding in Tuscany. " +
   "Could you share your packages and availability?";
 
-const event = {
-  name: "comms/email.received",
-  data: {
-    photographer_id: photographerId,
-    raw_email: {
-      from: senderEmail,
-      body,
-      subject: "Intake observability verify — new inquiry",
-    },
-  },
-};
-
-const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-const res = await fetch(ingestUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify([event]),
-});
-const sendText = await res.text();
-console.log("Inngest send:", res.status, sendText.slice(0, 300));
-
-if (!res.ok) {
-  console.error(sendText);
-  process.exit(1);
-}
-
 let eventId = null;
 try {
-  const j = JSON.parse(sendText);
-  eventId = j.ids?.[0] ?? null;
-} catch {
-  /* ignore */
+  const r = await enqueueInboxThreadRequiresTriageV1({
+    supabase,
+    photographerId,
+    weddingId: null,
+    senderEmail,
+    subject: "Intake observability verify — new inquiry",
+    body,
+    inngestKey,
+    traceId: `intake-obs-${Date.now()}`,
+    source: "manual",
+  });
+  console.log("Inngest send (inbox/thread.requires_triage.v1): ok", r.sendText.slice(0, 300));
+  eventId = r.inngestEventId;
+} catch (e) {
+  console.error(e instanceof Error ? e.message : e);
+  process.exit(1);
 }
 
 async function fetchEventRuns(evId) {
@@ -186,15 +176,14 @@ if (!signingKey) {
         o.shadow_orchestrator?.status === "skipped_intake" || o.shadow_orchestrator?.status === undefined,
     });
     if (!ok) {
-      console.warn("Unexpected triage output shape — inspect full output above.");
+      console.warn("Unexpected classifier output shape — inspect full output above.");
     }
   } else {
-    console.warn("Could not retrieve triage run output via API (fan-out or timing). Check Inngest dashboard.");
+    console.warn("Could not retrieve classifier run output via API (fan-out or timing). Check Inngest dashboard.");
   }
 }
 
 /** Legacy intake should create a client + wedding (inquiry) for this sender path. */
-const supabase = createClient(url, sr);
 console.log("\n--- DB spot-check (legacy intake worker) — polling up to 90s ---");
 let clients = null;
 for (let i = 0; i < 18; i++) {

@@ -1,5 +1,7 @@
 /**
  * One-off CUT7 proof: main-path commercial + known wedding → orchestrator (draft_only).
+ * Uses `inbox/thread.requires_triage.v1` (pre-ingress `comms/email.received` retired).
+ *
  * Run: node scripts/cut7_proof_once.mjs
  * Requires .env: VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INNGEST_EVENT_KEY
  */
@@ -7,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -119,30 +122,28 @@ const body =
   `${proofToken} — CUT7 E2E proof. We need an updated quote for the 10-hour photography package, payment schedule for the remaining balance, ` +
   "and whether the retainer invoice can be sent this week.";
 
-const event = {
-  name: "comms/email.received",
-  data: {
-    photographer_id: fixtures.photographerId,
-    raw_email: {
-      from: email,
-      body,
-      subject: "CUT7 E2E proof — pricing and invoice",
-    },
-  },
-};
-
 const proofStartedAt = new Date(Date.now() - 5000).toISOString();
 
-const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-const res = await fetch(ingestUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify([event]),
-});
-const text = await res.text();
-console.log("Inngest send:", res.status, text.slice(0, 500));
+let sendOk = false;
+try {
+  const r = await enqueueInboxThreadRequiresTriageV1({
+    supabase,
+    photographerId: fixtures.photographerId,
+    weddingId,
+    senderEmail: email,
+    subject: "CUT7 E2E proof — pricing and invoice",
+    body,
+    inngestKey,
+    traceId: `cut7-proof-${Date.now()}`,
+    source: "manual",
+  });
+  console.log("Inngest send (inbox/thread.requires_triage.v1):", r.sendText.slice(0, 500));
+  sendOk = true;
+} catch (e) {
+  console.error("Inngest send failed:", e instanceof Error ? e.message : e);
+}
 
-if (!res.ok) {
+if (!sendOk) {
   if (restored && prevStage != null) {
     await supabase.from("weddings").update({ stage: prevStage }).eq("id", weddingId);
   }
@@ -182,7 +183,7 @@ if (restored && prevStage != null) {
 }
 
 if (!found) {
-  console.error("Timed out waiting for orchestrator draft — check Inngest Cloud logs for triage + clientOrchestratorV1");
+  console.error("Timed out waiting for orchestrator draft — check Inngest Cloud logs for inbox classifier + clientOrchestratorV1");
   process.exit(2);
 }
 

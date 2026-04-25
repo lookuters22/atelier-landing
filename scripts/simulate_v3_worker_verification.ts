@@ -1,8 +1,9 @@
 /**
- * V3 worker verification harness — **real ingress only** (triage / routing), optional burst.
+ * V3 worker verification harness — **real ingress only** (post-ingest inbox classifier / routing), optional burst.
  *
- * ## Default: triage email path (`V3_VERIFY_MODE=email` or unset)
- * - Sends **`comms/email.received`** (same shape as production email ingress → Inngest `traffic-cop-triage`).
+ * ## Default: email path (`V3_VERIFY_MODE=email` or unset)
+ * - Persists thread + inbound message, then sends **`inbox/thread.requires_triage.v1`** (live primary path).
+ *   Pre-ingress **`comms/email.received`** / **`traffic-cop-triage`** are retired.
  * - **Does not** emit `ai/intent.persona` or any other worker directly — exercises routing → downstream workers only.
  * - Per turn: wait for persisted outcome (draft / outbound / escalation), quiet window, then **finalize** any
  *   `pending_approval` drafts by emitting **`approval/draft.approved`** to Inngest (same as `api-resolve-draft`), then
@@ -11,7 +12,7 @@
  * - Triage may create **one thread per inbound**; the report merges messages across thread ids for this run.
  *
  * ## `burst`
- * - Fires `comms/email.received` with fixed delay only (no per-turn outcome wait).
+ * - Fires `inbox/thread.requires_triage.v1` (via same DB seeding helper) with fixed delay only (no per-turn outcome wait).
  *
  * ## Run
  *   npx tsx scripts/simulate_v3_worker_verification.ts
@@ -21,7 +22,7 @@
  * - `V3_VERIFY_MODE` — `email` (default) | `burst`. Aliases `conversation`, `persona`, `triage` → `email` (ingress path).
  * - `V3_VERIFY_POLL_MS`, `V3_VERIFY_QUIET_MS`, `V3_VERIFY_TURN_MAX_MS` — wait for first persisted outcome + stability
  * - `V3_POST_APPROVE_OUTBOUND_WAIT_MS` — after approving a draft, poll for real outbound (default 30000)
- * - `V3_TURN_GAP_MS` — optional ms after finalizing a turn before next `comms/email.received` (default 0)
+ * - `V3_TURN_GAP_MS` — optional ms after finalizing a turn before next inbox ingress send (default 0)
  * - `V3_VERIFY_MAX_TURNS` — optional cap on scenario length (e.g. `3` for smoke; default all 10)
  * - `V3_VERIFY_SCENARIO` — `default` (bundled 10-case matrix) | `conversation_smoke_3` (3-turn inquiry → commercial → exception; see `buildConversationSmoke3Cases`)
  * - `V3_VERIFY_FRESH_WEDDING_PER_RUN` — `1`/`true` forces a **new** `weddings` row per email-mode run (same QA photographer); `0`/`false` disables. When unset, **fresh wedding is default for** `conversation_smoke_3` only (avoids cross-run transcript pollution).
@@ -31,7 +32,7 @@
  * - `V3_VERIFY_GATE_MODE` — `scenario` (default) | `strict_lifecycle` (alias: `strict`): which gates must be ON before the run
  * - `V3_VERIFY_REQUIRE_INTAKE_POST_BOOTSTRAP_EMAIL=1` — also require `INTAKE_LIVE_ORCHESTRATOR_POST_BOOTSTRAP_EMAIL_V1` (intake worker post-bootstrap path)
  * - **`V3_VERIFY_GATE_POSTURE_FILE`** — optional path (repo-root relative or absolute) to an env file that **overrides** triage/intake live gate vars for preflight (mirrors intended Edge posture). Default: `scripts/v3_verify_gate_posture.env` if present, else `.env.v3_verify_gate_posture`.
- * - Copy **`scripts/v3_verify_gate_posture.env.example`** → **`scripts/v3_verify_gate_posture.env`** and set `1` / `true` to match deployed `traffic-cop-triage` / intake secrets.
+ * - Copy **`scripts/v3_verify_gate_posture.env.example`** → **`scripts/v3_verify_gate_posture.env`** and set `1` / `true` to match deployed Edge secrets (inbox classifier + intake).
  * - **`V3_VERIFY_OPERATOR_PROFILE`** — `smoke_strict`: sets `V3_VERIFY_MAX_TURNS=1` and `V3_VERIFY_GATE_MODE=strict_lifecycle` unless already set (strict live-V3 smoke).
  * - `V3_VERIFY_SYNTHETIC_OUTBOUND_FALLBACK=1` — only if approval event + outbound worker did not persist a row in time (not default)
  * - `DRY_RUN=1` — no DB / Inngest
@@ -42,6 +43,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, isAbsolute, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -1298,7 +1300,7 @@ function buildV3PreflightReport(opts: {
   const notes: string[] = [];
   if (v3GatePostureFileResolved) {
     notes.push(
-      `Gate posture file loaded: \`${v3GatePostureFileResolved}\` — allowlisted triage/intake keys override base \`.env\` for preflight (mirror Edge \`traffic-cop-triage\` / intake).`,
+      `Gate posture file loaded: \`${v3GatePostureFileResolved}\` — allowlisted triage/intake keys override base \`.env\` for preflight (mirror Edge inbox classifier + intake).`,
     );
   } else {
     notes.push(
@@ -1631,18 +1633,19 @@ async function main(): Promise<void> {
 
   const ingestUrl = inngestKey ? "https://inn.gs/e/" + encodeURIComponent(inngestKey) : "";
   const productNote =
-    "**Ingress:** `comms/email.received` → Inngest triage (`traffic-cop-triage`) and downstream V3 routing. " +
+    "**Ingress:** `inbox/thread.requires_triage.v1` (thread + message inserted by harness) → inbox classifier and downstream V3 routing. " +
     "This harness does **not** send `ai/intent.persona` directly. " +
-    "Triage often creates **one new `threads` row per inbound**; the report merges **all thread ids** observed for this client in the run window, ordered by `messages.sent_at`. " +
+    "The harness creates **one new `threads` row per case**; the report merges **all thread ids** observed for this client in the run window, ordered by `messages.sent_at`. " +
     "After each turn stabilizes, the harness emits **`approval/draft.approved`** to Inngest (same as `api-resolve-draft`), then waits for the **outbound** worker to insert a real **out** message. Synthetic outbound only if **`V3_VERIFY_SYNTHETIC_OUTBOUND_FALLBACK=1`**.";
 
-  const productNoteBurst = "burst mode: fires `comms/email.received` with fixed delay only (no outcome wait).";
+  const productNoteBurst =
+    "burst mode: fires `inbox/thread.requires_triage.v1` with fixed delay only (no outcome wait).";
 
   console.log("\n========== V3 Worker Verification ==========");
   console.log(
     "mode:",
     mode,
-    mode === "email" ? "(comms/email.received → triage + finalize drafts/outbound)" : "(burst delay only)",
+    mode === "email" ? "(inbox/thread.requires_triage.v1 + finalize drafts/outbound)" : "(burst delay only)",
   );
   console.log("runId:", runId);
   console.log("photographerId:", photographerId);
@@ -1710,7 +1713,7 @@ async function main(): Promise<void> {
         v3Preflight,
       },
     };
-    console.error("\n*** V3 GATE PREFLIGHT FAILED — aborting scenario (no comms/email.received sends) ***\n");
+    console.error("\n*** V3 GATE PREFLIGHT FAILED — aborting scenario (no inbox ingress sends) ***\n");
     console.error(scenarioFailure.message);
     for (const g of missing) {
       console.error(
@@ -1724,17 +1727,7 @@ async function main(): Promise<void> {
     const c = cases[i];
     const from = c.sender === "cold_lead" ? coldSender : fixtureEmail;
     const marker = `[${c.id}] ${runId}`;
-    const event = {
-      name: "comms/email.received",
-      data: {
-        photographer_id: photographerId,
-        raw_email: {
-          from,
-          body: c.body + footer(c.id, runId),
-          subject: c.subject,
-        },
-      },
-    };
+    const weddingIdForThread = c.sender === "cold_lead" ? null : activeWeddingId;
 
     console.log(`\n--- Case ${i + 1}/${cases.length}: ${c.id} ---`);
     console.log("subject:", c.subject);
@@ -1766,22 +1759,33 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const res = await fetch(ingestUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([event]),
-    });
-    const text = await res.text();
-    const ok = res.ok;
-    results.push({ caseId: c.id, httpStatus: res.status, ok, snippet: text.slice(0, 300) });
-    console.log("result:", res.status, ok ? "ok" : "FAIL", text.slice(0, 200));
-
+    let text = "";
+    let httpStatus = 500;
+    let ok = false;
     let eventId: string | null = null;
     try {
-      eventId = JSON.parse(text).ids?.[0] ?? null;
-    } catch {
-      /* */
+      const r = await enqueueInboxThreadRequiresTriageV1({
+        supabase,
+        photographerId,
+        weddingId: weddingIdForThread,
+        senderEmail: from,
+        subject: c.subject,
+        body: c.body + footer(c.id, runId),
+        inngestKey: inngestKey!,
+        traceId: `${runId}-${c.id}`,
+        source: "manual",
+      });
+      text = r.sendText;
+      eventId = r.inngestEventId;
+      httpStatus = 200;
+      ok = true;
+    } catch (e) {
+      text = e instanceof Error ? e.message : String(e);
+      httpStatus = 500;
+      ok = false;
     }
+    results.push({ caseId: c.id, httpStatus, ok, snippet: text.slice(0, 300) });
+    console.log("result:", httpStatus, ok ? "ok" : "FAIL", text.slice(0, 200));
 
     if (mode === "burst") {
       if (i < cases.length - 1) {
@@ -1811,7 +1815,7 @@ async function main(): Promise<void> {
       continue;
     }
 
-    // email mode: triage path — strict persisted outcome only
+    // email mode: post-ingest classifier path — strict persisted outcome only
     const inbound = await waitForInboundWithMarker(supabase, photographerId, marker, turnMaxMs);
     if (inbound?.thread_id && !threadIdsObserved.includes(inbound.thread_id)) {
       threadIdsObserved.push(inbound.thread_id);
@@ -1819,7 +1823,7 @@ async function main(): Promise<void> {
     if (!inbound) {
       scenarioFailure = {
         caseId: c.id,
-        message: "Inbound with case marker not found within turn max — triage/ingestion may have failed.",
+        message: "Inbound with case marker not found within turn max — classifier/ingestion may have failed.",
         diagnostics: { marker, eventId },
       };
       break;
@@ -2021,7 +2025,7 @@ async function main(): Promise<void> {
 
   console.log("\n========== Operator verification checklist ==========");
   if (mode === "email") {
-    console.log("1. Ingress: `comms/email.received` → triage + V3 routing (no direct persona events from harness).");
+    console.log("1. Ingress: `inbox/thread.requires_triage.v1` → inbox classifier + V3 routing (no direct persona events from harness).");
     console.log(
       "2. Gate preflight: default `V3_VERIFY_GATE_MODE=scenario` unions required CUT4–CUT8 gates for the cases you run; use `strict_lifecycle` to require all five triage gates (+ optional intake env).",
     );

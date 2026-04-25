@@ -1,5 +1,6 @@
 /**
  * E2E proof: bounded unresolved near-match → photographer approval escalation.
+ * Ingress: `inbox/thread.requires_triage.v1` with `source: gmail_delta` (pre-ingress `comms/email.received` retired).
  *
  * Prereqs:
  * - Secrets: TRIAGE_BOUNDED_UNRESOLVED_EMAIL_MATCHMAKER_V1=1, TRIAGE_BOUNDED_UNRESOLVED_EMAIL_MATCH_APPROVAL_ESCALATION_V1=1
@@ -14,6 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -51,7 +53,7 @@ if (!url || !sr || !inngestKey) {
 }
 
 if (!signingKey) {
-  console.error("Missing INNGEST_SIGNING_KEY — required to poll triage output");
+  console.error("Missing INNGEST_SIGNING_KEY — required to poll classifier output");
   process.exit(1);
 }
 
@@ -103,36 +105,24 @@ const bodyLowConfidence = [
   "Could you send your packages and availability? This is our first message to you.",
 ].join(" ");
 
-function buildEvent(sender, body, subject) {
-  return {
-    name: "comms/email.received",
-    data: {
-      photographer_id: photographerId,
-      raw_email: {
-        from: sender,
-        body,
-        subject,
-      },
-    },
-  };
-}
-
-async function sendEvent(event) {
-  const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-  const res = await fetch(ingestUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([event]),
-  });
-  const sendText = await res.text();
-  let eventId = null;
+async function sendHarnessIngress(sender, body, subject) {
   try {
-    const j = JSON.parse(sendText);
-    eventId = j.ids?.[0] ?? null;
-  } catch {
-    /* ignore */
+    const r = await enqueueInboxThreadRequiresTriageV1({
+      supabase,
+      photographerId,
+      weddingId: null,
+      senderEmail: sender,
+      subject,
+      body,
+      inngestKey,
+      traceId: `bounded-near-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      source: "gmail_delta",
+    });
+    return { ok: true, status: 200, sendText: r.sendText.slice(0, 400), eventId: r.inngestEventId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 500, sendText: msg.slice(0, 400), eventId: null };
   }
-  return { ok: res.ok, status: res.status, sendText: sendText.slice(0, 400), eventId };
 }
 
 async function fetchEventRuns(evId) {
@@ -173,7 +163,13 @@ function pickTriageRun(list) {
     const out = run.output;
     if (!out || typeof out !== "object") continue;
     const fn = String(run.function_id ?? run.name ?? "");
-    if (isTriageOutput(out) && (fn.includes("traffic-cop") || fn.includes("triage"))) {
+    if (
+      isTriageOutput(out) &&
+      (fn.includes("traffic-cop") ||
+        fn.includes("triage") ||
+        fn.includes("inbox-thread") ||
+        fn.includes("process-inbox"))
+    ) {
       return { run, out };
     }
   }
@@ -272,12 +268,11 @@ console.log(
 
 console.log("\n--- Case N: near-match band attempt (ambiguous logistics + roster hints) ---");
 console.log("sender:", unknownSenderN);
-const evN = buildEvent(
+const sendN = await sendHarnessIngress(
   unknownSenderN,
   bodyNearMatch,
   "Bounded QA — near-match approval escalation (ambiguous file)",
 );
-const sendN = await sendEvent(evN);
 console.log("Inngest send:", sendN.status, sendN.sendText);
 const pollN = await pollTriageOutput(sendN.eventId, "caseN");
 if (pollN) {
@@ -306,8 +301,7 @@ await new Promise((r) => setTimeout(r, 5000));
 
 console.log("\n--- Case L: low-confidence / intake fallback (cold lead) ---");
 console.log("sender:", unknownSenderL);
-const evL = buildEvent(unknownSenderL, bodyLowConfidence, "Bounded QA — cold lead intake fallback");
-const sendL = await sendEvent(evL);
+const sendL = await sendHarnessIngress(unknownSenderL, bodyLowConfidence, "Bounded QA — cold lead intake fallback");
 console.log("Inngest send:", sendL.status, sendL.sendText);
 const pollL = await pollTriageOutput(sendL.eventId, "caseL");
 if (pollL) {

@@ -1,10 +1,12 @@
 # Legacy email / dashboard-web `ai/intent.*` — retirement sequencing (RET0 inventory)
 
+> **Historical / planning context:** This document was written for the **pre-ingress `triage.ts` (`traffic-cop-triage`)** era. **Email/web pre-ingress is retired**; live email classification is **`processInboxThreadRequiresTriage`** + shared dispatch. Keep this file for **RET sequencing and env-gated orchestrator behavior**, but read **`triage` / `comms/email.received` / `comms/web.received`** references as **retired ingress**, not current triggers.
+
 ## Purpose
 
-This document is the **narrow, email + dashboard-web–scoped** inventory for **`triage`-driven** legacy specialist dispatch. It supports **RET1–RET3** in [`V3_FULL_CUTOVER_PLAN.md`](V3_FULL_CUTOVER_PLAN.md) without removing workers or changing routing.
+This document is the **narrow, email + dashboard-web–scoped** inventory for **legacy specialist dispatch** (historically **`triage`-driven**; now **post-ingest–driven** for the same `ai/intent.*` edges). It supports **RET1–RET3** in [`V3_FULL_CUTOVER_PLAN.md`](V3_FULL_CUTOVER_PLAN.md) without removing workers or changing routing.
 
-**In scope:** `comms/email.received` and `comms/web.received` paths inside `triage.ts` (including the web-widget known-wedding fast path).
+**In scope (historical framing):** Retired `comms/email.received` and `comms/web.received` paths that lived in removed `triage.ts` (including the web-widget known-wedding fast path). **Current live scope:** same specialist/orchestrator questions via **`postIngestThreadDispatch`** / **`runMainPathEmailDispatch`**.
 
 **Out of scope (this slice):** WhatsApp branches (`comms/whatsapp.*`, `operator/whatsapp.legacy.*`), `whatsappOrchestrator`, operator lanes, bounded unresolved matchmaker / near-match escalation (see [`UNFILED_UNRESOLVED_MATCHING_SLICE.md`](UNFILED_UNRESOLVED_MATCHING_SLICE.md)).
 

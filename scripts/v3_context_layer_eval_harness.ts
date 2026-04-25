@@ -1,8 +1,10 @@
 /**
  * V3 context-layer evaluation harness — **comparison mode** for grounding (not a product change).
  *
- * Runs conditions A–E sequentially against live triage → clientOrchestratorV1 → persona rewrite,
+ * Runs conditions A–E sequentially against live **post-ingest** routing (`inbox/thread.requires_triage.v1`) →
+ * clientOrchestratorV1 → persona rewrite,
  * varying seeded `playbook_rules`, case `memories`, and (for D) best-effort `thread_summaries` + prior `messages`.
+ * (Pre-ingress `comms/email.received` retired.)
  *
  * ## Run
  *   npx tsx scripts/v3_context_layer_eval_harness.ts
@@ -16,6 +18,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -710,24 +713,17 @@ async function main(): Promise<void> {
       const { id, body } = turnDefs[ti];
       const marker = `[ctx_eval_${id}_${cond}] ${runId}`;
       const subject = ti === 0 ? baseSubject : `Re: ${baseSubject}`;
-      const event = {
-        name: "comms/email.received",
-        data: {
-          photographer_id: photographerId,
-          raw_email: {
-            from: fixtureEmail,
-            body: body + `\n\n--\n${marker}`,
-            subject,
-          },
-        },
-      };
-
-      const res = await fetch(ingestUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([event]),
+      await enqueueInboxThreadRequiresTriageV1({
+        supabase,
+        photographerId,
+        weddingId,
+        senderEmail: fixtureEmail,
+        subject,
+        body: body + `\n\n--\n${marker}`,
+        inngestKey,
+        traceId: `${runId}-${id}-${cond}-${ti}`,
+        source: "manual",
       });
-      if (!res.ok) throw new Error(`Ingest failed ${res.status}: ${await res.text()}`);
 
       const inbound = await waitForInboundWithMarker(supabase, photographerId, marker, turnMaxMs);
       if (!inbound) throw new Error(`No inbound for ${marker}`);

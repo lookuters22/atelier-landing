@@ -1,5 +1,6 @@
 /**
  * E2E proof: `escalated_for_approval` with QA synthetic confidence (see UNFILED §4.3).
+ * Ingress: `inbox/thread.requires_triage.v1` + `source: gmail_delta` (pre-ingress `comms/email.received` retired).
  *
  * Prereqs (Supabase Edge secrets on the target project):
  * - TRIAGE_BOUNDED_UNRESOLVED_EMAIL_MATCHMAKER_V1=1
@@ -15,6 +16,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -51,6 +53,7 @@ if (!url || !sr || !inngestKey) {
 
 const fixtures = JSON.parse(readFileSync(join(root, "supabase/functions/inngest/.qa_fixtures.json"), "utf8"));
 const photographerId = fixtures.photographerId;
+const supabase = createClient(url, sr);
 
 const ts = Date.now();
 const sender = `bounded_escal_${ts}@qa.atelier.test`;
@@ -62,26 +65,25 @@ const body = [
   "Ongoing logistics for the existing contract — not a new inquiry.",
 ].join(" ");
 
-const event = {
-  name: "comms/email.received",
-  data: {
-    photographer_id: photographerId,
-    raw_email: { from: sender, body, subject },
-  },
-};
-
 console.log("INPUT:", JSON.stringify({ sender, subject, body, photographer_id: photographerId }, null, 2));
 
-const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-const res = await fetch(ingestUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify([event]),
-});
-const sendText = await res.text();
-console.log("Inngest:", res.status, sendText.slice(0, 200));
-
-const supabase = createClient(url, sr);
+try {
+  const r = await enqueueInboxThreadRequiresTriageV1({
+    supabase,
+    photographerId,
+    weddingId: null,
+    senderEmail: sender,
+    subject,
+    body,
+    inngestKey,
+    traceId: `bounded-escal-${ts}`,
+    source: "gmail_delta",
+  });
+  console.log("Inngest (inbox/thread.requires_triage.v1): ok", r.sendText.slice(0, 200));
+} catch (e) {
+  console.error("Inngest send failed:", e instanceof Error ? e.message : e);
+  process.exit(1);
+}
 
 const deadline = Date.now() + 120_000;
 let escalation = null;

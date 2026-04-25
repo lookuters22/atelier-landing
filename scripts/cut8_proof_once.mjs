@@ -1,14 +1,17 @@
 /**
  * One-off CUT8 proof: main-path studio + known wedding → orchestrator (draft_only).
+ * Uses `inbox/thread.requires_triage.v1` (pre-ingress `comms/email.received` retired).
+ *
  * Run: node scripts/cut8_proof_once.mjs
  * Requires .env: VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INNGEST_EVENT_KEY
  *
- * Triage allows `studio` only in post_wedding stage group (delivered, archived).
+ * Classifier allows `studio` only in post_wedding stage group (delivered, archived).
  */
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -113,30 +116,28 @@ const body =
   `${proofToken} — CUT8 E2E proof. When will our online gallery be ready to share with family? ` +
   "We also want to order a fine art album and discuss print sizes for parent gifts.";
 
-const event = {
-  name: "comms/email.received",
-  data: {
-    photographer_id: fixtures.photographerId,
-    raw_email: {
-      from: email,
-      body,
-      subject: "CUT8 E2E proof — gallery and album",
-    },
-  },
-};
-
 const proofStartedAt = new Date(Date.now() - 5000).toISOString();
 
-const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-const res = await fetch(ingestUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify([event]),
-});
-const text = await res.text();
-console.log("Inngest send:", res.status, text.slice(0, 500));
+let sendOk = false;
+try {
+  const r = await enqueueInboxThreadRequiresTriageV1({
+    supabase,
+    photographerId: fixtures.photographerId,
+    weddingId,
+    senderEmail: email,
+    subject: "CUT8 E2E proof — gallery and album",
+    body,
+    inngestKey,
+    traceId: `cut8-proof-${Date.now()}`,
+    source: "manual",
+  });
+  console.log("Inngest send (inbox/thread.requires_triage.v1):", r.sendText.slice(0, 500));
+  sendOk = true;
+} catch (e) {
+  console.error("Inngest send failed:", e instanceof Error ? e.message : e);
+}
 
-if (!res.ok) {
+if (!sendOk) {
   if (restored && prevStage != null) {
     await supabase.from("weddings").update({ stage: prevStage }).eq("id", weddingId);
   }
@@ -176,7 +177,7 @@ if (restored && prevStage != null) {
 }
 
 if (!found) {
-  console.error("Timed out waiting for orchestrator draft — check Inngest Cloud logs for triage + clientOrchestratorV1");
+  console.error("Timed out waiting for orchestrator draft — check Inngest Cloud logs for inbox classifier + clientOrchestratorV1");
   process.exit(2);
 }
 

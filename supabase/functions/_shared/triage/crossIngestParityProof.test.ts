@@ -1,8 +1,10 @@
 /**
- * Cross-ingest parity proofs: `comms/email.received` / `triage.ts` vs `inbox/thread.requires_triage.v1` / Gmail canonical.
+ * Cross-ingest parity proofs: shared triage modules vs Gmail/post-ingest canonical (`inbox/thread.requires_triage.v1`).
+ * **Historical:** pre-ingress `comms/email.received` + removed `traffic-cop-triage` matched this ordering for email;
+ * live primary ingress is Gmail/thread post-ingest only.
  * See docs/v3/REAL_THREADS_ANALYSIS_AND_PROPOSALS.md (P1, P17) and UNFILED_UNRESOLVED_MATCHING_SLICE.md.
  *
- * **Bounded unresolved subset:** `triage.ts` enables `boundedUnresolvedSubsetEligible` only for `comms/email.received`;
+ * **Bounded unresolved subset:** legacy pre-ingress email enabled `boundedUnresolvedSubsetEligible` only for that path;
  * `processInboxThreadRequiresTriage.ts` enables it only when `source === "gmail_delta"`. That is intentional ingress
  * metadata, not shared-function drift.
  */
@@ -103,7 +105,7 @@ describe("cross-ingest suppression (Layer 1b): raw comms vs post-ingest synthesi
 });
 
 describe("cross-ingest deterministic human non-client ingress (shared evaluateDeterministicHumanNonClientIngress)", () => {
-  it("vendor solicitation: same triage status as triage.ts + processInboxThreadRequiresTriage", () => {
+  it("vendor solicitation: same deterministic status across raw vs post-ingest gates (shared ingress helpers)", () => {
     const subject = "SEO audit + link-building outreach for your studio";
     const body =
       "Hi,\nWe are a digital marketing agency specializing in link building campaigns for creative studios.\nBest,\nAlex";

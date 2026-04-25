@@ -1,5 +1,6 @@
 /**
  * E2E: intake post-bootstrap orchestrator parity (observation-only, non-mutating).
+ * Ingress: `inbox/thread.requires_triage.v1` (pre-ingress `comms/email.received` retired).
  *
  * Requires: VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INNGEST_EVENT_KEY
  * Optional: INNGEST_SIGNING_KEY — poll Inngest Cloud runs API
@@ -10,6 +11,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -51,44 +53,34 @@ if (!url || !sr || !inngestKey) {
 const fixturesPath = join(root, "supabase/functions/inngest/.qa_fixtures.json");
 const fixtures = JSON.parse(readFileSync(fixturesPath, "utf8"));
 const photographerId = fixtures.photographerId;
+const supabase = createClient(url, sr);
 
 const senderEmail = `intake_parity_e2e_${Date.now()}@qa.atelier.test`;
 const body =
   "Hello — we are newly engaged and looking for a photographer for a summer 2028 wedding in Tuscany. " +
   "Could you share your packages and availability?";
 
-const event = {
-  name: "comms/email.received",
-  data: {
-    photographer_id: photographerId,
-    raw_email: {
-      from: senderEmail,
-      body,
-      subject: "Intake parity E2E — new inquiry",
-    },
-  },
-};
-
-const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-const res = await fetch(ingestUrl, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify([event]),
-});
-const sendText = await res.text();
-console.log("Inngest send:", res.status, sendText.slice(0, 400));
-
-if (!res.ok) {
-  console.error(sendText);
-  process.exit(1);
-}
-
+let sendText = "";
 let eventId = null;
 try {
-  const j = JSON.parse(sendText);
-  eventId = j.ids?.[0] ?? null;
-} catch {
-  /* ignore */
+  const r = await enqueueInboxThreadRequiresTriageV1({
+    supabase,
+    photographerId,
+    weddingId: null,
+    senderEmail,
+    subject: "Intake parity E2E — new inquiry",
+    body,
+    inngestKey,
+    traceId: `intake-parity-${Date.now()}`,
+    source: "manual",
+  });
+  sendText = r.sendText;
+  eventId = r.inngestEventId;
+  console.log("Inngest send (inbox/thread.requires_triage.v1): ok", sendText.slice(0, 400));
+} catch (e) {
+  sendText = e instanceof Error ? e.message : String(e);
+  console.error(sendText);
+  process.exit(1);
 }
 
 console.log("Event id:", eventId);
@@ -156,8 +148,6 @@ async function pollOrchestratorParity(evId, maxMs = 240_000) {
   }
   return { run: null, parity: null, allRuns: [], seenSummaries: [...seen.values()] };
 }
-
-const supabase = createClient(url, sr);
 
 let parityResult = { run: null, parity: null, allRuns: [] };
 if (!signingKey) {

@@ -1,5 +1,7 @@
 # External producer and ingress map (operational readiness)
 
+> **Historical context (superseded for email/web pre-ingress):** **`comms/email.received`** and **`comms/web.received`** were **removed from the live `AtelierEvents` contract** and **`traffic-cop-triage` deleted**. Primary email ingress is **`inbox/thread.requires_triage.v1`**. The sections below remain as a **D1-era producer audit snapshot**; treat **`triageFunction` / `triage.ts` subscriber rows as obsolete** for email/web.
+
 **Slice type:** Analysis / documentation only — **no runtime code changes**. Complements [PHASE2_SLICE_D1_RETIREMENT_PREP_AUDIT.md](PHASE2_SLICE_D1_RETIREMENT_PREP_AUDIT.md) (D1) and supports preconditions in [V3_FULL_CUTOVER_PLAN.md](V3_FULL_CUTOVER_PLAN.md) (“ambiguous external producers are mapped”).
 
 **Baseline truth (repo):** Legacy `ai/intent.*` is live for email/web; `clientOrchestratorV1` is QA/shadow only. CUT2 live routing was rolled back twice — **do not** treat this document as permission to cut over or retire workers; it records **evidence gaps** so future work is not guess-based.
@@ -16,9 +18,9 @@
 |--------|--------|
 | **In-repo producer** | **None found** — no `inngest.send` with this name in the repository; no `[functions.*]` Edge function in `supabase/config.toml` dedicated to email ingress (only `inngest`, `webhook-web`, `webhook-approval`, `webhook-whatsapp`). |
 | **External / unknown** | **Yes — producer is unknown from this repo.** Plausible upstream: SendGrid/Mailgun/Postmark (or similar) → Inngest or Supabase function **not** present in this workspace, another repo, or manual dashboard sends. **Not invented here.** |
-| **Subscriber(s)** | `triageFunction` (`supabase/functions/inngest/functions/triage.ts`) — primary email/web pipeline. |
-| **Downstream** | After triage: `ai/intent.*` specialists → persona, etc. |
-| **Classification** | **Live-critical if production email uses this event** — cannot assume dead. **Ambiguous** until Inngest event history / infra docs name the sender. |
+| **Subscriber(s)** | ~~`triageFunction`~~ **None (retired)** — was `triage.ts`; pre-ingress email path removed. |
+| **Downstream** | Was: `ai/intent.*` specialists → persona, etc. **Current:** post-ingest classifier + same dispatch graph. |
+| **Classification** | **Retired from supported live contract** — do not add new producers. External emits, if any, are **orphaned** relative to this repo’s served bundle. |
 | **Evidence needed** | Inngest Cloud: which integration emits `comms/email.received`; staging vs prod; frequency; whether any traffic migrated to another event name. |
 
 ---
@@ -29,7 +31,7 @@
 |--------|--------|
 | **In-repo producer** | **None found.** |
 | **External / unknown** | **Yes.** [ARCHITECTURE.md](ARCHITECTURE.md) references this event; [POST_V3_CLEANUP_AUDIT.md](../../POST_V3_CLEANUP_AUDIT.md) notes legacy handoff to internal concierge via triage. Likely historical Twilio/client bridge or dashboard — **not confirmed in repo.** |
-| **Subscriber(s)** | `triageFunction` — early branch routes to `ai/intent.internal_concierge` (with `operator/whatsapp.legacy.received`). |
+| **Subscriber(s)** | **`legacy-whatsapp-ingress`** — same internal-concierge path (with `operator/whatsapp.legacy.received`). |
 | **Downstream** | `internalConciergeFunction` → `ai/intent.internal_concierge` (not the same as `webhook-whatsapp` operator lane). |
 | **Classification** | **Ambiguous / possibly live-critical** if any production client WhatsApp still targets this event. [inngest.ts](../../supabase/functions/_shared/inngest.ts) marks generic `comms/whatsapp.*` as deprecated in favor of explicit event names — does **not** prove zero traffic. |
 | **Evidence needed** | Inngest: emitters for this event; Twilio/console configs; whether traffic moved to `client/whatsapp.inbound.v1` or `comms/whatsapp.received.v2`. |
@@ -42,7 +44,7 @@
 |--------|--------|
 | **In-repo producer** | **None found** (`OPERATOR_WHATSAPP_LEGACY_RECEIVED_EVENT` in [inngest.ts](../../supabase/functions/_shared/inngest.ts)). |
 | **External / unknown** | **Yes** — constant exists for triage subscription; no local `inngest.send` located. |
-| **Subscriber(s)** | `triageFunction` — same internal-concierge bypass path as legacy `comms/whatsapp.received` (see triage comments). |
+| **Subscriber(s)** | **`legacy-whatsapp-ingress`** — same internal-concierge bypass path as legacy `comms/whatsapp.received`. |
 | **Downstream** | `ai/intent.internal_concierge`. |
 | **Classification** | **Ambiguous** — may be a renamed or parallel ingress for operator-adjacent legacy flows. |
 | **Evidence needed** | Inngest event catalog; whether this is emitted in prod or reserved for migration. |
@@ -79,9 +81,10 @@ These are **not** the focus of this map but clarify boundaries:
 
 | Event | In-repo producer | Subscriber |
 |-------|------------------|------------|
-| `comms/web.received` | `webhook-web/index.ts` | `triageFunction` |
+| `comms/web.received` | ~~`webhook-web`~~ **Retired emit** (410 `web_pre_ingress_retired`) | ~~`triageFunction`~~ **removed** |
+| `inbox/thread.requires_triage.v1` | `processGmailDeltaSync` (and harnesses) | `processInboxThreadRequiresTriage` |
 | `operator/whatsapp.inbound.v1` | `webhook-whatsapp/index.ts` | `operatorOrchestratorFunction` (**operator lane**, distinct from client WhatsApp events above) |
-| `ai/orchestrator.client.v1` (shadow) | `triage.ts` when `TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1` | `clientOrchestratorV1Function` |
+| `ai/orchestrator.client.v1` (shadow) | Post-ingest dispatch when shadow env enabled | `clientOrchestratorV1Function` |
 
 ---
 
@@ -122,7 +125,7 @@ Per [V3_FULL_CUTOVER_PLAN.md](V3_FULL_CUTOVER_PLAN.md) Rollout Gates / [CUT1](CU
 
 | Bucket | Items |
 |--------|--------|
-| **Safe to keep (do not retire on repo evidence alone)** | All subscribers for ambiguous events: **`triageFunction`**, **`internalConciergeFunction`**, **`whatsappOrchestratorFunction`**. Unmapped ingress does **not** imply dead code. |
+| **Safe to keep (do not retire on repo evidence alone)** | **`internalConciergeFunction`**, **`whatsappOrchestratorFunction`**, **`legacy-whatsapp-ingress`**, **`processInboxThreadRequiresTriage`**. Unmapped ingress does **not** imply dead code for channels still in the contract. |
 | **Needs external confirmation** | **`comms/email.received`**, **`comms/whatsapp.received`**, **`operator/whatsapp.legacy.received`**, **`comms/whatsapp.received.v2`**, **`client/whatsapp.inbound.v1`** — see §1. |
 | **Likely retirement candidate later** | **None identified from repository alone** (matches [D1 §3.2](PHASE2_SLICE_D1_RETIREMENT_PREP_AUDIT.md)). Revisit only after Inngest + provider evidence shows zero live emits and a replacement path exists. |
 

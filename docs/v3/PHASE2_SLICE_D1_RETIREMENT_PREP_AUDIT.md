@@ -1,8 +1,10 @@
 # Phase 2 Slice D1 — Retirement prep audit (conservative)
 
+> **Historical snapshot:** Produced before **pre-ingress `triage.ts` retirement**. Row 1 below (**`triage.ts` triggers**) is **obsolete**; live email uses **`inbox/thread.requires_triage.v1`** + **`legacyWhatsappIngress.ts`** for operator WhatsApp legacy only.
+
 **Slice type:** Analysis / prep only — **no workers unregistered, no files deleted** (no D2/D3 in this slice).
 
-**Date / baseline:** Live email/web specialist chain remains `ai/intent.*` via `triage`; `ai/orchestrator.client.v1` is QA/shadow-capable only.
+**Date / baseline:** Live email/web specialist chain remains `ai/intent.*` via **post-ingest** routing; `ai/orchestrator.client.v1` is QA/shadow-capable only.
 
 **Method:** Trace **in-repo** `inngest.send` producers and Edge webhook entrypoints to registered workers in `supabase/functions/inngest/index.ts`. Events with **no** producer in this repository are treated as **ambiguous** (may be external systems, other deploys, or manual Inngest sends) — **do not retire** listeners on that basis alone.
 
@@ -12,7 +14,7 @@
 
 | # | Worker module | Trigger event(s) |
 |---|----------------|-------------------|
-| 1 | `triage.ts` | `comms/email.received`, `comms/whatsapp.received`, `operator/whatsapp.legacy.received`, `comms/web.received` |
+| 1 | ~~`triage.ts`~~ **`legacyWhatsappIngress.ts`** (retirement update) | ~~pre-ingress comms~~ — **`comms/whatsapp.received`, `operator/whatsapp.legacy.received` only** |
 | 2 | `intake.ts` | `ai/intent.intake` |
 | 3 | `outbound.ts` | `approval/draft.approved` |
 | 4 | `rewrite.ts` | `ai/draft.rewrite_requested` |

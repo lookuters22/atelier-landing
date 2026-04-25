@@ -1,5 +1,6 @@
 /**
  * E2E proof: bounded unresolved email matchmaker (TRIAGE_BOUNDED_UNRESOLVED_EMAIL_MATCHMAKER_V1).
+ * Ingress: `inbox/thread.requires_triage.v1` + `source: gmail_delta` (pre-ingress `comms/email.received` retired).
  *
  * Prereqs:
  * - Secret TRIAGE_BOUNDED_UNRESOLVED_EMAIL_MATCHMAKER_V1=1 on the Supabase Edge project (deployed inngest bundle).
@@ -14,6 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -51,7 +53,7 @@ if (!url || !sr || !inngestKey) {
 }
 
 if (!signingKey) {
-  console.error("Missing INNGEST_SIGNING_KEY — required to poll triage output");
+  console.error("Missing INNGEST_SIGNING_KEY — required to poll classifier output");
   process.exit(1);
 }
 
@@ -94,36 +96,24 @@ const bodyFallback =
   "Hello — we just got engaged and are looking for a wedding photographer for summer 2027 in Tuscany. " +
   "Could you send your packages and availability? This is our first message to you.";
 
-function buildEvent(sender, body, subject) {
-  return {
-    name: "comms/email.received",
-    data: {
-      photographer_id: photographerId,
-      raw_email: {
-        from: sender,
-        body,
-        subject,
-      },
-    },
-  };
-}
-
-async function sendEvent(event) {
-  const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
-  const res = await fetch(ingestUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([event]),
-  });
-  const sendText = await res.text();
-  let eventId = null;
+async function sendHarnessIngress(sender, body, subject) {
   try {
-    const j = JSON.parse(sendText);
-    eventId = j.ids?.[0] ?? null;
-  } catch {
-    /* ignore */
+    const r = await enqueueInboxThreadRequiresTriageV1({
+      supabase,
+      photographerId,
+      weddingId: null,
+      senderEmail: sender,
+      subject,
+      body,
+      inngestKey,
+      traceId: `bounded-mm-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      source: "gmail_delta",
+    });
+    return { ok: true, status: 200, sendText: r.sendText.slice(0, 400), eventId: r.inngestEventId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, status: 500, sendText: msg.slice(0, 400), eventId: null };
   }
-  return { ok: res.ok, status: res.status, sendText: sendText.slice(0, 400), eventId };
 }
 
 async function fetchEventRuns(evId) {
@@ -164,7 +154,13 @@ function pickTriageRun(list) {
     const out = run.output;
     if (!out || typeof out !== "object") continue;
     const fn = String(run.function_id ?? run.name ?? "");
-    if (isTriageOutput(out) && (fn.includes("traffic-cop") || fn.includes("triage"))) {
+    if (
+      isTriageOutput(out) &&
+      (fn.includes("traffic-cop") ||
+        fn.includes("triage") ||
+        fn.includes("inbox-thread") ||
+        fn.includes("process-inbox"))
+    ) {
       return { run, out };
     }
   }
@@ -230,12 +226,11 @@ console.log(JSON.stringify({ photographerId, roster_pick: { id: pick.id, stage: 
 
 console.log("\n--- Case A: activation (unknown sender + logistics / roster-hint) ---");
 console.log("sender:", unknownSenderA);
-const evA = buildEvent(
+const sendA = await sendHarnessIngress(
   unknownSenderA,
   bodyActivation,
   "Bounded QA — logistics / unresolved matchmaker activation",
 );
-const sendA = await sendEvent(evA);
 console.log("Inngest send:", sendA.status, sendA.sendText);
 const pollA = await pollTriageOutput(sendA.eventId, "caseA");
 if (pollA) {
@@ -251,8 +246,7 @@ await new Promise((r) => setTimeout(r, 4000));
 
 console.log("\n--- Case B: fallback (unknown sender + new-lead intake bias) ---");
 console.log("sender:", unknownSenderB);
-const evB = buildEvent(unknownSenderB, bodyFallback, "Bounded QA — cold lead intake fallback");
-const sendB = await sendEvent(evB);
+const sendB = await sendHarnessIngress(unknownSenderB, bodyFallback, "Bounded QA — cold lead intake fallback");
 console.log("Inngest send:", sendB.status, sendB.sendText);
 const pollB = await pollTriageOutput(sendB.eventId, "caseB");
 if (pollB) {

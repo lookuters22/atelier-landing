@@ -1,5 +1,6 @@
 /**
  * V3 deterministic output auditor — live proof (happy vs failure branch).
+ * Ingress: `inbox/thread.requires_triage.v1` (pre-ingress `comms/email.received` retired).
  *
  * Run: npx tsx scripts/v3_auditor_proof_harness.ts
  * npm run v3:proof-auditor
@@ -19,6 +20,7 @@ import {
 } from "../supabase/functions/_shared/orchestrator/auditDraftCommercialTerms.ts";
 import type { DecisionContext, PlaybookRuleContextRow } from "../src/types/decisionContext.types.ts";
 import { emptyCrmSnapshot } from "../src/types/crmSnapshot.types.ts";
+import { enqueueInboxThreadRequiresTriageV1 } from "./lib/enqueueInboxThreadRequiresTriageV1.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -479,7 +481,6 @@ async function main(): Promise<void> {
     deterministic.r3.isValid === false;
 
   const supabase = createClient(url, sr, { auth: { persistSession: false, autoRefreshToken: false } });
-  const ingestUrl = "https://inn.gs/e/" + encodeURIComponent(inngestKey);
   const runId = `AUDITOR-PROOF-${Date.now()}`;
 
   const clientPriorWeddingId = (await supabase.from("clients").select("wedding_id").eq("email", fixtureEmail).maybeSingle())
@@ -523,24 +524,17 @@ async function main(): Promise<void> {
     const marker = `[auditor_proof_${spec.branch}] ${runId}`;
     const subject = `[V3 Auditor Proof ${spec.label}] ${runId}`;
 
-    const res = await fetch(ingestUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([
-        {
-          name: "comms/email.received",
-          data: {
-            photographer_id: photographerId,
-            raw_email: {
-              from: fixtureEmail,
-              body: commercialBody + `\n\n--\n${marker}`,
-              subject,
-            },
-          },
-        },
-      ]),
+    await enqueueInboxThreadRequiresTriageV1({
+      supabase,
+      photographerId,
+      weddingId,
+      senderEmail: fixtureEmail,
+      subject,
+      body: commercialBody + `\n\n--\n${marker}`,
+      inngestKey,
+      traceId: `${runId}-${spec.branch}`,
+      source: "manual",
     });
-    if (!res.ok) throw new Error(`Ingest failed ${res.status}: ${await res.text()}`);
 
     const inbound = await waitForInbound(supabase, photographerId, marker, turnMaxMs);
     if (!inbound) throw new Error(`No inbound for ${marker}`);
