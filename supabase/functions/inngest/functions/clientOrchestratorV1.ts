@@ -5,8 +5,8 @@
  * `drafts` insert** (A2, QA/replay) when eligible → **optional `toolEscalate` artifact** (A3, block/ask) →
  * optional `toolCalculator` placeholder.
  * **Invocations:** QA/replay (`qa_runner`); optional **shadow** fanout from `triage` when
- * `TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1=1` (observation only). **CUT2 live (narrow):** web widget known-wedding may
- * dispatch here when `TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1=1` with **`draft_only`** (not `auto`).
+ * `TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1=1` (observation only). **CUT4–CUT8 live:** main-path gates may dispatch here
+ * with **`draft_only`** when the corresponding env flags are on (post-ingest routing).
  *
  * Heavy context (`selectedMemories`, `globalKnowledge`, `playbookRules`, `audience`, escalations) feeds
  * deterministic proposal shaping — not big-model inventiveness.
@@ -19,10 +19,7 @@
  * **Phase 2 B3:** When `triage` shadow fanout includes correlation fields, emits `[orchestrator.shadow.compare]` log
  * plus `shadow_readiness_comparison` on the function return (grep-friendly; no routing impact).
  *
- * **V3 CUT3:** When `triage` live CUT2 includes `cut2LiveCorrelationId`, emits `[orchestrator.cut2.live.observe]` log
- * plus `cut2_live_observation` on the return — draft/escalation/neither, skip reasons, rollback hints.
- *
- * **V3 CUT4:** When `triage` live main-path concierge includes `cut4LiveCorrelationId`, emits
+ * **V3 CUT4:** When live main-path concierge includes `cut4LiveCorrelationId`, emits
  * `[orchestrator.cut4.live.observe]` + `cut4_live_observation`.
  *
  * **V3 CUT5:** Main-path `project_management` live includes `cut5LiveCorrelationId` → `[orchestrator.cut5.live.observe]`
@@ -70,11 +67,6 @@ import {
   runEscalationArtifactForClientOrchestratorV1,
   runToolVerifierForClientOrchestratorV1,
 } from "../../_shared/orchestrator/clientOrchestratorV1Core.ts";
-import {
-  buildCut2LiveOrchestratorObservationRecord,
-  logCut2LiveOrchestratorObservationRecord,
-  parseCut2LiveCorrelationFromEventData,
-} from "../../_shared/orchestrator/cut2LiveOrchestratorObservationRecord.ts";
 import {
   buildCut4LiveOrchestratorObservationRecord,
   logCut4LiveOrchestratorObservationRecord,
@@ -523,28 +515,6 @@ export const clientOrchestratorV1Function = inngest.createFunction(
       return {
         ...coreResult,
         cut4_live_observation: cut4Observation,
-      };
-    }
-
-    const cut2LiveCorrelation = parseCut2LiveCorrelationFromEventData(
-      event.data as Record<string, unknown>,
-    );
-    if (cut2LiveCorrelation) {
-      const cut2Observation = buildCut2LiveOrchestratorObservationRecord(
-        cut2LiveCorrelation,
-        coreResult,
-        {
-          weddingId,
-          threadId,
-          replyChannel,
-          requestedExecutionMode,
-          verifierPassed: verifierResult.success === true,
-        },
-      );
-      logCut2LiveOrchestratorObservationRecord(cut2Observation);
-      return {
-        ...coreResult,
-        cut2_live_observation: cut2Observation,
       };
     }
 

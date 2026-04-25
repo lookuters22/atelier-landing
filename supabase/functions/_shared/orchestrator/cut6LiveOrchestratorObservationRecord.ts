@@ -4,7 +4,10 @@
  * Grep: `[orchestrator.cut6.live.observe]`
  */
 import type { ClientOrchestratorV1CoreResult } from "./clientOrchestratorV1Core.ts";
-import { type Cut2LiveOutcomeBucket, type Cut2LiveOrchestratorObservationRecord } from "./cut2LiveOrchestratorObservationRecord.ts";
+import {
+  type OrchestratorLiveObservationRecordSharedBody,
+  orchestratorLiveOutcomeBucket,
+} from "./orchestratorLiveObservationShared.ts";
 
 export const ORCHESTRATOR_CUT6_LIVE_OBSERVE_LOG_TAG = "[orchestrator.cut6.live.observe]";
 
@@ -15,20 +18,11 @@ export type Cut6LiveCorrelationFields = {
   cut6LiveFanoutSource: Cut6LiveFanoutSource;
 };
 
-export type Cut6LiveOrchestratorObservationRecord = Omit<
-  Cut2LiveOrchestratorObservationRecord,
-  "compare_kind" | "cut2LiveCorrelationId" | "cut2LiveFanoutSource"
-> & {
+export type Cut6LiveOrchestratorObservationRecord = OrchestratorLiveObservationRecordSharedBody & {
   compare_kind: "orchestrator.cut6.live.v1";
   cut6LiveCorrelationId: string;
   cut6LiveFanoutSource: Cut6LiveFanoutSource;
 };
-
-function outcomeBucket(result: ClientOrchestratorV1CoreResult): Cut2LiveOutcomeBucket {
-  if (result.draftCreated) return "draft_created";
-  if (result.escalationArtifactCreated) return "escalation_artifact";
-  return "neither_draft_nor_escalation";
-}
 
 export function parseCut6LiveCorrelationFromEventData(data: {
   cut6LiveCorrelationId?: string;
@@ -60,7 +54,7 @@ export function buildCut6LiveOrchestratorObservationRecord(
   },
 ): Cut6LiveOrchestratorObservationRecord {
   const cc = result.chosenCandidate;
-  const bucket = outcomeBucket(result);
+  const bucket = orchestratorLiveOutcomeBucket(result);
   const draftOnlyNoVisible =
     ctx.requestedExecutionMode === "draft_only" &&
     !result.draftCreated &&

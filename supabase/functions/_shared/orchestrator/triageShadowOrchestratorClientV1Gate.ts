@@ -1,7 +1,7 @@
 /**
  * **Compatibility re-export surface only** — do not add new logic here.
  *
- * - **Legacy CUT2–CUT8 + shadow scaffolding:** implemented in {@link legacyOrchestratorCutoverGate.ts}; imported here
+ * - **Legacy CUT4–CUT8 + shadow scaffolding:** implemented in {@link legacyOrchestratorCutoverGate.ts}; imported here
  *   via `export *` for backward compatibility with existing import paths.
  * - **Neutral triage routing flags** (bounded matchmaker, inquiry dedup, QA synthetic confidence): live in
  *   `../triage/triageRoutingFlags.ts` and are re-exported below for the same reason.

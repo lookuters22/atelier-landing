@@ -27,23 +27,22 @@ export const CRM_STAGE_UPDATED_V1_SCHEMA_VERSION = 1 as const;
 /**
  * Phase 7 Step 7B — client orchestrator (email/web).
  *
- * **Live path from `triage`:** Default legacy `ai/intent.*`. **CUT2 (web widget known-wedding only):** optional live
- * dispatch when `TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1=1` with `requestedExecutionMode: "draft_only"`
- * (approval-style draft path). Otherwise QA/replay, **shadow** fanout, or explicit sends.
+ * **Live path (post-ingest):** Default legacy `ai/intent.*`. Optional **CUT4–CUT8** live dispatch from
+ * `inbox/thread.requires_triage.v1` when the corresponding env gates are on (`requestedExecutionMode: "draft_only"`).
+ * Otherwise QA/replay, **shadow** fanout, intake hooks, or explicit sends.
  *
- * **QA/replay:** Emit explicitly (e.g. `qa_runner`) without triage.
+ * **QA/replay:** Emit explicitly (e.g. `qa_runner`).
  *
- * **Phase 2 Slice C1 (shadow):** When `TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1=1`, `triage` may emit this event in parallel
- * for supported email/web non-intake traffic — observation only — except when CUT2 live is active for web-widget, CUT4
- * live for main-path concierge, CUT5 live for main-path project_management, CUT6 live for main-path logistics, CUT7
- * live for main-path commercial, or CUT8 live for main-path studio (shadow skipped that turn).
+ * **Phase 2 Slice C1 (shadow):** When `TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1=1`, dispatch may emit this event in parallel
+ * for supported non-intake traffic — observation only — except when CUT4–CUT8 live orchestrator runs that turn (shadow
+ * skipped to avoid duplicate sends).
  *
  * **Phase 2 B3:** Optional `shadowCorrelationId` / `legacyTriageIntent` / `shadowFanoutSource` on shadow-origin
- * payloads from `triage` for readiness comparison logs (QA callers and CUT2 live emits omit).
+ * payloads for readiness comparison logs (QA callers omit).
  *
  * **Intake post-bootstrap parity (observation):** Optional `intakeParityCorrelationId` +
  * `intakeParityFanoutSource: "intake_post_bootstrap_parity"` from `intake` when
- * `INTAKE_SHADOW_ORCHESTRATOR_POST_BOOTSTRAP_V1=1` — distinct from B3 shadow and CUT2–CUT8; worker skips draft +
+ * `INTAKE_SHADOW_ORCHESTRATOR_POST_BOOTSTRAP_V1=1` — distinct from B3 shadow and CUT4–CUT8; worker skips draft +
  * escalation **DB writes** (proposals + verifier + logs only); does not replace persona.
  *
  * **Intake post-bootstrap live (email-only):** Optional `intakeLiveCorrelationId` +
@@ -302,9 +301,6 @@ export type AtelierEvents = {
       shadowCorrelationId?: string;
       legacyTriageIntent?: string;
       shadowFanoutSource?: "triage_main" | "triage_web_widget";
-      /** V3 CUT3 — live CUT2 web-widget only; pairs with `cut2LiveFanoutSource`. */
-      cut2LiveCorrelationId?: string;
-      cut2LiveFanoutSource?: "triage_web_widget_live";
       /** V3 CUT4 — main-path concierge + known wedding; pairs with `cut4LiveFanoutSource`. */
       cut4LiveCorrelationId?: string;
       cut4LiveFanoutSource?: "triage_main_concierge_live";

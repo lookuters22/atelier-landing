@@ -30,8 +30,8 @@
  *
  * `clientOrchestratorV1Function` (`ai/orchestrator.client.v1`): QA/replay; optional **shadow** from Gmail/thread post-ingest
  * routing (`processInboxThreadRequiresTriage` / `runMainPathEmailDispatch`). **Pre-ingress `traffic-cop-triage` retired**
- * — web-widget **CUT2** live/D1 (`TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1`, `TRIAGE_D1_CUT2_*`) went with it;
- * see `docs/v3/CUT2_WEB_WIDGET_D1_PREP_SLICE.md` for historical context only.
+ * — the old web-widget **CUT2** orchestrator surface (envs, event correlation fields, live observation branch) is **removed**
+ * from code (Slice 8); pre-ingress web is not a live producer. Historical: `docs/v3/CUT2_WEB_WIDGET_D1_PREP_SLICE.md`.
  * Optional **CUT4** live for main-path concierge + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_CONCIERGE_KNOWN_WEDDING_V1`)
  * on **`inbox/thread.requires_triage.v1`**; **CUT4 D1:** `TRIAGE_D1_CUT4_MAIN_PATH_CONCIERGE_LEGACY_CONCIERGE_DISPATCH_V1`;
  * `cut4_main_path_concierge_d1_prep` v2 (`docs/v3/CUT4_MAIN_PATH_CONCIERGE_D1_PREP_SLICE.md`).

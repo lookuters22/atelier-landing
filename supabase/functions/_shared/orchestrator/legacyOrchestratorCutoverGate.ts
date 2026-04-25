@@ -1,88 +1,23 @@
 /**
- * **Legacy orchestrator migration scaffolding** — CUT2–CUT8 live gates, D1 execution helpers, shadow fan-out readers,
- * and live-cutover readiness payloads for pre–post-ingest `triage` + compatibility callers.
+ * **Legacy orchestrator migration scaffolding** — CUT4–CUT8 live gates, D1 execution helpers, shadow fan-out readers,
+ * and live-cutover readiness payloads for post-ingest dispatch + compatibility callers.
+ *
+ * **Historical:** pre-ingress web-widget **CUT2** (`TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1` and related)
+ * was removed (Slice 8); pre-ingress web is retired and no producer can reach that surface.
  *
  * Prefer importing this module directly for CUT/shadow work. `triageShadowOrchestratorClientV1Gate.ts` is a thin
  * compatibility surface that re-exports this file plus neutral flags from `../triage/triageRoutingFlags.ts`.
  *
  * ---
  *
- * Phase 2 Slice C1 — opt-in shadow fanout from `triage` to `ai/orchestrator.client.v1`.
+ * Phase 2 Slice C1 — opt-in shadow fanout to `ai/orchestrator.client.v1`.
  *
  * **Runtime truth:** Shadow events are observation-only (parallel Inngest send) when legacy is still the parallel
- * live path.
- *
- * **V3 CUT2 retry (web widget known-wedding only):** When `TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1=1`,
- * that branch dispatches **live** to `ai/orchestrator.client.v1` with `requestedExecutionMode: "draft_only"`
- * (approval-style draft path — not `auto`, which previously risked a no-op). Legacy `ai/intent.concierge` is
- * skipped for that branch only when CUT2 is on. When CUT2 is off, `TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1`
- * may forbid legacy (blocked return — no dispatch). Default **off**; rollback = unset env. Shadow is **skipped** when live CUT2 runs
- * to avoid duplicate orchestrator sends.
+ * live path. Shadow is **skipped** when a live CUT4–CUT8 orchestrator send runs that turn (no duplicate sends).
  *
  * Enable shadow deliberately: `TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1=1` (or `true`).
  */
 export const TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1_ENV = "TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1" as const;
-
-/**
- * CUT2 — web widget known-wedding fast path live orchestrator. Default **off** (`1` / `true` to enable).
- * Uses **draft_only** execution mode (not auto).
- */
-export const TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV =
-  "TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1" as const;
-
-/**
- * **D1 execution (CUT2 web-widget only):** When **`0` / `false` / `off` / `no`**, triage **does not** dispatch
- * legacy `ai/intent.concierge` on the web-widget known-wedding branch when **CUT2 is off** — that branch has **no** live
- * AI route until CUT2 is enabled (or this env is relaxed). **Default when unset:** legacy **allowed** when CUT2 off
- * (backward compatible).
- *
- * Distinct from `TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1`, which chooses orchestrator vs legacy when D1 allows legacy.
- */
-export const TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1_ENV =
-  "TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1" as const;
-
-export type Cut2WebWidgetD1ExecV2 = {
-  schema_version: 2;
-  narrow_branch: "web_widget_known_wedding";
-  retirement_target: "legacy_ai_intent.concierge_when_cut2_off";
-  cut2_live_gate_env: typeof TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV;
-  d1_legacy_dispatch_gate_env: typeof TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1_ENV;
-  /** Env read: legacy `ai/intent.concierge` permitted when CUT2 is off (default true if unset). */
-  d1_legacy_when_cut2_off_allowed: boolean;
-  cut2_web_widget_live: boolean;
-  /** True when D1 forbids legacy and CUT2 is off — triage dispatches neither orchestrator nor concierge. */
-  blocked_no_dispatch: boolean;
-};
-
-/**
- * `1` / `true` / unset (empty) → legacy allowed when CUT2 off.
- * `0` / `false` / `off` / `no` → legacy **not** allowed when CUT2 off (orchestrator-only policy for that branch).
- * Unknown values → **allowed** (fail open) to avoid surprise outages on typos.
- */
-export function isTriageD1Cut2WebWidgetLegacyConciergeDispatchWhenCut2OffAllowed(): boolean {
-  const v = Deno.env.get(TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1_ENV);
-  if (v === undefined || v === "") return true;
-  const s = v.trim().toLowerCase();
-  if (s === "0" || s === "false" || s === "off" || s === "no") return false;
-  return true;
-}
-
-export function buildCut2WebWidgetD1ExecV2(input: {
-  d1LegacyWhenCut2OffAllowed: boolean;
-  cut2WebWidgetLive: boolean;
-}): Cut2WebWidgetD1ExecV2 {
-  const blocked_no_dispatch = !input.cut2WebWidgetLive && !input.d1LegacyWhenCut2OffAllowed;
-  return {
-    schema_version: 2,
-    narrow_branch: "web_widget_known_wedding",
-    retirement_target: "legacy_ai_intent.concierge_when_cut2_off",
-    cut2_live_gate_env: TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV,
-    d1_legacy_dispatch_gate_env: TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1_ENV,
-    d1_legacy_when_cut2_off_allowed: input.d1LegacyWhenCut2OffAllowed,
-    cut2_web_widget_live: input.cut2WebWidgetLive,
-    blocked_no_dispatch,
-  };
-}
 
 /**
  * CUT4 — main triage path (LLM + stage gate), **concierge** intent only, **known wedding** (`wedding_id` filed).
@@ -97,8 +32,7 @@ export const TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_CONCIERGE_KNOWN_WEDDING_V1_ENV =
  * dispatch legacy `ai/intent.concierge` when **CUT4** is off on this branch — **no** live AI route until CUT4 is enabled or D1
  * is relaxed. **Default when unset:** legacy **allowed** when CUT4 off (backward compatible). Unknown values → **allowed**.
  *
- * **Scope:** main triage path (not web-widget fast path) + `dispatch_intent === "concierge"` + filed `wedding_id`.
- * Distinct from **`TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1`**.
+ * **Scope:** main path + `dispatch_intent === "concierge"` + filed `wedding_id`.
  */
 export const TRIAGE_D1_CUT4_MAIN_PATH_CONCIERGE_LEGACY_CONCIERGE_DISPATCH_V1_ENV =
   "TRIAGE_D1_CUT4_MAIN_PATH_CONCIERGE_LEGACY_CONCIERGE_DISPATCH_V1" as const;
@@ -367,16 +301,6 @@ export type OrchestratorClientV1LiveCutoverHold = {
   prerequisites_before_c2_retry: readonly string[];
 };
 
-export type OrchestratorClientV1LiveCutoverActiveWebWidget = {
-  live_cutover_enabled: true;
-  hold_reason_code: null;
-  narrow_cutover_branch: "web_widget_known_wedding_v1";
-  env_gate: typeof TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV;
-  /** Live orchestrator uses draft-only (approval-style); not `auto`. */
-  cut2_requested_execution_mode: "draft_only";
-  summary: string;
-};
-
 export type OrchestratorClientV1LiveCutoverActiveMainPathConcierge = {
   live_cutover_enabled: true;
   hold_reason_code: null;
@@ -422,10 +346,6 @@ export type OrchestratorClientV1LiveCutoverActiveMainPathStudio = {
   summary: string;
 };
 
-export type OrchestratorClientV1LiveCutoverReadiness =
-  | OrchestratorClientV1LiveCutoverHold
-  | OrchestratorClientV1LiveCutoverActiveWebWidget;
-
 export type OrchestratorClientV1LiveCutoverMainPathConciergeReadiness =
   | OrchestratorClientV1LiveCutoverHold
   | OrchestratorClientV1LiveCutoverActiveMainPathConcierge;
@@ -447,17 +367,17 @@ export type OrchestratorClientV1LiveCutoverMainPathStudioReadiness =
   | OrchestratorClientV1LiveCutoverActiveMainPathStudio;
 
 /**
- * Default hold for non–web-widget returns and web-widget when CUT2 gate is off.
+ * Default hold when no CUT4–CUT8 live gate applies for the route in question.
  */
 export const ORCHESTRATOR_CLIENT_V1_LIVE_CUTOVER: OrchestratorClientV1LiveCutoverHold = {
   live_cutover_enabled: false,
   hold_reason_code: ORCHESTRATOR_CLIENT_V1_LIVE_CUTOVER_HOLD_REASON_CODE,
   summary:
-    "Legacy ai/intent.* is the live path for this route. Web widget known-wedding: optional CUT2 live orchestrator " +
-    `via ${TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV} (draft_only). Shadow/QA unchanged when gate off.`,
+    "Legacy ai/intent.* remains the live path unless a CUT4–CUT8 env gate enables draft_only orchestrator on the " +
+    "matching main-path branch. Shadow/QA paths unchanged when those gates are off.",
   prerequisites_before_c2_retry: [
-    "B3 / operational evidence before enabling CUT2 in production",
-    "Monitor draft creation vs legacy concierge for the narrow branch",
+    "B3 / operational evidence before enabling CUT4–CUT8 live orchestrator gates in production",
+    "Monitor draft creation vs legacy intent workers per enabled cut",
   ] as const,
 };
 
@@ -465,31 +385,8 @@ export function getOrchestratorClientV1LiveCutoverReadiness(): OrchestratorClien
   return ORCHESTRATOR_CLIENT_V1_LIVE_CUTOVER;
 }
 
-export function getWebWidgetKnownWeddingOrchestratorLiveCutoverReadiness(
-  cut2GateOn: boolean,
-): OrchestratorClientV1LiveCutoverReadiness {
-  if (cut2GateOn) {
-    return {
-      live_cutover_enabled: true,
-      hold_reason_code: null,
-      narrow_cutover_branch: "web_widget_known_wedding_v1",
-      env_gate: TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV,
-      cut2_requested_execution_mode: "draft_only",
-      summary:
-        "CUT2 active: live dispatch is ai/orchestrator.client.v1 with draft_only; legacy ai/intent.concierge skipped. " +
-        `Rollback: unset ${TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV}.`,
-    };
-  }
-  return ORCHESTRATOR_CLIENT_V1_LIVE_CUTOVER;
-}
-
 export function isTriageShadowOrchestratorClientV1Enabled(): boolean {
   const v = Deno.env.get(TRIAGE_SHADOW_ORCHESTRATOR_CLIENT_V1_ENV);
-  return v === "1" || v === "true";
-}
-
-export function isTriageLiveOrchestratorWebWidgetKnownWeddingEnabled(): boolean {
-  const v = Deno.env.get(TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1_ENV);
   return v === "1" || v === "true";
 }
 
