@@ -1,5 +1,9 @@
 /**
  * Pure retirement-readiness summary for pre-ingress `triage` + `comms/*` paths (audit only; no routing).
+ *
+ * **Web pre-ingress (execution Slice A):** `webhook-web` no longer emits `comms/web.received`; audits should pass
+ * `webEmitterPresentInRepo: false`. The `web_pre_ingress_emitter_still_present` blocker applies only if a new in-repo
+ * emitter appears.
  */
 
 export const LEGACY_ROUTING_RETIREMENT_READINESS_EVENT = "legacy_routing_retirement_readiness_v1" as const;
@@ -30,8 +34,8 @@ export type BuildLegacyRoutingRetirementReadinessInput = {
 };
 
 /**
- * Conservative: not ready while triage remains registered, an in-repo web emitter exists, or email pre-ingress
- * is still subscribed without an observed in-repo producer (external ingress not ruled out).
+ * Conservative: not ready while `triageFunction` remains registered, an in-repo **web** emitter exists, or email
+ * pre-ingress is still consumed without an observed in-repo producer (external `comms/email.received` not ruled out).
  */
 export function buildLegacyRoutingRetirementReadinessRecord(
   input: BuildLegacyRoutingRetirementReadinessInput,

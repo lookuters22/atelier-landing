@@ -392,6 +392,12 @@ The orchestrator **decommission-prep program** (Slices 1–7) ends in a **retain
 - **Done:** `webhook-web` stopped emitting `comms/web.received`; responses are **410** with `web_pre_ingress_retired`.
 - **Not in this slice:** `triage.ts` unregister, `comms/email.received`, Gmail/thread post-ingest.
 
+## Retirement execution — Slice B (readiness + last blocker isolation)
+
+- **Done:** `legacyRoutingRetirementReadiness` + `[triage.legacy_retirement_readiness]` use **`webEmitterPresentInRepo: false`**; remaining automated blockers are **`triage_function_still_registered`** and **`email_pre_ingress_external_emitter_not_ruled_out`** (no `web_pre_ingress_emitter_still_present`).
+- **`legacyRoutingCutoverGate`:** comments + `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY` updated to reflect web retired and **email external producer proof** as the primary unresolved pre-ingress question before any final delete/unregister PR.
+- **Not in this slice:** unregister `triageFunction`, remove `comms/email.received`, routing changes.
+
 ## Source-of-truth files for this roadmap
 
 - [processGmailDeltaSync.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/processGmailDeltaSync.ts)

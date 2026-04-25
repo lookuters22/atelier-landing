@@ -30,9 +30,9 @@ After the orchestrator decommission prep slices (`docs/v3/ORCHESTRATOR_DECOMMISS
 
 **In-repo web pre-ingress:** **Retired.** `supabase/functions/webhook-web/index.ts` **does not** emit `comms/web.received`; callers receive **410 Gone** with `web_pre_ingress_retired`.
 
-**Email pre-ingress:** no `comms/email.received` emitter under `supabase/functions/` was observed; **external producers are not ruled out** — do not remove the consumer or event subscription without proof. This is now the **main remaining blocker** to full `triageFunction` / `comms/*` retirement (along with WhatsApp ingress and explicit unregister work).
+**Email pre-ingress:** no `comms/email.received` emitter under `supabase/functions/` was observed; **external producers are not ruled out** — do not remove the consumer or event subscription without proof. After **execution Slice B**, this is the **isolated last pre-ingress retirement blocker** (plus `triageFunction` still registered, WhatsApp ingress, and explicit unregister — see `[triage.legacy_retirement_readiness]` with `webEmitterPresentInRepo: false`).
 
-**Retirement blockers** (machine-greppable): `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY`, `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`, `[triage.legacy_retirement_readiness]`, `legacyRoutingCutoverGate.ts`.
+**Retirement blockers** (machine-greppable): `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY` (now: email external + pending unregister), `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`, `[triage.legacy_retirement_readiness]`, `legacyRoutingCutoverGate.ts`.
 
 **Prerequisite for a future removal PR:** prove or retire external `comms/email.received` producers (and any other live ingress); then change retention gates and unregister in one coordinated change set — never “cleanup” by deleting `triage.ts` or `comms/*` support blindly.
 

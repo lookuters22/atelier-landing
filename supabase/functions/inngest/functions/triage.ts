@@ -242,16 +242,16 @@ export const triageFunction = inngest.createFunction(
   async ({ event, step }) => {
     /**
      * Pre-ingress ingress (observability only; routing unchanged):
-     * - **Web:** `comms/web.received` — still reachable in-repo (e.g. `webhook-web`).
-     * - **Email:** `comms/email.received` — no in-repo emitter observed; branch remains for external/legacy producers.
-     * Both events stay subscribed on this function; see `[triage.pre_ingress_source]` logs.
+     * - **Web:** `comms/web.received` — subscription retained; **in-repo emit retired** (`webhook-web` → 410 `web_pre_ingress_retired`).
+     * - **Email:** `comms/email.received` — no in-repo emitter observed; branch remains for external/legacy producers (**last pre-ingress blocker** for full retirement).
+     * Both events stay subscribed on this function; see `[triage.pre_ingress_source]` + `[triage.legacy_retirement_readiness]` logs.
      */
     logLegacyRoutingRetirementReadinessRecord(
       buildLegacyRoutingRetirementReadinessRecord({
         triageRegistered: true,
         consumesCommsEmailReceived: true,
         consumesCommsWebReceived: true,
-        webEmitterPresentInRepo: true,
+        webEmitterPresentInRepo: false,
         emailEmitterPresentInRepo: false,
       }),
     );

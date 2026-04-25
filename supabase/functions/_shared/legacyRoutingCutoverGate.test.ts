@@ -14,7 +14,7 @@ describe("Step 12D — legacy routing retention gate", () => {
 
   it("exports stable pre-ingress retention summary for audits/docs", () => {
     expect(LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY).toBe(
-      "pre_ingress_routing_intentionally_retained_pending_explicit_ops_retirement",
+      "pre_ingress_retained_email_external_producer_unresolved_pending_unregister",
     );
   });
 });
