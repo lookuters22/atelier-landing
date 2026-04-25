@@ -1,6 +1,10 @@
 /**
- * Pre-ingress source observability for `triageFunction` (`comms/web.received` vs `comms/email.received`).
- * Pure builders only — classification uses event name only (no payload introspection).
+ * Narrow ingress observability for **legacy Inngest triggers** that are not Gmail/thread post-ingest.
+ *
+ * **Live:** `legacyWhatsappIngress` logs via this module (WhatsApp events → `other_pre_ingress`).
+ * **Historical:** `comms/web.received` / `comms/email.received` are retired from the typed contract and
+ * subscribers, but event-name classification is kept so any stale replay/log line still maps consistently.
+ * Pure builders — classification uses `ingressEventName` only (no payload introspection).
  */
 
 export const COMMS_WEB_RECEIVED_EVENT = "comms/web.received" as const;
@@ -9,7 +13,7 @@ export const COMMS_EMAIL_RECEIVED_EVENT = "comms/email.received" as const;
 export type PreIngressSourceObservability =
   | "web_pre_ingress"
   | "email_pre_ingress"
-  /** WhatsApp and any other triage subscriber not in the web/email pre-ingress split. */
+  /** Retired email/web aside, includes live operator WhatsApp legacy events and any other non-web/email label. */
   | "other_pre_ingress";
 
 export type PreIngressSourceObservabilityRecord = {

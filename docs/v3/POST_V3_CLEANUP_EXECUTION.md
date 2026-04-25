@@ -19,9 +19,9 @@ The right approach is:
 2. harden remaining legacy paths that are still live
 3. only then retire old routing and workers
 
-## Orchestrator decommission prep — dual paths (formalized)
+## Orchestrator decommission prep — ingress layout (post–pre-ingress retirement)
 
-After the orchestrator decommission prep slices (`docs/v3/ORCHESTRATOR_DECOMMISSION_SLICE_ROADMAP.md`) **and the final pre-ingress retirement PR**, the codebase has **one supported primary email/classification ingress** plus an **explicit WhatsApp legacy lane**:
+After the orchestrator decommission prep slices (`docs/v3/ORCHESTRATOR_DECOMMISSION_SLICE_ROADMAP.md`) **and the final pre-ingress retirement PR**, the codebase has **one supported primary email/classification ingress** plus an **explicit WhatsApp legacy lane**. Pre-cutover readiness audit code (`legacyRoutingRetirementReadiness`) was **removed** as dead scaffolding once retirement landed.
 
 | Path | Role | Notes |
 |------|------|--------|

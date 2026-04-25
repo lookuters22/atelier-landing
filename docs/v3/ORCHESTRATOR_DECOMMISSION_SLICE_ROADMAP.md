@@ -230,34 +230,9 @@ Why third:
 
 ### Slice 4 — Isolate the web pre-ingress path from the dead email pre-ingress path
 
-**Status:** complete (orchestrator decommission prep).
+**Status:** complete (historical) — **superseded** by final pre-ingress retirement (`traffic-cop-triage` removed; `comms/*` dropped from `AtelierEvents`; `webhook-web` → 410 only).
 
-Goal:
-
-- reflect the real state:
-  - `comms/email.received` appears orphaned
-  - `comms/web.received` still has an emitter
-
-Likely files:
-
-- ~~`inngest/functions/triage.ts`~~ *(removed)*
-- [webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts)
-- possibly [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts)
-
-Expected scope:
-
-- split or clearly separate the `comms/web.received` branch from the dead-looking email ingress assumptions
-- add comments / structure that make web-only reachability explicit
-- optionally remove the `comms/email.received` trigger if and only if no external emitter is confirmed
-
-Acceptance:
-
-- web path is explicit
-- email pre-ingress path is either removed or formally marked as external-only pending proof
-
-Risk note:
-
-- do **not** remove `comms/email.received` consumer until external emitters are ruled out
+This slice documented interim goals before email/web pre-ingress was fully removed. No further action.
 
 ---
 
@@ -373,10 +348,10 @@ The orchestrator **decommission-prep program** (Slices 1–7) ends with **pre-in
 - **Done:** `webhook-web` stopped emitting `comms/web.received`; responses are **410** with `web_pre_ingress_retired`.
 - **Not in this slice:** `triage.ts` unregister, `comms/email.received`, Gmail/thread post-ingest.
 
-## Retirement execution — Slice B (readiness + last blocker isolation)
+## Retirement execution — Slice B (historical readiness audit)
 
-- **Done (historical):** readiness audit isolated blockers before final retirement.
-- **Superseded by final retirement PR:** `traffic-cop-triage` removed; `comms/email.received` / `comms/web.received` dropped from `AtelierEvents`; `legacyRoutingCutoverGate` flipped to retired state (`LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY`).
+- **Historical only:** pre-cutover audit helpers (`legacyRoutingRetirementReadiness`) existed to make blockers explicit; they were **removed** after the final retirement PR landed.
+- **Current state:** `traffic-cop-triage` removed; `comms/email.received` / `comms/web.received` dropped from `AtelierEvents`; `legacyRoutingCutoverGate` reflects retirement (`LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY`).
 
 ## Source-of-truth files for this roadmap
 

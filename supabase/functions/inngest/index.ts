@@ -53,10 +53,10 @@
  * migration target (dashboard web = photographer ↔ Ana). Client intake live path is email gate only.
  * All other live email/web remains legacy `ai/intent.*`.
  *
- * **Legacy email/web specialist workers (triage `INTENT_EVENT_MAP` + web-widget `ai/intent.concierge`):**
- * `concierge`, `logistics`, `commercial`, `projectManager`, `studio`, `intake` — remain registered until RET1+
- * proves triage no longer dispatches their event for supported paths; CUT2/CUT4–CUT8 gates **off** = rollback to
- * these workers. Inventory: `docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`.
+ * **Legacy email/web specialist workers** (post-ingest dispatch `INTENT_EVENT_MAP` in `postIngestThreadDispatch` +
+ * `ai/intent.concierge` where applicable): `concierge`, `logistics`, `commercial`, `projectManager`, `studio`, `intake`
+ * — remain registered until RET1+ proves post-ingest routing no longer dispatches their event for supported paths;
+ * CUT4–CUT8 gates **off** = rollback to these workers. Inventory: `docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`.
  * **RET1:** post-ingest routing returns `retirement_dispatch_observability_v1` + log `[triage.retirement_dispatch_v1]` (§5 same doc).
  *
  * **Phase 2 Slice D1 (retirement prep):** Producer/ingress audit — no workers removed; see

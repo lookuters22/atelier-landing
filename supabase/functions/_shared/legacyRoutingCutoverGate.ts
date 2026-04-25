@@ -10,6 +10,8 @@
  * - **Pre-ingress web emitter:** `webhook-web` does not emit `comms/web.received` (410 `web_pre_ingress_retired`).
  * - **WhatsApp (operator legacy)** is **not** email/web pre-ingress: `legacy-whatsapp-ingress` still handles
  *   `comms/whatsapp.received` + `operator/whatsapp.legacy.received` → `ai/intent.internal_concierge` only.
+ * - The old **`legacyRoutingRetirementReadiness`** audit helper was deleted after cutover; use this module +
+ *   `preIngressSourceObservability` for ingress observability needs.
  *
  * ### Runtime flag
  *

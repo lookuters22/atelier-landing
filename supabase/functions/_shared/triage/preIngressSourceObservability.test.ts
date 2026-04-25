@@ -17,7 +17,7 @@ function assertNoBodyLeak(record: ReturnType<typeof buildPreIngressSourceObserva
 }
 
 describe("buildPreIngressSourceObservabilityRecord", () => {
-  it("comms/web.received → web_pre_ingress", () => {
+  it("retired web event name still maps to web_pre_ingress (schema / stale logs)", () => {
     const r = buildPreIngressSourceObservabilityRecord({
       ingressEventName: COMMS_WEB_RECEIVED_EVENT,
       replyChannel: "web",
@@ -33,7 +33,7 @@ describe("buildPreIngressSourceObservabilityRecord", () => {
     assertNoBodyLeak(r);
   });
 
-  it("comms/email.received → email_pre_ingress", () => {
+  it("retired email event name still maps to email_pre_ingress (schema / stale logs)", () => {
     const r = buildPreIngressSourceObservabilityRecord({
       ingressEventName: COMMS_EMAIL_RECEIVED_EVENT,
       replyChannel: "email",
@@ -48,7 +48,18 @@ describe("buildPreIngressSourceObservabilityRecord", () => {
     assertNoBodyLeak(r);
   });
 
-  it("reply channel is passed through unchanged (web / email)", () => {
+  it("operator WhatsApp legacy event maps to other_pre_ingress (live path)", () => {
+    const r = buildPreIngressSourceObservabilityRecord({
+      ingressEventName: "operator/whatsapp.legacy.received",
+      replyChannel: "whatsapp",
+      photographerIdPresent: true,
+    });
+    expect(r.ingressSource).toBe("other_pre_ingress");
+    expect(r.replyChannel).toBe("whatsapp");
+    assertNoBodyLeak(r);
+  });
+
+  it("reply channel is passed through unchanged", () => {
     const web = buildPreIngressSourceObservabilityRecord({
       ingressEventName: COMMS_WEB_RECEIVED_EVENT,
       replyChannel: "web",
@@ -68,8 +79,8 @@ describe("logPreIngressSourceObservabilityRecord", () => {
   it("emits grep-friendly prefix and JSON body", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const record = buildPreIngressSourceObservabilityRecord({
-      ingressEventName: COMMS_EMAIL_RECEIVED_EVENT,
-      replyChannel: "email",
+      ingressEventName: "operator/whatsapp.legacy.received",
+      replyChannel: "whatsapp",
       photographerIdPresent: true,
     });
     logPreIngressSourceObservabilityRecord(record);

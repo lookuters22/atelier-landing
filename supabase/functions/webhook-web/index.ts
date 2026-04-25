@@ -1,9 +1,9 @@
 /**
- * Stateless Web Support webhook — **pre-ingress web path retired** (orchestrator retirement execution Slice A).
+ * Stateless Web Support webhook — **pre-ingress web emit retired** (complete). Primary email/classification ingress is
+ * Gmail/thread post-ingest (`inbox/thread.requires_triage.v1`); this endpoint does not participate in that path.
  *
  * **Does not** emit `comms/web.received`. Successful auth/ingress checks end in **410 Gone** with
- * `web_pre_ingress_retired` so operators and clients get an explicit signal. Gmail/thread post-ingest routing is
- * unchanged (`inbox/thread.requires_triage.v1`).
+ * `web_pre_ingress_retired` so operators and clients get an explicit signal.
  *
  * Legacy payload shapes (parsed only for ingress token verification when applicable):
  *  - Test button / lead form: { source, lead: { name, email, event_date, message }, ingress_token? }
