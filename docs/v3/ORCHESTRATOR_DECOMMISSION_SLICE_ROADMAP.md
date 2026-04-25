@@ -30,22 +30,19 @@ The active Gmail path is:
 - emits `inbox/thread.requires_triage.v1`
 - consumed by [processInboxThreadRequiresTriage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/processInboxThreadRequiresTriage.ts)
 
-### 2. The old pre-ingest triage path is not fully deletable
+### 2. Pre-ingress email/web triage is retired (final retirement PR)
 
-[triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts) is still registered in [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts) and still listens to:
+The former `traffic-cop-triage` worker (`inngest/functions/triage.ts`, **removed**) is **unregistered**. `comms/email.received` and `comms/web.received` are **not** part of the shared `AtelierEvents` contract or any served Inngest function trigger.
 
-- `comms/email.received`
-- `comms/web.received`
+**WhatsApp legacy ingress** is separate: [legacyWhatsappIngress.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/legacyWhatsappIngress.ts) (`legacy-whatsapp-ingress`) handles `comms/whatsapp.received` and `operator/whatsapp.legacy.received` → `ai/intent.internal_concierge` only.
 
-### 3. `comms/email.received` currently looks orphaned in-repo
+### 3. `comms/email.received` — removed from supported live contract
 
-Repo search found the event definition and the consumer in `triage.ts`, but **no emitter** for `comms/email.received` in `supabase/functions/`.
+Historical: repo search found **no** in-repo emitter under `supabase/functions/`; the consumer lived only on the retired triage worker.
 
-This makes the email pre-ingress lane a strong decommission candidate, but not yet a delete target without confirming no external emitter exists.
+### 4. `comms/web.received` — in-repo emitter retired (execution Slice A); contract retired
 
-### 4. `comms/web.received` — in-repo emitter retired (execution Slice A)
-
-[webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts) **no longer** emits `comms/web.received`. It returns **410 Gone** with `web_pre_ingress_retired`. `triageFunction` may still subscribe to `comms/web.received` until a later unregister PR; any **new** web traffic must use the supported replacement path (not this webhook emit).
+[webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts) **does not** emit `comms/web.received` (410 `web_pre_ingress_retired`). The event name is no longer in `AtelierEvents`.
 
 ### 5. The active Gmail/thread path still depends on old routing modules
 
@@ -80,7 +77,7 @@ via intake post-bootstrap gates under `_shared/intake/`.
 
 So the right framing is:
 
-- `triage.ts` and CUT/shadow scaffolding are likely overgrown and partly dormant
+- pre-ingress `triage.ts` is removed; post-ingest routing modules remain live
 - but `clientOrchestratorV1` and some routing gates are still reachable from active flows
 
 ## What we are actually doing
@@ -212,12 +209,12 @@ Likely files:
 - [runMainPathEmailDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/runMainPathEmailDispatch.ts)
 - new: `supabase/functions/_shared/triage/postIngestThreadDispatch.ts`
 - [processInboxThreadRequiresTriage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/processInboxThreadRequiresTriage.ts)
-- [triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts)
+- ~~`inngest/functions/triage.ts`~~ *(removed in final pre-ingress retirement PR)*
 
 Expected scope:
 
 - extract neutral post-ingest dispatch selection into a separate module
-- leave `triage.ts` with its legacy/CUT-specific wiring
+- ~~leave `triage.ts` with its legacy/CUT-specific wiring~~ *(pre-ingress triage later removed)*
 - keep behavior identical
 
 Acceptance:
@@ -243,7 +240,7 @@ Goal:
 
 Likely files:
 
-- [triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts)
+- ~~`inngest/functions/triage.ts`~~ *(removed)*
 - [webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts)
 - possibly [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts)
 
@@ -275,7 +272,7 @@ Goal:
 Likely files:
 
 - [triageShadowOrchestratorClientV1Gate.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/orchestrator/triageShadowOrchestratorClientV1Gate.ts)
-- [triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts)
+- ~~`inngest/functions/triage.ts`~~ *(removed)*
 - any CUT observation record helpers still only referenced by legacy path
 
 Expected scope:
@@ -311,7 +308,7 @@ Expected scope:
 
 - clarify whether intake post-bootstrap orchestrator is intended live behavior
 - if yes, document and keep it out of the “dead scaffolding” bucket
-- if no, plan its retirement separately from `triage.ts`
+- if no, plan its retirement separately from post-ingest routing modules
 
 Acceptance:
 
@@ -321,26 +318,17 @@ Acceptance:
 
 ### Slice 7 — Remove dormant `traffic-cop-triage` only after reachability is truly severed
 
-**Status:** complete (orchestrator decommission prep) — **delivered as retirement readiness audit + formal retention**, not removal. `legacyRoutingRetirementReadiness.ts`, `[triage.legacy_retirement_readiness]`, and `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY` in `legacyRoutingCutoverGate.ts` make blockers explicit; unregister/delete remains **deferred** until prerequisites below are met.
+**Status:** **complete (retirement executed).** `traffic-cop-triage` is removed; [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts) registers `legacy-whatsapp-ingress` only for operator WhatsApp legacy events. `legacyRoutingCutoverGate.ts` uses `LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY` and `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA === false`.
 
-Goal:
+Goal (met):
 
-- de-register or delete [triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts) only when:
-  - no active path imports its old helpers
-  - no live ingress emits `comms/web.received`
-  - no external system still emits `comms/email.received`
+- deleted pre-ingress triage implementation; dropped `comms/email.received` / `comms/web.received` from `AtelierEvents`
+- preserved WhatsApp → internal concierge via [legacyWhatsappIngress.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/legacyWhatsappIngress.ts)
 
-Likely files:
+Acceptance (met):
 
-- [triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts)
-- [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts)
-- [webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts) or its replacement path
-- docs under `docs/v3/*RET*`
-
-Acceptance:
-
-- `traffic-cop-triage` is unregistered only after upstream emitters are gone or rerouted
-- no live path can produce `comms/web.received` / `comms/email.received`
+- `traffic-cop-triage` is not in the served bundle
+- supported live contract does not include `comms/web.received` / `comms/email.received`
 
 ## Recommended execution order
 
@@ -366,26 +354,19 @@ Reason:
 ## What Vibecoder should not do
 
 - Do not delete `_shared/orchestrator/` wholesale
-- Do not unregister `triageFunction` yet
 - Do not assume `ai/intent.*` is dead just because it did not show up in one day of runs
 - Do not remove `clientOrchestratorV1` while `processIntakeExistingThread.ts` can still emit `ORCHESTRATOR_CLIENT_V1_EVENT`
 
-## Current endpoint: cleanup complete, retirement deferred
+## Current endpoint: cleanup complete — pre-ingress email/web retired
 
-The orchestrator **decommission-prep program** (Slices 1–7) ends in a **retained-not-removed** state, with **execution Slice A** applied:
+The orchestrator **decommission-prep program** (Slices 1–7) ends with **pre-ingress email/web routing retired** and **Gmail/thread post-ingest** as the **sole supported primary** path for email classification:
 
-- **Live / cleaned-up primary path:** Gmail delta → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage.ts` (bounded flags, explicit post-ingest dispatch module, dispatch + intake + pre-ingress observability logs).
-- **Pre-ingress web:** **`webhook-web` no longer emits `comms/web.received`** (410 `web_pre_ingress_retired`). **`triageFunction`** may still be registered for `comms/web.received` until a follow-up unregister/cleanup PR.
-- **Pre-ingress email / WhatsApp:** **`triageFunction`** still consumes `comms/email.received` and WhatsApp ingress events.
-- **Unsafe without an explicit ops/product PR:** hard delete of `triage.ts`, removal of `comms/*` triggers, or unregister of `triageFunction` while external `comms/email.received` producers are unproven.
+- **Primary path:** Gmail delta → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage.ts`.
+- **Pre-ingress web:** `webhook-web` does not emit `comms/web.received` (410 `web_pre_ingress_retired`); event removed from `AtelierEvents`.
+- **Pre-ingress email:** `comms/email.received` removed from `AtelierEvents`; `traffic-cop-triage` deleted.
+- **WhatsApp (operator legacy):** **not** retired — `legacy-whatsapp-ingress` → `ai/intent.internal_concierge` only.
 
-**Explicit retirement blockers** (also in code: `legacyRoutingCutoverGate.ts`, `legacyRoutingRetirementReadiness.ts`):
-
-1. `triageFunction` still registered (intentional).
-2. ~~In-repo web emitter (`webhook-web`)~~ **Retired** — no longer emits `comms/web.received`.
-3. `comms/email.received` — no in-repo emitter observed; **external emitters not ruled out** (**primary remaining pre-ingress blocker** for full triage retirement, aside from WhatsApp and explicit cutover).
-
-**Next prerequisites for any future removal PR:** prove or retire external email ingress; unregister or narrow `triageFunction` triggers when safe; flip `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA` only in the **same** change set as routing/unregister work (Step 12C/ops sign-off as applicable).
+**Machine-greppable state:** `LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY` (`pre_ingress_routing_retired_gmail_thread_path_primary`), `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA === false` in `legacyRoutingCutoverGate.ts`.
 
 ## Retirement execution — Slice A (web pre-ingress emitter)
 
@@ -394,9 +375,8 @@ The orchestrator **decommission-prep program** (Slices 1–7) ends in a **retain
 
 ## Retirement execution — Slice B (readiness + last blocker isolation)
 
-- **Done:** `legacyRoutingRetirementReadiness` + `[triage.legacy_retirement_readiness]` use **`webEmitterPresentInRepo: false`**; remaining automated blockers are **`triage_function_still_registered`** and **`email_pre_ingress_external_emitter_not_ruled_out`** (no `web_pre_ingress_emitter_still_present`).
-- **`legacyRoutingCutoverGate`:** comments + `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY` updated to reflect web retired and **email external producer proof** as the primary unresolved pre-ingress question before any final delete/unregister PR.
-- **Not in this slice:** unregister `triageFunction`, remove `comms/email.received`, routing changes.
+- **Done (historical):** readiness audit isolated blockers before final retirement.
+- **Superseded by final retirement PR:** `traffic-cop-triage` removed; `comms/email.received` / `comms/web.received` dropped from `AtelierEvents`; `legacyRoutingCutoverGate` flipped to retired state (`LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY`).
 
 ## Source-of-truth files for this roadmap
 
@@ -406,7 +386,7 @@ The orchestrator **decommission-prep program** (Slices 1–7) ends in a **retain
 - [runMainPathEmailDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/runMainPathEmailDispatch.ts)
 - [emailIngressClassification.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/emailIngressClassification.ts)
 - [triageShadowOrchestratorClientV1Gate.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/orchestrator/triageShadowOrchestratorClientV1Gate.ts)
-- [triage.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/triage.ts)
+- [legacyWhatsappIngress.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/legacyWhatsappIngress.ts) (operator WhatsApp legacy only)
 - [clientOrchestratorV1.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/functions/clientOrchestratorV1.ts)
 - [webhook-web/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/webhook-web/index.ts)
 - [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts)

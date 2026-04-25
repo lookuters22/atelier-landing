@@ -135,11 +135,6 @@ export const OPS_ESCALATION_RESOLUTION_V1_SCHEMA_VERSION = 1 as const;
 export type OperatorEscalationDeliveryPolicy = "urgent_now" | "batch_later" | "dashboard_only";
 
 export type AtelierEvents = {
-  "comms/email.received": {
-    data: {
-      raw_email: Record<string, unknown>;
-    };
-  };
   /** @deprecated Step 8D — prefer `OPERATOR_WHATSAPP_LEGACY_RECEIVED_EVENT` for triage→internal concierge. */
   "comms/whatsapp.received": {
     data: {
@@ -170,12 +165,6 @@ export type AtelierEvents = {
       threadId: string | null;
       rawMessage: string;
       lane: "client";
-    };
-  };
-  "comms/web.received": {
-    data: {
-      raw_message: unknown;
-      photographer_id?: string;
     };
   };
   "ai/draft.generate_requested": {

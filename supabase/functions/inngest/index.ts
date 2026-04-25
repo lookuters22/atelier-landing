@@ -28,21 +28,23 @@
  * If Inngest Cloud still shows removed workers, verify Dashboard **Sync URL** = this project's
  * `https://<ref>.supabase.co/functions/v1/inngest`, app **atelier-os**, **Production** env, and `INNGEST_ALLOW_IN_BAND_SYNC=1`.
  *
- * `clientOrchestratorV1Function` (`ai/orchestrator.client.v1`): QA/replay; optional **shadow** from `triage`; optional
- * **CUT2** live for web-widget known-wedding only (`TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1`, draft_only);
- * **CUT2 D1 execution:** triage reads `TRIAGE_D1_CUT2_WEB_WIDGET_LEGACY_CONCIERGE_DISPATCH_V1` on web-widget known-wedding; return `cut2_web_widget_d1_prep` v2 (`docs/v3/CUT2_WEB_WIDGET_D1_PREP_SLICE.md`);
- * optional **CUT4** live for main-path concierge + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_CONCIERGE_KNOWN_WEDDING_V1`);
- * **CUT4 D1 execution:** triage reads `TRIAGE_D1_CUT4_MAIN_PATH_CONCIERGE_LEGACY_CONCIERGE_DISPATCH_V1` on main-path concierge+known-wedding; `cut4_main_path_concierge_d1_prep` v2 (`docs/v3/CUT4_MAIN_PATH_CONCIERGE_D1_PREP_SLICE.md`);
- * **CUT5 D1 execution:** triage reads `TRIAGE_D1_CUT5_MAIN_PATH_PROJECT_MANAGEMENT_LEGACY_DISPATCH_V1` on main-path PM+known-wedding; `cut5_main_path_project_management_d1_prep` v2 (`docs/v3/CUT5_MAIN_PATH_PROJECT_MANAGEMENT_D1_PREP_SLICE.md`);
- * optional **CUT5** live for main-path project_management + known wedding
+ * `clientOrchestratorV1Function` (`ai/orchestrator.client.v1`): QA/replay; optional **shadow** from Gmail/thread post-ingest
+ * routing (`processInboxThreadRequiresTriage` / `runMainPathEmailDispatch`). **Pre-ingress `traffic-cop-triage` retired**
+ * — web-widget **CUT2** live/D1 (`TRIAGE_LIVE_ORCHESTRATOR_WEB_WIDGET_KNOWN_WEDDING_V1`, `TRIAGE_D1_CUT2_*`) went with it;
+ * see `docs/v3/CUT2_WEB_WIDGET_D1_PREP_SLICE.md` for historical context only.
+ * Optional **CUT4** live for main-path concierge + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_CONCIERGE_KNOWN_WEDDING_V1`)
+ * on **`inbox/thread.requires_triage.v1`**; **CUT4 D1:** `TRIAGE_D1_CUT4_MAIN_PATH_CONCIERGE_LEGACY_CONCIERGE_DISPATCH_V1`;
+ * `cut4_main_path_concierge_d1_prep` v2 (`docs/v3/CUT4_MAIN_PATH_CONCIERGE_D1_PREP_SLICE.md`).
+ * **CUT5 D1:** `TRIAGE_D1_CUT5_MAIN_PATH_PROJECT_MANAGEMENT_LEGACY_DISPATCH_V1`; `cut5_main_path_project_management_d1_prep` v2
+ * (`docs/v3/CUT5_MAIN_PATH_PROJECT_MANAGEMENT_D1_PREP_SLICE.md`).
+ * Optional **CUT5** live for main-path project_management + known wedding
  * (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_PROJECT_MANAGEMENT_KNOWN_WEDDING_V1`); optional **CUT6** live for main-path
  * logistics + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_LOGISTICS_KNOWN_WEDDING_V1`);
- * **CUT6 D1 execution:** triage reads `TRIAGE_D1_CUT6_MAIN_PATH_LOGISTICS_LEGACY_DISPATCH_V1` on main-path logistics+known-wedding; `cut6_main_path_logistics_d1_prep` v2 (`docs/v3/CUT6_MAIN_PATH_LOGISTICS_D1_PREP_SLICE.md`);
- * optional **CUT7** live for
- * main-path commercial + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_COMMERCIAL_KNOWN_WEDDING_V1`);
- * **CUT7 D1 execution:** triage reads `TRIAGE_D1_CUT7_MAIN_PATH_COMMERCIAL_LEGACY_DISPATCH_V1` on main-path commercial+known-wedding; `cut7_main_path_commercial_d1_prep` v2 (`docs/v3/CUT7_MAIN_PATH_COMMERCIAL_D1_PREP_SLICE.md`);
- * optional **CUT8** live for main-path studio + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_STUDIO_KNOWN_WEDDING_V1`);
- * **CUT8 D1 execution:** triage reads `TRIAGE_D1_CUT8_MAIN_PATH_STUDIO_LEGACY_DISPATCH_V1` on main-path studio+known-wedding; `cut8_main_path_studio_d1_prep` v2 (`docs/v3/CUT8_MAIN_PATH_STUDIO_D1_PREP_SLICE.md`).
+ * **CUT6 D1:** `TRIAGE_D1_CUT6_MAIN_PATH_LOGISTICS_LEGACY_DISPATCH_V1`; `cut6_main_path_logistics_d1_prep` v2 (`docs/v3/CUT6_MAIN_PATH_LOGISTICS_D1_PREP_SLICE.md`).
+ * Optional **CUT7** live for main-path commercial + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_COMMERCIAL_KNOWN_WEDDING_V1`);
+ * **CUT7 D1:** `TRIAGE_D1_CUT7_MAIN_PATH_COMMERCIAL_LEGACY_DISPATCH_V1`; `cut7_main_path_commercial_d1_prep` v2 (`docs/v3/CUT7_MAIN_PATH_COMMERCIAL_D1_PREP_SLICE.md`).
+ * Optional **CUT8** live for main-path studio + known wedding (`TRIAGE_LIVE_ORCHESTRATOR_MAIN_PATH_STUDIO_KNOWN_WEDDING_V1`);
+ * **CUT8 D1:** `TRIAGE_D1_CUT8_MAIN_PATH_STUDIO_LEGACY_DISPATCH_V1`; `cut8_main_path_studio_d1_prep` v2 (`docs/v3/CUT8_MAIN_PATH_STUDIO_D1_PREP_SLICE.md`).
  * Optional **intake post-bootstrap parity** (`INTAKE_SHADOW_ORCHESTRATOR_POST_BOOTSTRAP_V1`) — observation-only
  * `ai/orchestrator.client.v1` after lead bootstrap; legacy `ai/intent.persona` remains live.
  * Optional **intake post-bootstrap live email** (`INTAKE_LIVE_ORCHESTRATOR_POST_BOOTSTRAP_EMAIL_V1` + explicit email
@@ -55,7 +57,7 @@
  * `concierge`, `logistics`, `commercial`, `projectManager`, `studio`, `intake` — remain registered until RET1+
  * proves triage no longer dispatches their event for supported paths; CUT2/CUT4–CUT8 gates **off** = rollback to
  * these workers. Inventory: `docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`.
- * **RET1:** triage return `retirement_dispatch_observability_v1` + log `[triage.retirement_dispatch_v1]` (§5 same doc).
+ * **RET1:** post-ingest routing returns `retirement_dispatch_observability_v1` + log `[triage.retirement_dispatch_v1]` (§5 same doc).
  *
  * **Phase 2 Slice D1 (retirement prep):** Producer/ingress audit — no workers removed; see
  * `docs/v3/PHASE2_SLICE_D1_RETIREMENT_PREP_AUDIT.md`. **RET2 unregister-readiness** (legacy `ai/intent.*` only):
@@ -66,7 +68,7 @@
 import { serve } from "npm:inngest@3/edge";
 import { inngest } from "../_shared/inngest.ts";
 import { LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA } from "../_shared/legacyRoutingCutoverGate.ts";
-import { triageFunction } from "./functions/triage.ts";
+import { legacyWhatsappIngressFunction } from "./functions/legacyWhatsappIngress.ts";
 import { intakeFunction } from "./functions/intake.ts";
 import { outboundFunction } from "./functions/outbound.ts";
 import { rewriteFunction } from "./functions/rewrite.ts";
@@ -98,7 +100,7 @@ import { renewGmailWatch } from "./functions/renewGmailWatch.ts";
 import { gmailDeltaSanitySweep } from "./functions/gmailDeltaSanitySweep.ts";
 import { renewGmailWatchSweep } from "./functions/renewGmailWatchSweep.ts";
 
-/** Step 12D anchor: retain legacy registration until cutover; referenced so the gate module stays linked. */
+/** Step 12D anchor: gate module stays linked in the serve bundle. */
 void LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA;
 
 /**
@@ -112,11 +114,9 @@ const handler = serve({
   servePath: "/functions/v1/inngest",
   ...(serveHost ? { serveHost } : {}),
   functions: [
-    // `triageFunction` (traffic-cop-triage): intentionally registered for retained pre-ingress routing
-    // (`comms/email.received`, `comms/web.received`, WhatsApp ingress). Not obsolete — see
-    // `_shared/legacyRoutingCutoverGate.ts`, `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY`, and
-    // `[triage.legacy_retirement_readiness]` / `[triage.pre_ingress_source]` logs. Do not unregister in a cleanup-only PR.
-    triageFunction,
+    // Pre-ingress email/web (`traffic-cop-triage`) retired — see `legacyRoutingCutoverGate.ts`,
+    // `LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY`. WhatsApp legacy ingress only:
+    legacyWhatsappIngressFunction,
     intakeFunction,
     intakeExistingThreadFunction,
     outboundFunction,

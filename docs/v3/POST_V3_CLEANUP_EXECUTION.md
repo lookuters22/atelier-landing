@@ -21,20 +21,19 @@ The right approach is:
 
 ## Orchestrator decommission prep — dual paths (formalized)
 
-After the orchestrator decommission prep slices (`docs/v3/ORCHESTRATOR_DECOMMISSION_SLICE_ROADMAP.md`), the codebase has **two explicit ingress stories**:
+After the orchestrator decommission prep slices (`docs/v3/ORCHESTRATOR_DECOMMISSION_SLICE_ROADMAP.md`) **and the final pre-ingress retirement PR**, the codebase has **one supported primary email/classification ingress** plus an **explicit WhatsApp legacy lane**:
 
 | Path | Role | Notes |
 |------|------|--------|
-| **Post-ingest Gmail/thread** | Primary cleaned-up flow | `processGmailDeltaSync` → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage` — observability and dispatch modules are explicit. |
-| **Pre-ingress `triageFunction`** | **Partially retained** | Still registered in `inngest/index.ts`; listens for `comms/email.received`, `comms/web.received`, WhatsApp. **Web pre-ingress retired:** `webhook-web` no longer emits `comms/web.received` (returns **410** `web_pre_ingress_retired`). |
+| **Post-ingest Gmail/thread** | **Sole supported primary** for email | `processGmailDeltaSync` → `inbox/thread.requires_triage.v1` → `processInboxThreadRequiresTriage`. |
+| **Pre-ingress email/web** | **Retired** | `traffic-cop-triage` removed; `comms/email.received` and `comms/web.received` dropped from `AtelierEvents`. |
+| **Operator WhatsApp legacy** | **Retained (narrow)** | `legacy-whatsapp-ingress` in `inngest/functions/legacyWhatsappIngress.ts` — `comms/whatsapp.received` + `operator/whatsapp.legacy.received` → `ai/intent.internal_concierge` only. **Not** email/web pre-ingress. |
 
 **In-repo web pre-ingress:** **Retired.** `supabase/functions/webhook-web/index.ts` **does not** emit `comms/web.received`; callers receive **410 Gone** with `web_pre_ingress_retired`.
 
-**Email pre-ingress:** no `comms/email.received` emitter under `supabase/functions/` was observed; **external producers are not ruled out** — do not remove the consumer or event subscription without proof. After **execution Slice B**, this is the **isolated last pre-ingress retirement blocker** (plus `triageFunction` still registered, WhatsApp ingress, and explicit unregister — see `[triage.legacy_retirement_readiness]` with `webEmitterPresentInRepo: false`).
+**Email pre-ingress:** **Retired** from the live Inngest contract (no served subscriber for `comms/email.received`).
 
-**Retirement blockers** (machine-greppable): `LEGACY_PRE_INGRESS_ROUTING_RETENTION_STATUS_SUMMARY` (now: email external + pending unregister), `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA`, `[triage.legacy_retirement_readiness]`, `legacyRoutingCutoverGate.ts`.
-
-**Prerequisite for a future removal PR:** prove or retire external `comms/email.received` producers (and any other live ingress); then change retention gates and unregister in one coordinated change set — never “cleanup” by deleting `triage.ts` or `comms/*` support blindly.
+**Retirement state** (machine-greppable): `LEGACY_PRE_INGRESS_ROUTING_RETIRED_STATE_SUMMARY` (`pre_ingress_routing_retired_gmail_thread_path_primary`), `LEGACY_ROUTING_RETAINED_PENDING_STEP12_EXIT_CRITERIA === false`, `legacyRoutingCutoverGate.ts`.
 
 ## Global Rules For Vibecoder
 
@@ -130,7 +129,7 @@ Only do this after Slices 1–3 are complete and verified.
 Targets:
 
 - `supabase/functions/inngest/index.ts`
-- `supabase/functions/inngest/functions/triage.ts`
+- `supabase/functions/inngest/functions/legacyWhatsappIngress.ts` (operator WhatsApp legacy only; pre-ingress email/web triage removed)
 - legacy `ai/intent.*` workers
 - legacy WhatsApp bridge paths
 
