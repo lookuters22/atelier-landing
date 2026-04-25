@@ -55,14 +55,17 @@
  *
  * **Legacy email/web specialist workers** (post-ingest dispatch `INTENT_EVENT_MAP` in `postIngestThreadDispatch` +
  * `ai/intent.concierge` where applicable): `concierge`, `logistics`, `commercial`, `projectManager`, `studio`, `intake`
- * — remain registered until RET1+ proves post-ingest routing no longer dispatches their event for supported paths;
+ * — remain registered until evidence proves post-ingest routing no longer dispatches their event for supported paths;
  * CUT4–CUT8 gates **off** = rollback to these workers. Inventory: `docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`.
- * **RET1:** post-ingest routing returns `retirement_dispatch_observability_v1` + log `[triage.retirement_dispatch_v1]` (§5 same doc).
+ * **RET1 telemetry (historical):** planned `retirement_dispatch_observability_v1` + `[triage.retirement_dispatch_v1]` lived in
+ * pre-ingress `triage.ts` work; **`retirementDispatchObservabilityV1.ts` was removed** (Slice 9) with **no replacement** in the current
+ * runtime — see §5 in `docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md` for the archived spec only. **Do not** grep production for
+ * that prefix as a current signal.
  *
  * **Phase 2 Slice D1 (retirement prep):** Producer/ingress audit — no workers removed; see
  * `docs/v3/PHASE2_SLICE_D1_RETIREMENT_PREP_AUDIT.md`. **RET2 unregister-readiness** (legacy `ai/intent.*` only):
  * `docs/v3/RET2_UNREGISTER_READINESS_AUDIT.md` — no unregister in that audit slice.
- * **RET2 pilot:** `docs/v3/RET2_PILOT_CANDIDATE_SELECTION.md` — production RET1 rollup + one pilot rule. Unregister only after D2 execution
+ * **RET2 pilot:** `docs/v3/RET2_PILOT_CANDIDATE_SELECTION.md` — runbook references historical RET1 rollup tooling where applicable. Unregister only after D2 execution
  * with proven-dead paths per worker.
  */
 import { serve } from "npm:inngest@3/edge";

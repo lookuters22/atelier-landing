@@ -214,9 +214,9 @@ Remove only what is truly replaced.
 
 **Done (RET0 slice):** [`docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) classifies triage-driven legacy specialist events for **`comms/email.received`** and **`comms/web.received`** (main path + web-widget branch): live vs CUT2/CUT4–CUT8 **gated orchestrator** vs **rollback**, and directional retirement preconditions. Comments in `triage.ts` (`INTENT_EVENT_MAP`) and `inngest/index.ts` point here.
 
-### D0b. RET1 dispatch observability (evidence — no removal)
+### D0b. RET1 dispatch observability (historical — module removed, Slice 9)
 
-**Done:** `triage` return field **`retirement_dispatch_observability_v1`** + log line **`[triage.retirement_dispatch_v1]`** (`supabase/functions/_shared/triage/retirementDispatchObservabilityV1.ts`). Distinguishes **legacy `ai/intent.*`** vs **`ai/orchestrator.client.v1`** vs escalation/unfiled; includes **`rollback_capable`** when legacy ran only because a CUT gate was off. See **§5** in [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md).
+**Superseded:** The planned **`retirement_dispatch_observability_v1`** return field + **`[triage.retirement_dispatch_v1]`** log line were tied to pre-ingress **`triage.ts`** work. **`retirementDispatchObservabilityV1.ts` was deleted** with **no replacement** in the current runtime. See **§5** in [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) for the **archived** schema and rollup notes only — **not** a live telemetry contract.
 
 ### D0c. RET1b rollup script (readiness — no removal)
 

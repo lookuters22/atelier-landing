@@ -2,7 +2,7 @@
 
 **Slice type:** Evidence review + **runbook** — **no worker unregistration**, **no routing changes**.
 
-**Baseline:** [`RET2_UNREGISTER_READINESS_AUDIT.md`](RET2_UNREGISTER_READINESS_AUDIT.md) (inventory + not-ready default). Rollup tool: [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs).
+**Baseline:** [`RET2_UNREGISTER_READINESS_AUDIT.md`](RET2_UNREGISTER_READINESS_AUDIT.md) (inventory + not-ready default). Rollup tool: [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs) — parses **historical** `[triage.retirement_dispatch_v1]` lines only; **current** runtime does **not** emit that telemetry (Slice 9).
 
 ---
 
@@ -13,7 +13,7 @@
 | **`scripts/fixtures/ret1_sample_export.log`** | **Synthetic** sample (header comment in file) for script smoke tests — **not** production traffic. **Do not** use it to name a production pilot. |
 | **`reports/ret1-export-*.log`** (suggested path) | Production exports: use [`reports/README.md`](../../reports/README.md). **Still none committed** — see **§1.1** below. |
 
-**Conclusion (initial):** **No real production RET1 export** was available in the workspace for this slice. **No named pilot worker** is selected from evidence here. Sections **3–4** give the **runbook** and **decision rule** to select **exactly one** pilot after a real export exists.
+**Conclusion (initial):** **No real production RET1 export** was available in the workspace for this slice. **Slice 9:** RET1 log telemetry was **removed** from the codebase without replacement — new evidence for unregister decisions must use **other** signals (Inngest runs, worker-level metrics), not `[triage.retirement_dispatch_v1]`. **No named pilot worker** is selected from evidence here. Sections **3–4** retain a **historical** runbook if archived logs exist.
 
 ### 1.1 Evidence capture attempt (automated workspace — 2026-04-06)
 
@@ -22,14 +22,14 @@
 - **Rollup on production:** **not run** — no input file.
 - **Pilot candidate from real data:** **none** — preconditions in §4.1 cannot be verified without an export.
 
-**Additional evidence needed:** A **7–14 day** production (or clearly labeled staging) text export of lines containing `[triage.retirement_dispatch_v1]`, saved as `reports/ret1-export-prod-YYYYMMDD.log`, then rollup applied locally. Re-evaluate §4.1–§4.3; prefer **“no candidate yet”** if any legacy specialist counts remain **> 0** for `studio` / `commercial` / `project_management` or orchestrator replacement rows are absent.
+**Historical note:** A **7–14 day** text export of **archived** lines containing `[triage.retirement_dispatch_v1]` (if any exist from pre–Slice 9 environments) could be rolled up locally. **Current** production does **not** emit that marker — use alternate evidence for pilot selection.
 
 ---
 
 ## 2. Runbook — produce evidence
 
 1. **Window:** e.g. 7–14 days of production (or staging if that is your only observable environment — label clearly).
-2. **Source:** Supabase Edge / Inngest logs where `triage` runs; filter messages containing **`[triage.retirement_dispatch_v1]`** (same JSON as `retirement_dispatch_observability_v1` per [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) §5).
+2. **Source (archived only):** Historical exports where the **retired** pre-ingress worker logged **`[triage.retirement_dispatch_v1]`** — see [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) §5 (historical spec). **Not** emitted by current post-ingest routing.
 3. **Save:** one plain-text file, one log line per record acceptable; e.g. `reports/ret1-export-prod-YYYYMMDD.log` (add `reports/` to `.gitignore` locally if needed — do not commit PII-heavy raw logs).
 4. **Rollup:**
 

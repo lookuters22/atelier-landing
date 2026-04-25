@@ -157,10 +157,12 @@ Per [`V3_FULL_CUTOVER_PLAN.md`](V3_FULL_CUTOVER_PLAN.md): a worker is a candidat
 
 ---
 
-## 4. Next retirement-oriented slice (after RET1 observability)
+## 4. Next retirement-oriented slice (planning — RET1 telemetry removed)
 
-1. **RET1b:** roll up **`[triage.retirement_dispatch_v1]`** logs (§5.5).
-2. **RET1c:** real export procedure + first D1 candidate — [`RET1C_D1_CANDIDATE_SELECTION.md`](RET1C_D1_CANDIDATE_SELECTION.md) (§5.6).
+> **Slice 9:** `retirementDispatchObservabilityV1.ts` was **deleted**; the runtime does **not** emit **`[triage.retirement_dispatch_v1]`** or **`retirement_dispatch_observability_v1`**. Items below are **historical procedure / docs** only unless you are analyzing **archived** pre-retirement logs.
+
+1. **RET1b (historical):** roll up **archived** lines with **`[triage.retirement_dispatch_v1]`** if present — §5.5 (script + fixture describe the old shape).
+2. **RET1c (historical):** [`RET1C_D1_CANDIDATE_SELECTION.md`](RET1C_D1_CANDIDATE_SELECTION.md) — export procedure was written for retired pre-ingress `triage`; see doc banner.
 3. **Continue Phase 2** parity work (**A4**, **B3**) until cutover gates can stay **on** by policy.
 4. **D1 / D2** only after evidence shows **legacy** dispatches → **~0** for the intended window.
 
@@ -168,13 +170,15 @@ See also: [`PHASE2_SLICE_D1_RETIREMENT_PREP_AUDIT.md`](PHASE2_SLICE_D1_RETIREMEN
 
 ---
 
-## 5. RET1 — dispatch observability (implemented)
+## 5. RET1 — dispatch observability (historical specification; not live)
 
-**Purpose:** Evidence for **when legacy workers are still hit** vs **orchestrator live**, without changing routing.
+> **Historical planning artifact — Slice 9:** The implementation module **`retirementDispatchObservabilityV1.ts`** was **removed** from the repo **without replacement**. **Current** post-ingest routing (`postIngestThreadDispatch` / `processInboxThreadRequiresTriage`) does **not** attach **`retirement_dispatch_observability_v1`** or emit **`[triage.retirement_dispatch_v1]`**. **Do not** use that log prefix as a **current** production signal. The subsections below preserve the **intended** schema and rollup notes for **old exports** and doc continuity only.
+
+**Original purpose (pre-removal):** Evidence for **when legacy workers are still hit** vs **orchestrator live**, without changing routing.
 
 ### 5.1 Inngest function return payload
 
-Successful `triage` returns for **email + dashboard web** (including web-widget fast path and unfiled early exit) include:
+**Archived behavior (removed):** Successful pre-ingress **`triage`** returns for **email + dashboard web** (including web-widget fast path and unfiled early exit) were specified to include:
 
 - **`retirement_dispatch_observability_v1`** — object, `schema_version: 1`
 
@@ -199,28 +203,28 @@ Successful `triage` returns for **email + dashboard web** (including web-widget 
 - `__cut7_main_path_commercial_d1_no_dispatch_cut7_off__` — CUT7 main-path commercial: D1 forbids legacy and CUT7 is off ([`CUT7_MAIN_PATH_COMMERCIAL_D1_PREP_SLICE.md`](CUT7_MAIN_PATH_COMMERCIAL_D1_PREP_SLICE.md))
 - `__cut8_main_path_studio_d1_no_dispatch_cut8_off__` — CUT8 main-path studio: D1 forbids legacy and CUT8 is off ([`CUT8_MAIN_PATH_STUDIO_D1_PREP_SLICE.md`](CUT8_MAIN_PATH_STUDIO_D1_PREP_SLICE.md))
 
-### 5.2 Structured log line
+### 5.2 Structured log line (historical)
 
-Every turn that sets `retirement_dispatch_observability_v1` also emits:
+When the module still ran, every turn that set `retirement_dispatch_observability_v1` also emitted:
 
 ```text
 [triage.retirement_dispatch_v1] {"schema_version":1,...}
 ```
 
-**Aggregate in log pipelines:** filter by prefix `triage.retirement_dispatch_v1`, parse JSON, group by `lane`, `branch_code`, `dispatch_intent`, `downstream_inngest_event`, `rollback_capable`.
+**Aggregate on archived exports only:** filter by prefix `triage.retirement_dispatch_v1`, parse JSON, group by `lane`, `branch_code`, `dispatch_intent`, `downstream_inngest_event`, `rollback_capable`.
 
-### 5.3 How to use this for retirement decisions
+### 5.3 How to use this for retirement decisions (archived RET1 data only)
 
-- **Legacy still required:** sustained volume where `lane === "legacy_ai_intent"` (or `LEGACY_INTAKE`) for supported traffic.
+- **Legacy still required:** sustained volume where `lane === "legacy_ai_intent"` (or `LEGACY_INTAKE`) for supported traffic in **historical** RET1 exports.
 - **Orchestrator live winning:** `lane === "orchestrator_client_v1_live"` for the same intent + path — compare counts vs legacy before turning gates **default-on**.
 - **Rollback-only posture:** `rollback_capable === true` means that turn **would** have used orchestrator if the env gate were on — useful to confirm gates are the only barrier.
 - **Do not unregister** a worker until **legacy** counts for its event → **~0** for the intended production window **and** ops sign-off (see **D1** in roadmap).
 
-### 5.5 RET1b — metrics rollup script (readiness)
+### 5.5 RET1b — metrics rollup script (historical inputs only)
 
-**Script:** [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs)
+**Script:** [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs) — still parses **lines** with the old marker if you have an **archived** export; **not** tied to current runtime telemetry.
 
-**How to get input:** Export recent Edge / Inngest logs that include `[triage.retirement_dispatch_v1]` (same JSON as `retirement_dispatch_observability_v1`). Save as a `.log` or `.txt` file, or pipe stdin.
+**How to get input (if available):** Use **historical** Edge / Inngest log exports that include `[triage.retirement_dispatch_v1]` (same JSON shape as `retirement_dispatch_observability_v1`). Current production does **not** emit this prefix.
 
 ```bash
 node scripts/ret1_dispatch_metrics_rollup.mjs path/to/export.log
@@ -232,7 +236,7 @@ Get-Content path\to\export.log | node scripts/ret1_dispatch_metrics_rollup.mjs
 
 **Sample:** [`scripts/fixtures/ret1_sample_export.log`](../../scripts/fixtures/ret1_sample_export.log)
 
-**Dashboard / query recipe (manual):** In any log platform, filter message contains `triage.retirement_dispatch_v1`, extract JSON after the prefix, aggregate with your tool’s JSON grouping — same dimensions as the script.
+**Dashboard / query recipe (manual, archived data):** If analyzing old logs, filter message contains `triage.retirement_dispatch_v1`, extract JSON after the prefix, aggregate with your tool’s JSON grouping — same dimensions as the script.
 
 ### 5.6 RET1c — real evidence + first D1 candidate (planning only)
 

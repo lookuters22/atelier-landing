@@ -1,8 +1,10 @@
 # RET1c — Real evidence capture and first D1 candidate selection
 
+> **Historical / superseded (Slice 9):** RET1 **`[triage.retirement_dispatch_v1]`** telemetry was **never wired** to post-ingest routing; the implementation file was **removed** without replacement. Treat this doc as **planning archive** and **do not** expect current production to emit the marker. Rollup script + fixtures remain usable only on **old** log exports, if any.
+
 **Slice type:** Evidence and planning only — **no worker unregistration, no routing changes.**
 
-**Related:** [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) §5, [`POST_V3_CLEANUP_PHASE2_ROADMAP.md`](POST_V3_CLEANUP_PHASE2_ROADMAP.md) workstream D, [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs).
+**Related:** [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) §5 (historical spec), [`POST_V3_CLEANUP_PHASE2_ROADMAP.md`](POST_V3_CLEANUP_PHASE2_ROADMAP.md) workstream D, [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs).
 
 ---
 
@@ -10,7 +12,7 @@
 
 | Item | Status |
 |------|--------|
-| Production / staging Edge log export containing `[triage.retirement_dispatch_v1]` | **Not present** in the workspace at RET1c authoring time |
+| Production / staging Edge log export containing `[triage.retirement_dispatch_v1]` | **Not applicable** to current runtime (telemetry removed — Slice 9); **not present** in workspace at RET1c authoring time |
 | Synthetic sample usable for script smoke tests | [`scripts/fixtures/ret1_sample_export.log`](../../scripts/fixtures/ret1_sample_export.log) |
 
 **Conclusion:** RET1 rollup numbers below are **not** from production. Section 2 is the procedure to produce a real window; section 4 is a **fill-in template** after you run the rollup on that export.
@@ -21,9 +23,7 @@
 
 1. **Pick a window** (e.g. last 7 or 14 days) that matches how you evaluate “supported production” behavior (avoid one-off incidents unless labeled).
 
-2. **Collect logs** where `triage` runs for **email + dashboard web** (same sources RET1 was designed for):
-   - **Supabase Edge Functions:** Dashboard → Project → **Logs** → filter function **`inngest`** (or the deployed bundle that contains `triage`), search message text **`triage.retirement_dispatch_v1`**.
-   - **Inngest:** If your observability forwards function logs or you export run output, filter the same substring and export visible lines.
+2. **Collect logs (archived / pre-retirement only):** RET1 markers were designed for the **removed** pre-ingress `triage` worker. If you have **historical** exports, search message text **`triage.retirement_dispatch_v1`**. **Current** post-ingest workers **do not** emit this prefix.
 
 3. **Save as plain text** (one line per log line is fine; extra metadata columns are OK if each line still contains the marker + JSON).
 
@@ -89,7 +89,7 @@ Paste or summarize from a real `node scripts/ret1_dispatch_metrics_rollup.mjs �
 - When legacy fires: `downstream_inngest_event`: `ai/intent.concierge`, `lane`: `legacy_ai_intent`, `branch_code`: `LEGACY_INTENT_MAP` (CUT2 **off**)
 - When orchestrator live: `branch_code`: `CUT2_WEB_WIDGET`, `lane`: `orchestrator_client_v1_live`
 
-See `buildWebWidgetRetirementDispatchV1` in [`supabase/functions/_shared/triage/retirementDispatchObservabilityV1.ts`](../../supabase/functions/_shared/triage/retirementDispatchObservabilityV1.ts).
+**Historical:** `buildWebWidgetRetirementDispatchV1` lived in removed `retirementDispatchObservabilityV1.ts` (pre–Slice 9); the shape is summarized in [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) §5.
 
 ### Why this is the safest first D1 path (even before production counts)
 

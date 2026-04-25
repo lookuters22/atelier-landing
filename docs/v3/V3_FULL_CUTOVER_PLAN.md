@@ -85,7 +85,7 @@ These must remain true before any live cutover retry:
 ### Email/web legacy intent sequencing (readiness)
 
 - **RET0 inventory:** [`docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) — which `ai/intent.*` events triage still emits for email/dashboard web, which paths are **orchestrator-live when gates are on**, and which workers remain **rollback when gates are off**. Use this before **RET1** (stop obsolete dispatches) or **RET2** (unregister).
-- **RET1 observability:** same doc **§5** — `triage` **`retirement_dispatch_observability_v1`** + **`[triage.retirement_dispatch_v1]`** logs for aggregating legacy vs orchestrator vs rollback-capable turns.
+- **RET1 observability (historical):** same doc **§5** — **archived** spec for **`retirement_dispatch_observability_v1`** + **`[triage.retirement_dispatch_v1]`**; the implementation was **removed** (Slice 9) with **no** current runtime emission — do not treat as a live signal.
 - **RET1b rollup:** same doc **§5.5** — [`scripts/ret1_dispatch_metrics_rollup.mjs`](../../scripts/ret1_dispatch_metrics_rollup.mjs) for offline counts from log exports.
 - **RET1c D1 candidate:** [`docs/v3/RET1C_D1_CANDIDATE_SELECTION.md`](RET1C_D1_CANDIDATE_SELECTION.md) — export procedure, rollup commands, first D1 candidate path (CUT2 web-widget concierge).
 - **RET2 unregister-readiness audit (planning):** [`docs/v3/RET2_UNREGISTER_READINESS_AUDIT.md`](RET2_UNREGISTER_READINESS_AUDIT.md) — per-worker criteria, producers, evidence gaps; **no unregister** in that slice.

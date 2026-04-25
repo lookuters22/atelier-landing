@@ -94,7 +94,6 @@ After the final pre-ingress retirement and cleanup slices, the live architecture
   - post-ingest dispatch isolated into a named module
 - **still messy**
   - `runMainPathEmailDispatch.ts` remains as a compatibility wrapper with no production caller
-  - `retirementDispatchObservabilityV1.ts` and its doc promises are out of sync with actual runtime logging
   - several CUT4-CUT8 comments still say "email or web" even though post-ingest live routing is now effectively email-only
 
 ## What we are actually doing
@@ -404,35 +403,20 @@ Outcome:
 
 ### Slice 9 - Reconcile RET1 observability with reality
 
-**Status:** planned.
+**Status:** done.
 
-Why:
+**Decision (landed):** delete stale observability — **no** new telemetry contract.
 
-- [retirementDispatchObservabilityV1.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/retirementDispatchObservabilityV1.ts) still exists
-- [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts) still advertises `[triage.retirement_dispatch_v1]`
-- no live code currently emits that log line
+- **`retirementDispatchObservabilityV1.ts`** — **deleted** (no in-repo callers; tied to removed pre-ingress `triage` world).
+- **[inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts)** — comments state RET1 log prefix is **historical**, not live.
+- **Docs** — [`LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md`](C:/Users/Despot/Desktop/wedding/docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md) §5 and related v3 docs marked **historical / superseded** where they described live RET1 emission.
 
-Decision:
+**Not done (by design):** wire observability into [postIngestThreadDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.ts).
 
-- either wire RET1 observability into [postIngestThreadDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.ts)
-- or delete the stale observability file and fix the docs/comments that promise it
+**Acceptance:**
 
-Preferred direction:
-
-- wire it if RET1/RET2 retirement of legacy specialist workers is still an active program
-- delete it if that program is no longer going to use this telemetry
-
-Targets:
-
-- [postIngestThreadDispatch.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/postIngestThreadDispatch.ts)
-- [retirementDispatchObservabilityV1.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/_shared/triage/retirementDispatchObservabilityV1.ts)
-- [inngest/index.ts](C:/Users/Despot/Desktop/wedding/supabase/functions/inngest/index.ts)
-- [LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md](C:/Users/Despot/Desktop/wedding/docs/v3/LEGACY_EMAIL_WEB_INTENT_RETIREMENT_SEQUENCE.md)
-
-Acceptance:
-
-- code and docs agree on whether `retirement_dispatch_observability_v1` is real
-- no promised log prefix exists only on paper
+- `retirement_dispatch_observability_v1` / `[triage.retirement_dispatch_v1]` are **not** claimed as current runtime signals
+- archived schema text remains for old exports / planning continuity only
 
 ---
 
